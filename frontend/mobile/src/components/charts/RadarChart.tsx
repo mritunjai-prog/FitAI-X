@@ -7,7 +7,7 @@ const AnimatedPolygon = Animated.createAnimatedComponent(Polygon);
 
 export type RadarData = { label: string; value: number }[]; // value 0 to 1
 
-export default function RadarChart({ data, size, color }: { data: RadarData, size: number, color: string }) {
+export default function RadarChart({ data, size, color, highlightLabel }: { data: RadarData, size: number, color: string, highlightLabel?: string }) {
   const center = size / 2;
   const radius = (size / 2) - 25; // padding for labels
 
@@ -64,20 +64,39 @@ export default function RadarChart({ data, size, color }: { data: RadarData, siz
           strokeLinejoin="round"
           animatedProps={animatedProps}
         />
+        {/* Highlighted Vertex Dot */}
+        {highlightLabel && data.map((d, i) => {
+          if (d.label === highlightLabel) {
+            return (
+              <Circle 
+                key={`dot-${i}`}
+                cx={points[i].x} 
+                cy={points[i].y} 
+                r={4} 
+                fill={color} 
+              />
+            );
+          }
+          return null;
+        })}
         {/* Labels */}
-        {data.map((d, i) => (
-          <SvgText
-            key={i}
-            x={points[i].lx} y={points[i].ly}
-            fill="#a1a1aa"
-            fontSize="10"
-            fontFamily="monospace"
-            textAnchor="middle"
-            alignmentBaseline="middle"
-          >
-            {d.label}
-          </SvgText>
-        ))}
+        {data.map((d, i) => {
+          const isHighlighted = d.label === highlightLabel;
+          return (
+            <SvgText
+              key={i}
+              x={points[i].lx} y={points[i].ly}
+              fill={isHighlighted ? color : "#a1a1aa"}
+              fontSize={isHighlighted ? "11" : "10"}
+              fontWeight={isHighlighted ? "bold" : "normal"}
+              fontFamily="monospace"
+              textAnchor="middle"
+              alignmentBaseline="middle"
+            >
+              {d.label}
+            </SvgText>
+          );
+        })}
       </Svg>
     </View>
   );

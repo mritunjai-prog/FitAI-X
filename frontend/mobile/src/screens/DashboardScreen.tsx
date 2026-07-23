@@ -1,8 +1,10 @@
 import React, { useMemo, useState, useEffect } from "react";
-import { View, Text, StyleSheet, SafeAreaView, Platform, StatusBar as RNStatusBar } from "react-native";
+import { View, Text, StyleSheet, SafeAreaView, Platform, StatusBar as RNStatusBar, TouchableOpacity, ScrollView, Image } from "react-native";
 import { BlurView } from "expo-blur";
 import Animated, { FadeInUp, Layout, useAnimatedScrollHandler, useSharedValue, useAnimatedStyle, interpolate, Extrapolation, withRepeat, withSequence, withTiming, withSpring } from "react-native-reanimated";
 import Svg, { Text as SvgText, Defs, LinearGradient, Stop } from 'react-native-svg';
+import { MaterialIcons as Icon } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 
 import { DarkColors, LightColors, ThemeColors, F } from "../theme";
 import MeshGradientBackground from "../components/MeshGradientBackground";
@@ -16,7 +18,7 @@ import AnimatedPressable from "../components/AnimatedPressable";
 const isDark = true;
 const C = isDark ? DarkColors : LightColors;
 
-export default function DashboardScreen() {
+export default function DashboardScreen({ onOpenCommandPalette }: { onOpenCommandPalette?: () => void }) {
   const styles = useMemo(() => getStyles(C), [C]);
 
   const bgColors = (
@@ -27,19 +29,30 @@ export default function DashboardScreen() {
 
   // Feed state with progress
   const [feed, setFeed] = useState([
-    { id: '1', msg: 'AI Coach generated Push Day V3', time: 'Just now', progress: 1 },
-    { id: '2', msg: 'Hydration goal', time: '2m ago', progress: 0.5 }
+    { id: '1', type: 'workout', user: 'Sarah J.', avatar: 'https://i.pravatar.cc/100?img=5', msg: 'Crushed "Leg Day V2"', time: '2m ago', likes: 12, bpm: 142 },
+    { id: '2', type: 'ai', user: 'Rachel (AI)', msg: 'Analyzing your sleep data to adjust today\'s load.', time: '10m ago' },
+    { id: '3', type: 'workout', user: 'David M.', avatar: 'https://i.pravatar.cc/100?img=11', msg: 'Completed a 5k Run', time: '1h ago', likes: 8, bpm: 156 }
   ]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setFeed(prev => [
-        { id: Math.random().toString(), msg: 'Rachel recommended adding sleep time tonight', time: 'Just now', progress: 0.8 },
+        { id: Math.random().toString(), type: 'ai', user: 'Rachel (AI)', msg: 'Based on your HRV, I recommend switching to a lighter Recovery Flow today.', time: 'Just now' },
         ...prev
       ]);
-    }, 8000);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }, 12000);
     return () => clearTimeout(timer);
   }, []);
+
+  const ACTIVE_USERS = [
+    { id: 'u1', name: 'You', img: 'https://i.pravatar.cc/100?img=33', isLive: true },
+    { id: 'u2', name: 'Sarah', img: 'https://i.pravatar.cc/100?img=5', isLive: true },
+    { id: 'u3', name: 'Mike', img: 'https://i.pravatar.cc/100?img=12', isLive: false },
+    { id: 'u4', name: 'Emma', img: 'https://i.pravatar.cc/100?img=9', isLive: true },
+    { id: 'u5', name: 'Chris', img: 'https://i.pravatar.cc/100?img=11', isLive: false },
+    { id: 'u6', name: 'Jessica', img: 'https://i.pravatar.cc/100?img=20', isLive: true }
+  ];
 
   // Parallax Scroll Header
   const scrollY = useSharedValue(0);
@@ -49,18 +62,9 @@ export default function DashboardScreen() {
     }
   });
 
-  const headerAnimatedStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(scrollY.value, [0, 100], [1, 0], Extrapolation.CLAMP);
-    const scale = interpolate(scrollY.value, [0, 100], [1, 0.9], Extrapolation.CLAMP);
-    return {
-      opacity,
-      transform: [{ scale }]
-    };
-  });
-
   const stickyHeaderStyle = useAnimatedStyle(() => {
-    const opacity = interpolate(scrollY.value, [80, 120], [0, 1], Extrapolation.CLAMP);
-    const translateY = interpolate(scrollY.value, [80, 120], [-20, 0], Extrapolation.CLAMP);
+    const opacity = interpolate(scrollY.value, [20, 60], [0, 1], Extrapolation.CLAMP);
+    const translateY = interpolate(scrollY.value, [20, 60], [-20, 0], Extrapolation.CLAMP);
     return {
       opacity,
       transform: [{ translateY }]
@@ -83,15 +87,25 @@ export default function DashboardScreen() {
     transform: [{ scale: pulse.value }]
   }));
 
+  // Live ring animation (Soft Glow Pulse instead of double border)
+  const liveRing = useSharedValue(1);
+  useEffect(() => {
+    liveRing.value = withRepeat(withTiming(1.2, { duration: 1500 }), -1, true);
+  }, []);
+  const liveRingStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(liveRing.value, [1, 1.2], [1, 1.4]) }],
+    opacity: interpolate(liveRing.value, [1, 1.2], [0.3, 0])
+  }));
+
   return (
     <View style={styles.safe}>
       <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
 
       <SafeAreaView style={{ flex: 1 }}>
-        {/* Sticky Blurred Header */}
-        <Animated.View style={[styles.stickyHeader, stickyHeaderStyle]}>
+        {/* Sticky Blurred Header (Replaces Top Nav when scrolled) */}
+        <Animated.View style={[styles.stickyHeader, stickyHeaderStyle]} pointerEvents="none">
           <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
-          <Text style={styles.stickyTitle}>Alex Mercer</Text>
+          <Text style={styles.stickyTitle}>Dashboard</Text>
         </Animated.View>
 
         <Animated.ScrollView 
@@ -100,16 +114,44 @@ export default function DashboardScreen() {
           contentContainerStyle={styles.scrollContent} 
           showsVerticalScrollIndicator={false}
         >
-          {/* Main Parallax Header */}
-          <Animated.View style={[styles.header, headerAnimatedStyle]}>
-            <Text style={styles.greeting}>Good Evening, Alex</Text>
-            <Text style={styles.subGreeting}>Recovery is optimal. Ready to train?</Text>
+          {/* Top Navigation */}
+          <Animated.View entering={FadeInUp.delay(50).springify()} style={styles.topNav}>
+            <View style={styles.topNavLeft}>
+              <Image source={{ uri: 'https://i.pravatar.cc/100?img=33' }} style={styles.topNavAvatar} />
+              <View>
+                <Text style={styles.greeting}>Alex Mercer</Text>
+                <Text style={styles.subGreeting}>Recovery is optimal. Ready?</Text>
+              </View>
+            </View>
+            <View style={styles.topNavRight}>
+              <TouchableOpacity style={styles.iconBtn} onPress={() => { Haptics.selectionAsync(); onOpenCommandPalette?.(); }}>
+                <Icon name="search" size={24} color={C.onSurface} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.iconBtn} onPress={() => Haptics.selectionAsync()}>
+                <Icon name="notifications" size={24} color={C.onSurface} />
+                <View style={styles.notificationBadge} />
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+
+          {/* Active Users Horizontal List */}
+          <Animated.View entering={FadeInUp.delay(100).springify()}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeUsersContainer}>
+              {ACTIVE_USERS.map((u, i) => (
+                <View key={u.id} style={styles.userAvatarWrapper}>
+                  {u.isLive && (
+                    <Animated.View style={[styles.liveRing, liveRingStyle]} />
+                  )}
+                  <Image source={{ uri: u.img }} style={[styles.userAvatar, u.isLive && { borderWidth: 2, borderColor: C.primary }]} />
+                  <Text style={styles.userName} numberOfLines={1}>{u.name}</Text>
+                  {u.isLive && <View style={styles.liveDot} />}
+                </View>
+              ))}
+            </ScrollView>
           </Animated.View>
 
           {/* BENTO BOX GRID */}
-          
-          {/* Top Hero: Activity Rings */}
-          <Animated.View entering={FadeInUp.delay(100).springify().damping(15)}>
+          <Animated.View entering={FadeInUp.delay(150).springify().damping(15)}>
             <AnimatedPressable containerStyle={{ marginBottom: 12 }}>
               <View style={[styles.card, { flexDirection: 'row', alignItems: 'center' }]}>
                 <View style={{ flex: 1 }}>
@@ -142,7 +184,6 @@ export default function DashboardScreen() {
                     <View style={{ padding: 16, paddingBottom: 0 }}>
                       <Text style={styles.cardTitle}>LIVE VITALS</Text>
                       <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 8 }}>
-                        {/* Gradient Typography */}
                         <Animated.View style={pulseStyle}>
                           <Svg width={80} height={40}>
                             <Defs>
@@ -220,28 +261,57 @@ export default function DashboardScreen() {
             </View>
           </View>
 
-          {/* Live Feed Section */}
+          {/* Live Social Feed Section */}
           <Animated.View entering={FadeInUp.delay(500).springify().damping(15)}>
-            <Text style={[styles.cardTitle, { marginHorizontal: 4, marginTop: 24, marginBottom: 12 }]}>LIVE ACTIVITY FEED</Text>
+            <View style={styles.feedHeader}>
+              <Text style={styles.cardTitle}>LIVE ACTIVITY FEED</Text>
+              <View style={styles.livePulseDot} />
+            </View>
+            
             <View>
               {feed.map((item) => (
                 <Animated.View 
                   key={item.id} 
                   entering={FadeInUp.springify().damping(15)} 
                   layout={Layout.springify().damping(15)}
-                  style={styles.feedItem}
                 >
-                  <View style={[styles.dot, { backgroundColor: C.primary, width: 8, height: 8, marginRight: 12 }]} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.feedMsg}>{item.msg}</Text>
-                    {/* Micro Progress Bar */}
-                    {item.progress && (
-                      <View style={microStyles.microBarContainer}>
-                        <AnimatedMicroBar progress={item.progress} />
+                  <AnimatedPressable containerStyle={{ marginBottom: 12 }}>
+                    <View style={[styles.card, styles.feedCard]}>
+                      
+                      {item.type === 'ai' ? (
+                        <View style={[styles.feedAvatar, { backgroundColor: C.primary }]}>
+                          <Icon name="auto-awesome" size={20} color={C.onPrimary} />
+                        </View>
+                      ) : (
+                        <Image source={{ uri: item.avatar }} style={styles.feedAvatar} />
+                      )}
+
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.feedCardHeader}>
+                          <Text style={styles.feedUserName}>{item.user}</Text>
+                          <Text style={styles.feedTime}>{item.time}</Text>
+                        </View>
+                        
+                        <Text style={[styles.feedMsg, item.type === 'ai' && { color: C.primary, fontFamily: F.bodyMed }]}>
+                          {item.msg}
+                        </Text>
+                        
+                        {item.type === 'workout' && (
+                          <View style={styles.feedMetricsRow}>
+                            <View style={styles.feedMetricBadge}>
+                              <Icon name="favorite" size={14} color="#ff416c" />
+                              <Text style={styles.feedMetricText}>{item.bpm} bpm</Text>
+                            </View>
+                            <View style={styles.feedMetricBadge}>
+                              <Icon name="thumb-up" size={14} color={C.onSurfaceVariant} />
+                              <Text style={styles.feedMetricText}>{item.likes}</Text>
+                            </View>
+                          </View>
+                        )}
                       </View>
-                    )}
-                    <Text style={styles.feedTime}>{item.time}</Text>
-                  </View>
+
+                    </View>
+                  </AnimatedPressable>
                 </Animated.View>
               ))}
             </View>
@@ -254,124 +324,65 @@ export default function DashboardScreen() {
   );
 }
 
-// Helper for Feed micro progress bars
-function AnimatedMicroBar({ progress }: { progress: number }) {
-  const w = useSharedValue(0);
-  useEffect(() => {
-    w.value = withSpring(progress * 100, { damping: 14, stiffness: 90 });
-  }, [progress]);
-  const style = useAnimatedStyle(() => ({ width: `${w.value}%` }));
-  return (
-    <Animated.View style={[microStyles.microBarFill, style]} />
-  );
-}
-
-const microStyles = StyleSheet.create({
-  microBarContainer: {
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 2,
-    marginTop: 8,
-    marginBottom: 4,
-    overflow: 'hidden'
-  },
-  microBarFill: {
-    height: '100%',
-    backgroundColor: DarkColors.primary,
-    borderRadius: 2
-  }
-});
-
 const getStyles = (C: ThemeColors) =>
   StyleSheet.create({
     safe: { flex: 1, backgroundColor: C.bg },
     stickyHeader: {
       position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
+      top: 0, left: 0, right: 0,
       height: Platform.OS === 'ios' ? 100 : 80,
       zIndex: 10,
       justifyContent: 'flex-end',
       paddingBottom: 16,
       alignItems: 'center',
     },
-    stickyTitle: {
-      fontFamily: F.header,
-      fontSize: 16,
-      color: C.onSurface,
-    },
-    header: {
+    stickyTitle: { fontFamily: F.header, fontSize: 16, color: C.onSurface },
+    
+    topNav: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 24,
       paddingHorizontal: 4,
-      paddingTop: 12,
-      paddingBottom: 24,
     },
-    greeting: { fontFamily: F.header, fontSize: 32, color: C.onSurface, letterSpacing: -0.5 },
-    subGreeting: { fontFamily: F.body, fontSize: 15, color: C.onSurfaceVariant, marginTop: 4 },
+    topNavLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    topNavAvatar: { width: 44, height: 44, borderRadius: 22 },
+    greeting: { fontFamily: F.header, fontSize: 20, color: C.onSurface, letterSpacing: -0.5 },
+    subGreeting: { fontFamily: F.bodyMed, fontSize: 13, color: C.primary, marginTop: 2 },
+    topNavRight: { flexDirection: 'row', gap: 8 },
+    iconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.glassInset, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.outlineVariant },
+    notificationBadge: { position: 'absolute', top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: C.primary },
+
+    activeUsersContainer: { paddingHorizontal: 4, paddingBottom: 24, gap: 16 },
+    userAvatarWrapper: { alignItems: 'center', width: 56 },
+    userAvatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: C.glassInset },
+    userName: { fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant, marginTop: 6 },
+    liveRing: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 28, backgroundColor: C.primary },
+    liveDot: { position: 'absolute', bottom: 18, right: 2, width: 12, height: 12, borderRadius: 6, backgroundColor: C.primary, borderWidth: 2, borderColor: C.bg },
+
+    scrollContent: { padding: 16, paddingTop: 16 },
+    row: { flexDirection: 'row', gap: 12 },
     
-    scrollContent: { padding: 16, paddingTop: 40 },
+    card: { backgroundColor: C.glassInset, borderRadius: 24, padding: 16, borderWidth: 1, borderColor: C.outlineVariant },
+    cardTitle: { fontFamily: F.header, fontSize: 11, letterSpacing: 1.2, color: C.onSurfaceVariant },
+    metricLabel: { fontFamily: F.bodyBold, fontSize: 16, color: C.primary },
     
-    row: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    card: {
-      backgroundColor: C.glassInset,
-      borderRadius: 24,
-      padding: 16,
-      borderWidth: 1,
-      borderColor: C.outlineVariant,
-    },
-    cardTitle: {
-      fontFamily: F.header,
-      fontSize: 11,
-      letterSpacing: 1.2,
-      color: C.onSurfaceVariant,
-    },
-    metricLabel: {
-      fontFamily: F.bodyBold,
-      fontSize: 16,
-      color: C.primary,
-    },
-    legend: {
-      marginTop: 16,
-      gap: 6,
-    },
-    legendItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    dot: {
-      width: 6,
-      height: 6,
-      borderRadius: 3,
-      marginRight: 8,
-    },
-    legendText: {
-      fontFamily: F.bodyMed,
-      fontSize: 12,
-      color: C.onSurfaceVariant,
-    },
-    feedItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: C.glassInset,
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 10,
-      borderWidth: 1,
-      borderColor: C.outlineVariant,
-    },
-    feedMsg: {
-      fontFamily: F.bodyMed,
-      fontSize: 14,
-      color: C.onSurface,
-      lineHeight: 20,
-    },
-    feedTime: {
-      fontFamily: F.body,
-      fontSize: 12,
-      color: C.outline,
-      marginTop: 2,
-    }
+    legend: { marginTop: 16, gap: 6 },
+    legendItem: { flexDirection: 'row', alignItems: 'center' },
+    dot: { width: 6, height: 6, borderRadius: 3, marginRight: 8 },
+    legendText: { fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant },
+
+    feedHeader: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 4, marginTop: 16, marginBottom: 12 },
+    livePulseDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#ff4b2b', marginLeft: 8, marginBottom: 2 },
+    
+    feedCard: { flexDirection: 'row', padding: 16, gap: 16, borderRadius: 20 },
+    feedAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+    feedCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+    feedUserName: { fontFamily: F.header, fontSize: 14, color: C.onSurface },
+    feedTime: { fontFamily: F.body, fontSize: 11, color: C.onSurfaceVariant },
+    feedMsg: { fontFamily: F.body, fontSize: 14, color: C.onSurfaceVariant, lineHeight: 20 },
+    
+    feedMetricsRow: { flexDirection: 'row', gap: 12, marginTop: 10 },
+    feedMetricBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    feedMetricText: { fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant }
   });

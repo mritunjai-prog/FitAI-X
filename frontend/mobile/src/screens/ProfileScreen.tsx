@@ -28,10 +28,12 @@ import Animated, {
   Extrapolation,
   useAnimatedScrollHandler,
   useDerivedValue,
+  FadeInDown
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaskedView from '@react-native-masked-view/masked-view';
 import MeshGradientBackground from '../components/MeshGradientBackground';
+import RadarChart from '../components/charts/RadarChart';
 import { DarkColors, LightColors, ThemeColors, F } from '../theme';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -44,6 +46,11 @@ const Icons = {
   ),
   bolt: ({ size = 24, color = '#fff' }: IconProps) => (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M7 2v11h3v9l7-12h-4l4-8z" /></Svg>
+  ),
+  'auto-awesome': ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <Path d="M19 4.25L17.75 7L15 8.25L17.75 9.5L19 12.25L20.25 9.5L23 8.25L20.25 7L19 4.25ZM10.5 5.5L8 11L2.5 13.5L8 16L10.5 21.5L13 16L18.5 13.5L13 11L10.5 5.5ZM10.5 9.87L11.59 12.24L13.96 13.33L11.59 14.42L10.5 16.79L9.41 14.42L7.04 13.33L9.41 12.24L10.5 9.87Z" />
+    </Svg>
   ),
   edit: ({ size = 24, color = '#fff' }: IconProps) => (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" /></Svg>
@@ -126,14 +133,14 @@ function GradientText({ text, style, C }: { text: string; style: any; C: ThemeCo
 }
 
 function AnimatedCard({ children, index, style }: { children: React.ReactNode; index: number; style?: any }) {
-  const opacity = useSharedValue(0);
-  const translateY = useSharedValue(30);
-  useEffect(() => {
-    opacity.value = withDelay(index * 150, withTiming(1, { duration: 600 }));
-    translateY.value = withDelay(index * 150, withSpring(0, { damping: 20, stiffness: 100 }));
-  }, []);
-  const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value, transform: [{ translateY: translateY.value }] }));
-  return <Animated.View style={[animStyle, style]}>{children}</Animated.View>;
+  return (
+    <Animated.View 
+      entering={FadeInDown.delay(index * 120).springify().mass(0.8).damping(15)} 
+      style={style}
+    >
+      {children}
+    </Animated.View>
+  );
 }
 
 function PressableScale({ children, onPress, style, disabled = false }: any) {
@@ -431,24 +438,88 @@ export default function ProfileScreen({ onNavigateToBuilder }: { onNavigateToBui
             </View>
           </AnimatedCard>
 
-          {/* ═══ INJURY PROTOCOL ═══ */}
+          {/* ═══ MUSCLE BALANCE ═══ */}
           <AnimatedCard index={3}>
             <View style={S.section}>
-              <Text style={S.sectionLabel}>INJURY PROTOCOL</Text>
+              <Text style={S.sectionLabel}>MUSCLE BALANCE</Text>
+              <TiltCard C={C} tiltEnabled={false}>
+                <View style={{ alignItems: 'center', marginVertical: 10 }}>
+                  <RadarChart 
+                    size={180}
+                    color={C.cyan}
+                    highlightLabel="Back"
+                    data={[
+                      { label: 'Chest', value: 0.8 },
+                      { label: 'Back', value: 0.6 },
+                      { label: 'Legs', value: 0.9 },
+                      { label: 'Arms', value: 0.7 },
+                      { label: 'Core', value: 0.5 },
+                    ]}
+                  />
+                </View>
+                <View style={{ marginTop: 20, backgroundColor: `${C.cyan}15`, borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: `${C.cyan}40` }}>
+                  <View style={{ marginRight: 10 }}>
+                    <Icon name="auto-awesome" size={20} color={C.cyan} />
+                  </View>
+                  <Text style={{ flex: 1, fontFamily: F.bodyMed, fontSize: 13, color: C.onSurface, lineHeight: 18 }}>
+                    AI detected a <Text style={{ color: C.cyan, fontFamily: F.bodyBold }}>15% imbalance</Text> between Chest and Back. Modifying upcoming volume.
+                  </Text>
+                </View>
+              </TiltCard>
+            </View>
+          </AnimatedCard>
+
+          {/* ═══ INJURY PROTOCOL & MEMORY MODEL ═══ */}
+          <AnimatedCard index={4}>
+            <View style={S.section}>
+              <Text style={S.sectionLabel}>INJURY-MEMORY MODEL</Text>
               <TiltCard C={C}>
                 <View style={S.pillsRow}>
                   <View style={S.pillRed}><Text style={S.pillRedText}>Right Shoulder</Text></View>
                   <View style={S.pillGreen}><Text style={S.pillGreenText}>Left Knee</Text></View>
                 </View>
                 <BodyMapSVG C={C} />
-                <View style={S.divider} />
-                <Text style={S.injuryNote}>AI Coach is currently routing around heavy overhead pressing movements.</Text>
+                
+                {/* Visual Timeline of Injury Memory */}
+                <View style={S.timelineContainer}>
+                  <LinearGradient 
+                    colors={[C.error, C.primary, C.success]} 
+                    start={{ x: 0, y: 0 }} 
+                    end={{ x: 0, y: 1 }} 
+                    style={S.timelineLine} 
+                  />
+                  
+                  <View style={S.timelineNode}>
+                    <View style={S.timelineDotRed} />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={S.timelineDate}>Mar 12</Text>
+                      <Text style={S.timelineEvent}>Shoulder strain reported.</Text>
+                    </View>
+                  </View>
+
+                  <View style={S.timelineNode}>
+                    <View style={S.timelineDotPrimary} />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={S.timelineDate}>Mar 13 - Present</Text>
+                      <Text style={S.timelineEvent}>AI routing around heavy overhead pressing.</Text>
+                    </View>
+                  </View>
+                  
+                  <View style={S.timelineNode}>
+                    <View style={S.timelineDotGreen} />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={S.timelineDate}>Apr 02 (Projected)</Text>
+                      <Text style={S.timelineEvent}>Shoulder cleared for full mobility based on recovery trend.</Text>
+                    </View>
+                  </View>
+                </View>
+                
               </TiltCard>
             </View>
           </AnimatedCard>
 
           {/* ═══ AI COACHING ENGINE ═══ */}
-          <AnimatedCard index={4}>
+          <AnimatedCard index={5}>
             <View style={S.section}>
               <Text style={S.sectionLabel}>AI COACHING ENGINE</Text>
               <TiltCard C={C}>
@@ -473,7 +544,7 @@ export default function ProfileScreen({ onNavigateToBuilder }: { onNavigateToBui
           </AnimatedCard>
 
           {/* ═══ TELEMETRY DEVICES ═══ */}
-          <AnimatedCard index={5}>
+          <AnimatedCard index={6}>
             <View style={S.section}>
               <Text style={S.sectionLabel}>TELEMETRY DEVICES</Text>
               <TiltCard C={C} tiltEnabled={false}>
@@ -561,7 +632,17 @@ const getStyles = (C: ThemeColors) => StyleSheet.create({
   pillGreen: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: `${C.success}26`, borderWidth: 1, borderColor: `${C.success}4D` },
   pillGreenText: { fontSize: 11, fontFamily: F.header, color: C.success, letterSpacing: 0.5 },
   
-  injuryNote: { fontSize: 13, fontFamily: F.body, color: C.onSurfaceVariant, lineHeight: 20 },
+  injuryNote: { fontFamily: F.bodyMed, fontSize: 13, color: C.onSurfaceVariant, textAlign: 'center', marginTop: 12, lineHeight: 18 },
+
+  // Timeline Styles
+  timelineContainer: { marginTop: 24, paddingLeft: 8 },
+  timelineLine: { position: 'absolute', left: 15, top: 10, bottom: 20, width: 2, opacity: 0.6 },
+  timelineNode: { flexDirection: 'row', marginBottom: 20 },
+  timelineDotRed: { width: 16, height: 16, borderRadius: 8, backgroundColor: C.error, borderWidth: 3, borderColor: C.surface, zIndex: 1 },
+  timelineDotPrimary: { width: 16, height: 16, borderRadius: 8, backgroundColor: C.primary, borderWidth: 3, borderColor: C.surface, zIndex: 1 },
+  timelineDotGreen: { width: 16, height: 16, borderRadius: 8, backgroundColor: C.success, borderWidth: 3, borderColor: C.surface, zIndex: 1 },
+  timelineDate: { fontFamily: F.header, fontSize: 11, color: C.onSurfaceVariant, marginBottom: 2 },
+  timelineEvent: { fontFamily: F.bodyMed, fontSize: 13, color: C.onSurface, lineHeight: 18 },
 
   toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16, paddingVertical: 6 },
   toggleLabel: { fontSize: 16, fontFamily: F.bodyMed, color: C.onSurface, marginBottom: 2 },
