@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>FitAI X - Profile &amp; Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        colors: {
+          "on-error": "#690005",
+          "secondary": "#cdc6b5",
+          "secondary-fixed": "#e9e2d1",
+          "background": "#0A0A0A",
+          "on-background": "#ebe1d0",
+          "on-tertiary-container": "#005d71",
+          "on-secondary-fixed-variant": "#4a473a",
+          "surface": "#161616",
+          "outline-variant": "#4e4632",
+          "on-primary-container": "#685200",
+          "primary": "#f5c400",
+          "inverse-on-surface": "#353024",
+          "surface-dim": "#171309",
+          "on-primary": "#3d2f00",
+          "on-tertiary-fixed-variant": "#004e5f",
+          "primary-fixed-dim": "#f1c100",
+          "tertiary": "#beeeff",
+          "on-surface": "#ebe1d0",
+          "on-secondary-container": "#bbb5a4",
+          "surface-container-high": "#2e2a1e",
+          "primary-fixed": "#ffe08b",
+          "on-primary-fixed-variant": "#584400",
+          "tertiary-fixed-dim": "#4dd6fb",
+          "surface-bright": "#3e392d",
+          "surface-container-lowest": "#110e05",
+          "on-surface-variant": "#B0AA9A",
+          "on-error-container": "#ffdad6",
+          "secondary-container": "#4a473a",
+          "surface-container-low": "#1f1b11",
+          "surface-tint": "#f1c100",
+          "on-tertiary-fixed": "#001f27",
+          "on-secondary": "#343025",
+          "surface-variant": "#393428",
+          "outline": "#9a9078",
+          "surface-container": "#231f14",
+          "primary-container": "#f5c400",
+          "tertiary-fixed": "#b3ebff",
+          "inverse-primary": "#745b00",
+          "on-tertiary": "#003642",
+          "error": "#ffb4ab",
+          "tertiary-container": "#52daff",
+          "inverse-surface": "#ebe1d0",
+          "on-primary-fixed": "#241a00",
+          "error-container": "#93000a",
+          "secondary-fixed-dim": "#cdc6b5",
+          "surface-container-highest": "#393428",
+          "on-secondary-fixed": "#1e1c11"
+        },
+        borderRadius: {
+          "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"
+        },
+        spacing: {
+          "gutter": "16px", "container-margin": "24px", "section-gap": "40px",
+          "card-padding": "20px", "unit": "8px"
+        },
+        fontFamily: {
+          "title-md": ["Manrope"], "body-md": ["Manrope"], "display-lg": ["Manrope"],
+          "headline-lg-mobile": ["Manrope"], "headline-lg": ["Manrope"],
+          "body-lg": ["Manrope"], "label-caps": ["Manrope"], "stats-num": ["Manrope"],
+          "mono-tech": ["JetBrains Mono"]
+        },
+        fontSize: {
+          "title-md": ["20px", { lineHeight: "28px", fontWeight: "600" }],
+          "body-md": ["14px", { lineHeight: "20px", fontWeight: "400" }],
+          "display-lg": ["48px", { lineHeight: "56px", letterSpacing: "-0.02em", fontWeight: "800" }],
+          "headline-lg-mobile": ["24px", { lineHeight: "32px", fontWeight: "700" }],
+          "headline-lg": ["32px", { lineHeight: "40px", letterSpacing: "-0.01em", fontWeight: "700" }],
+          "body-lg": ["16px", { lineHeight: "24px", fontWeight: "400" }],
+          "label-caps": ["12px", { lineHeight: "16px", letterSpacing: "0.05em", fontWeight: "700" }],
+          "stats-num": ["28px", { lineHeight: "32px", letterSpacing: "-0.02em", fontWeight: "800" }]
+        }
+      }
+    }
+  }
+</script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<style>
+  body { font-family: 'Manrope', sans-serif; background-color: #0A0A0A; color: #ebe1d0; }
+  .glass-panel { background: #161616; border: 1px solid rgba(245, 196, 0, 0.15); }
+  .glass-inset { background: #101010; }
+  .gold-gradient { background: linear-gradient(135deg, #f5c400 0%, #b38d00 100%); }
+  .section-label { text-transform: uppercase; font-size: 11px; color: #B0AA9A; font-weight: 700; letter-spacing: 0.05em; margin-bottom: 8px; display: block; }
+
+  /* Toggle Switch */
+  .toggle-switch {
+    width: 40px; height: 23px; border-radius: 9999px; position: relative; cursor: pointer;
+    transition: background 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    background: #101010; border: 1px solid #2e2a1e; flex-shrink: 0;
+  }
+  .toggle-switch.on { background: linear-gradient(135deg, #f5c400 0%, #b38d00 100%); border-color: transparent; }
+  .toggle-switch::after {
+    content: ''; position: absolute; top: 2px; left: 2px; width: 17px; height: 17px; border-radius: 50%;
+    background: #ebe1d0; transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .toggle-switch.on::after { transform: translateX(17px); background: #3d2f00; }
+
+  /* Chips */
+  .chip {
+    background: #101010; border: 1px solid #2e2a1e; color: #B0AA9A; padding: 6px 12px;
+    border-radius: 9999px; font-size: 12px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 4px; cursor: pointer; transition: all 0.2s ease;
+  }
+  .chip.active {
+    background: linear-gradient(135deg, rgba(245, 196, 0, 0.1) 0%, rgba(245, 196, 0, 0.2) 100%);
+    border-color: rgba(245, 196, 0, 0.5); color: #f5c400;
+  }
+
+  /* Pills */
+  .pill { padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; display: inline-block; }
+  .pill.active { background: rgba(239, 68, 68, 0.2); border: 1px solid #EF4444; color: #EF4444; }
+  .pill.resolved { background: rgba(163, 230, 53, 0.2); border: 1px solid #A3E635; color: #A3E635; }
+
+  /* Input Insets */
+  .input-inset {
+    background: #101010; border: 1px solid transparent; border-radius: 8px;
+    padding: 8px 10px; color: #ebe1d0; font-size: 14px; transition: border-color 0.2s ease;
+  }
+
+  /* Bottom Nav */
+  .pb-safe { padding-bottom: calc(80px + 20px); }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 10px rgba(245, 196, 0, 0.3); transform: scale(1); }
+    50% { box-shadow: 0 0 25px rgba(245, 196, 0, 0.6); transform: scale(1.05); }
+  }
+  .animate-pulse-glow { animation: pulse-glow 2.5s infinite ease-in-out; }
+
+  .haptic-press:active { transform: scale(0.95); filter: brightness(0.8); transition: all 0.1s ease; }
+
+  body { min-height: 100dvh; }
+
+  /* Material Symbols */
+  .material-symbols-outlined {
+    font-family: 'Material Symbols Outlined';
+    font-weight: normal; font-style: normal; font-size: 24px;
+    line-height: 1; letter-spacing: normal; text-transform: none;
+    display: inline-block; white-space: nowrap; word-wrap: normal; direction: ltr;
+    -webkit-font-smoothing: antialiased;
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: #0A0A0A; }
+  ::-webkit-scrollbar-thumb { background: #4e4632; border-radius: 2px; }
+</style>
+</head>
+<body class="antialiased">
+
+<!-- Top App Bar -->
+<header class="sticky top-0 z-40 flex justify-between items-center px-6 py-4 border-b border-[#4e4632] bg-[#0A0A0A]/80 backdrop-blur-md">
+  <div style="font-family:'Manrope',sans-serif; font-size:24px; font-weight:800; color:#f5c400; letter-spacing:-0.03em;">FitAI X</div>
+  <div class="flex gap-4">
+    <span class="material-symbols-outlined cursor-pointer hover:text-[#f5c400] transition-colors" style="color:#B0AA9A;">notifications</span>
+    <span class="material-symbols-outlined cursor-pointer hover:text-[#f5c400] transition-colors" style="color:#B0AA9A;">bolt</span>
+  </div>
+</header>
+
+<main class="px-6 py-6 pb-safe flex flex-col gap-10 max-w-md mx-auto">
+
+  <!-- Hero / Profile Card -->
+  <section class="glass-panel rounded-xl p-5 flex items-center gap-4 relative overflow-hidden">
+    <div class="absolute inset-0 opacity-10 bg-gradient-to-br from-[#f5c400] to-transparent pointer-events-none"></div>
+    <div class="relative w-16 h-16 rounded-full p-[2px] gold-gradient animate-pulse-glow flex-shrink-0">
+      <img
+        src="https://lh3.googleusercontent.com/aida-public/AB6AXuBs0aRM5s6_f22oY_Jya-UvvMNGSGivaANAH0MtLocja2ltBy7WlqZeS2oUNL3Zvy6owK1y_pwI5FivaELc03lFVhin35MuIoem0gQbILbNX03ETq0_QfalXIE11fR8gSfatGNKiTM5UHUcXeUREBTIQnsqfCOv-lVzd2UHfHF0ol6VGxWOMUyRrVbPn0wBe0r0vnv6qEHKZrcQuocSrjc90qTqTugxMws-mJKpaNGCdkJ1Doc2pp9muvMYhuqjOcMhq95kAuCkjpk"
+        alt="Profile avatar"
+        class="w-full h-full rounded-full object-cover border-2 border-[#0A0A0A]"
+      />
+    </div>
+    <div class="flex-1 relative z-10">
+      <div class="flex items-center gap-2 mb-1">
+        <h1 style="font-size:20px; font-weight:600; color:#ebe1d0;">Alex Mercer</h1>
+        <span class="gold-gradient text-[10px] font-bold px-2 py-[2px] rounded uppercase tracking-wider" style="color:#3d2f00;">Pro</span>
+      </div>
+      <p style="font-size:14px; color:#B0AA9A;">alex.mercer@elite.fit</p>
+    </div>
+    <span class="material-symbols-outlined cursor-pointer hover:text-[#f5c400] transition-colors haptic-press" style="color:#9a9078;">edit</span>
+  </section>
+
+  <!-- Fitness Profile -->
+  <section>
+    <span class="section-label">Fitness Profile</span>
+    <div class="glass-panel rounded-xl p-5 grid grid-cols-3 gap-4">
+      <!-- Height -->
+      <div class="flex flex-col gap-1">
+        <span style="font-size:12px; color:#B0AA9A; font-weight:500;">Height</span>
+        <div class="input-inset flex items-baseline gap-1">
+          <span style="font-size:20px; font-weight:800; color:#f5c400; font-family:'JetBrains Mono',monospace; letter-spacing:-0.02em;">185</span>
+          <span style="font-size:11px; color:#9a9078;">cm</span>
+        </div>
+      </div>
+      <!-- Weight -->
+      <div class="flex flex-col gap-1">
+        <span style="font-size:12px; color:#B0AA9A; font-weight:500;">Weight</span>
+        <div class="input-inset flex flex-col">
+          <div class="flex items-baseline gap-1">
+            <span style="font-size:20px; font-weight:800; color:#f5c400; font-family:'JetBrains Mono',monospace; letter-spacing:-0.02em;">82</span>
+            <span style="font-size:11px; color:#9a9078;">kg</span>
+          </div>
+          <svg class="w-full mt-1" height="12" fill="none" viewBox="0 0 50 12" preserveAspectRatio="none">
+            <path d="M0,10 L10,8 L20,9 L30,4 L40,6 L50,2" stroke="#f5c400" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+      <!-- Age -->
+      <div class="flex flex-col gap-1">
+        <span style="font-size:12px; color:#B0AA9A; font-weight:500;">Age</span>
+        <div class="input-inset flex items-baseline gap-1">
+          <span style="font-size:20px; font-weight:800; color:#f5c400; font-family:'JetBrains Mono',monospace; letter-spacing:-0.02em;">29</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Dynamic Goals -->
+  <section>
+    <span class="section-label">Dynamic Goals</span>
+    <div class="glass-panel rounded-xl p-5">
+      <div class="flex flex-wrap gap-2">
+        <div class="chip active haptic-press">
+          <span class="material-symbols-outlined" style="font-size:16px;">fitness_center</span> Hypertrophy
+        </div>
+        <div class="chip haptic-press">
+          <span class="material-symbols-outlined" style="font-size:16px;">directions_run</span> Endurance
+        </div>
+        <div class="chip haptic-press">
+          <span class="material-symbols-outlined" style="font-size:16px;">speed</span> Power
+        </div>
+        <div class="chip active haptic-press">
+          <span class="material-symbols-outlined" style="font-size:16px;">monitor_weight</span> Lean Mass
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Injury Protocol -->
+  <section>
+    <span class="section-label">Injury Protocol</span>
+    <div class="glass-panel rounded-xl p-5 flex flex-col gap-3" style="border-color: rgba(239,68,68,0.2);">
+      <div class="flex gap-2">
+        <span class="pill active">Right Shoulder</span>
+        <span class="pill resolved">Left Knee</span>
+      </div>
+      <!-- 3D Body Map using Canvas -->
+      <div id="bodymap-container" style="width:100%; height:200px; position:relative;">
+        <canvas id="bodymap-canvas" style="width:100%;height:100%;display:block;"></canvas>
+      </div>
+      <p style="font-size:13px; color:#B0AA9A; border-top:1px solid #2e2a1e; padding-top:12px;">
+        AI Coach is currently routing around heavy overhead pressing movements.
+      </p>
+    </div>
+  </section>
+
+  <!-- AI Coaching Engine -->
+  <section>
+    <span class="section-label">AI Coaching Engine</span>
+    <div class="relative rounded-xl p-[1px] overflow-hidden group" style="background:linear-gradient(135deg,#f5c400,#ffb300,#f5c400);">
+      <div class="glass-panel rounded-xl p-5 flex flex-col gap-4" style="background:#161616;">
+        <!-- Toggle Row 1 -->
+        <div class="flex justify-between items-center gap-4">
+          <div class="flex flex-col flex-1">
+            <span style="font-size:16px; font-weight:500; color:#ebe1d0;">Adaptive Progression</span>
+            <span style="font-size:12px; color:#B0AA9A;">Auto-adjust weights based on previous sets</span>
+          </div>
+          <div class="toggle-switch on haptic-press" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div style="height:1px; background:#1a1a1a;"></div>
+        <!-- Toggle Row 2 -->
+        <div class="flex justify-between items-center gap-4">
+          <div class="flex flex-col flex-1">
+            <span style="font-size:16px; font-weight:500; color:#ebe1d0;">Real-time Form Feedback</span>
+            <span style="font-size:12px; color:#B0AA9A;">Voice alerts during working sets</span>
+          </div>
+          <div class="toggle-switch haptic-press" onclick="this.classList.toggle('on')"></div>
+        </div>
+        <div style="height:1px; background:#1a1a1a;"></div>
+        <!-- Toggle Row 3 -->
+        <div class="flex justify-between items-center gap-4">
+          <div class="flex flex-col flex-1">
+            <span style="font-size:16px; font-weight:500; color:#ebe1d0;">Nutrition Auto-Sync</span>
+            <span style="font-size:12px; color:#B0AA9A;">Adjust macros based on workout intensity</span>
+          </div>
+          <div class="toggle-switch on haptic-press" onclick="this.classList.toggle('on')"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Telemetry Devices -->
+  <section>
+    <span class="section-label">Telemetry Devices</span>
+    <div class="glass-panel rounded-xl p-5 flex flex-col gap-4">
+      <!-- Oura Ring -->
+      <div class="flex flex-col gap-2 cursor-pointer haptic-press" onclick="this.querySelector('.telemetry-details').classList.toggle('hidden')">
+        <div class="flex items-center gap-4">
+          <div class="w-10 h-10 rounded-full glass-inset flex items-center justify-center flex-shrink-0" style="color:#f5c400;">
+            <span class="material-symbols-outlined">watch</span>
+          </div>
+          <div class="flex-1">
+            <span class="block" style="font-size:16px; font-weight:500; color:#ebe1d0;">Oura Ring Gen 3</span>
+            <span class="block" style="font-size:12px; color:#f5c400; font-family:'JetBrains Mono',monospace;">Connected • 84% Battery</span>
+          </div>
+          <span class="material-symbols-outlined" style="color:#9a9078;">expand_more</span>
+        </div>
+        <div class="telemetry-details hidden pl-14 flex gap-4 pt-1" style="font-size:12px; color:#B0AA9A;">
+          <span>HRV: <span style="color:#ebe1d0; font-family:'JetBrains Mono',monospace; font-weight:500;">45ms</span></span>
+          <span>Sleep Score: <span style="color:#f5c400; font-family:'JetBrains Mono',monospace; font-weight:500;">88</span></span>
+        </div>
+      </div>
+      <div style="height:1px; background:#1a1a1a;"></div>
+      <!-- Polar H10 -->
+      <div class="flex items-center gap-4 opacity-50 cursor-pointer haptic-press">
+        <div class="w-10 h-10 rounded-full glass-inset flex items-center justify-center flex-shrink-0" style="color:#B0AA9A;">
+          <span class="material-symbols-outlined">monitor_heart</span>
+        </div>
+        <div class="flex-1">
+          <span class="block" style="font-size:16px; font-weight:500; color:#ebe1d0;">Polar H10</span>
+          <span class="block" style="font-size:12px; color:#B0AA9A;">Disconnected</span>
+        </div>
+        <span class="material-symbols-outlined" style="color:#9a9078;">add</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Data Export -->
+  <section class="mb-8">
+    <button
+      class="haptic-press"
+      style="width:100%; padding:16px; border-radius:12px; border:1px solid #4e4632; color:#f5c400; background:transparent; font-family:'Manrope',sans-serif; font-size:12px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px; transition: background 0.2s ease;"
+      onmouseover="this.style.background='#393428'"
+      onmouseout="this.style.background='transparent'"
+    >
+      <span class="material-symbols-outlined" style="font-size:18px;">download</span>
+      Export Biometric Data
+    </button>
+  </section>
+
+</main>
+
+<!-- Bottom Nav -->
+<nav style="position:fixed; bottom:0; left:0; width:100%; background:rgba(46,42,30,0.92); backdrop-filter:blur(12px); border-top:1px solid #4e4632; z-index:50; display:flex; justify-content:space-around; align-items:center; padding:10px 16px; border-radius:16px 16px 0 0;">
+  <a href="#" style="display:flex;flex-direction:column;align-items:center;gap:2px;color:#B0AA9A;text-decoration:none;padding:6px 10px;border-radius:10px;" class="haptic-press">
+    <span class="material-symbols-outlined" style="font-size:22px;">home</span>
+    <span style="font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;">Home</span>
+  </a>
+  <a href="#" style="display:flex;flex-direction:column;align-items:center;gap:2px;color:#B0AA9A;text-decoration:none;padding:6px 10px;border-radius:10px;" class="haptic-press">
+    <span class="material-symbols-outlined" style="font-size:22px;">insights</span>
+    <span style="font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;">Activity</span>
+  </a>
+  <!-- FAB Spacer -->
+  <div style="width:56px;"></div>
+  <a href="#" style="display:flex;flex-direction:column;align-items:center;gap:2px;color:#B0AA9A;text-decoration:none;padding:6px 10px;border-radius:10px;" class="haptic-press">
+    <span class="material-symbols-outlined" style="font-size:22px;">settings</span>
+    <span style="font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;">Settings</span>
+  </a>
+  <a href="#" style="display:flex;flex-direction:column;align-items:center;gap:2px;color:#3d2f00;text-decoration:none;padding:6px 10px;border-radius:10px;background:#f5c400;" class="haptic-press">
+    <span class="material-symbols-outlined" style="font-size:22px;">person</span>
+    <span style="font-size:10px;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;">Profile</span>
+  </a>
+  <!-- Center FAB -->
+  <div style="position:absolute;left:50%;top:-28px;transform:translateX(-50%);">
+    <div class="animate-pulse-glow" style="background:rgba(46,42,30,0.95);border-radius:50%;padding:6px;border:1px solid #4e4632;box-shadow:0 -5px 30px rgba(245,196,0,0.4);">
+      <button
+        class="haptic-press gold-gradient"
+        style="width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 0 20px rgba(245,196,0,0.3);transition:transform 0.2s ease;"
+        onmouseover="this.style.transform='scale(1.08)'"
+        onmouseout="this.style.transform='scale(1)'"
+      >
+        <span class="material-symbols-outlined" style="font-size:26px;color:#3d2f00;">smart_toy</span>
+      </button>
+    </div>
+  </div>
+</nav>
+
+<script>
+  // Chip toggle
+  document.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => chip.classList.toggle('active'));
+  });
+
+  // 3D Body Map using Canvas (no Three.js dependency issues)
+  (function() {
+    const canvas = document.getElementById('bodymap-canvas');
+    const container = document.getElementById('bodymap-container');
+    if (!canvas || !container) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    function resize() {
+      canvas.width = container.clientWidth * dpr;
+      canvas.height = container.clientHeight * dpr;
+      canvas.style.width = container.clientWidth + 'px';
+      canvas.style.height = container.clientHeight + 'px';
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const ctx = canvas.getContext('2d');
+    let angle = 0;
+
+    function drawBody(t) {
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const cx = w / 2;
+      const cy = h / 2 - h * 0.05;
+      const scale = Math.min(w, h) * 0.28;
+      const swing = Math.sin(t * 0.6) * 0.18; // gentle sway
+
+      // Color palette
+      const goldWire = 'rgba(245,196,0,0.55)';
+      const redHighlight = '#EF4444';
+      const greenHighlight = '#A3E635';
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(scale / 100, scale / 100);
+
+      // Helper: draw ellipse wireframe
+      function ellipse(x, y, rx, ry, color, alpha = 0.5) {
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = alpha;
+        ctx.lineWidth = 1.5 / (scale / 100);
+        ctx.beginPath();
+        ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        // cross lines
+        ctx.beginPath();
+        ctx.moveTo(x - rx, y); ctx.lineTo(x + rx, y);
+        ctx.moveTo(x, y - ry); ctx.lineTo(x, y + ry);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Helper: glowing circle for injury
+      function injuryDot(x, y, r, color) {
+        ctx.save();
+        ctx.shadowBlur = 16 * (scale / 100);
+        ctx.shadowColor = color;
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.85 + 0.15 * Math.sin(t * 3);
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      const sway = swing * 8;
+
+      // Head
+      ellipse(sway * 0.3, -148, 18, 20, goldWire, 0.6);
+
+      // Neck
+      ctx.save();
+      ctx.strokeStyle = goldWire; ctx.globalAlpha = 0.4; ctx.lineWidth = 1.5 / (scale / 100);
+      ctx.beginPath(); ctx.moveTo(sway * 0.3 - 6, -128); ctx.lineTo(sway * 0.3 + 6, -128);
+      ctx.moveTo(sway * 0.3 - 8, -118); ctx.lineTo(sway * 0.3 + 8, -118);
+      ctx.stroke(); ctx.restore();
+
+      // Torso (shoulders to hips)
+      ctx.save();
+      ctx.strokeStyle = goldWire; ctx.globalAlpha = 0.5; ctx.lineWidth = 1.5 / (scale / 100);
+      // shoulders line
+      ctx.beginPath(); ctx.moveTo(sway - 42, -108); ctx.lineTo(sway + 42, -108); ctx.stroke();
+      // torso shape
+      ctx.beginPath();
+      ctx.moveTo(sway - 42, -108);
+      ctx.lineTo(sway - 28, -10);
+      ctx.lineTo(sway - 20, 20);
+      ctx.moveTo(sway + 42, -108);
+      ctx.lineTo(sway + 28, -10);
+      ctx.lineTo(sway + 20, 20);
+      ctx.stroke();
+      // chest cross
+      ctx.beginPath();
+      ctx.moveTo(sway - 42, -85); ctx.lineTo(sway + 42, -85);
+      ctx.moveTo(sway - 38, -55); ctx.lineTo(sway + 38, -55);
+      ctx.moveTo(sway - 30, -20); ctx.lineTo(sway + 30, -20);
+      ctx.stroke();
+      // spine
+      ctx.beginPath(); ctx.moveTo(sway, -108); ctx.lineTo(sway, 20); ctx.stroke();
+      ctx.restore();
+
+      // Hips
+      ellipse(sway * 0.5, 20, 22, 8, goldWire, 0.4);
+
+      // LEFT Arm (healthy)
+      ctx.save(); ctx.strokeStyle = goldWire; ctx.globalAlpha = 0.45; ctx.lineWidth = 1.5 / (scale / 100);
+      ctx.beginPath();
+      ctx.moveTo(sway - 42, -108);
+      ctx.lineTo(-sway - 56, -60);
+      ctx.lineTo(-sway - 62, 0);
+      ctx.lineTo(-sway - 56, 50);
+      ctx.stroke(); ctx.restore();
+
+      // RIGHT Arm (injury: shoulder highlighted)
+      ctx.save(); ctx.strokeStyle = goldWire; ctx.globalAlpha = 0.45; ctx.lineWidth = 1.5 / (scale / 100);
+      ctx.beginPath();
+      ctx.moveTo(sway + 42, -108);
+      ctx.lineTo(-sway + 56, -60);
+      ctx.lineTo(-sway + 62, 0);
+      ctx.lineTo(-sway + 56, 50);
+      ctx.stroke(); ctx.restore();
+
+      // Left Leg (knee highlighted)
+      ctx.save(); ctx.strokeStyle = goldWire; ctx.globalAlpha = 0.45; ctx.lineWidth = 1.5 / (scale / 100);
+      ctx.beginPath();
+      ctx.moveTo(sway - 14, 20); ctx.lineTo(sway - 18, 90); ctx.lineTo(sway - 16, 148); ctx.stroke();
+      ctx.restore();
+
+      // Right Leg
+      ctx.save(); ctx.strokeStyle = goldWire; ctx.globalAlpha = 0.45; ctx.lineWidth = 1.5 / (scale / 100);
+      ctx.beginPath();
+      ctx.moveTo(sway + 14, 20); ctx.lineTo(sway + 18, 90); ctx.lineTo(sway + 16, 148); ctx.stroke();
+      ctx.restore();
+
+      // RIGHT SHOULDER injury dot
+      injuryDot(-sway + 42, -108, 8, redHighlight);
+
+      // LEFT KNEE injury dot (resolved = green)
+      injuryDot(sway - 18, 90, 7, greenHighlight);
+
+      ctx.restore();
+    }
+
+    function loop(timestamp) {
+      angle = timestamp / 1000;
+      drawBody(angle);
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  })();
+</script>
+</body>
+</html>

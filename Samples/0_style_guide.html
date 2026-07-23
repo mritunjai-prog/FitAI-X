@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FitAI Pro — Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0A0A; --card:#161616; --card2:#101010;
+    --purple:#F5C400; --violet:#FFD60A; --pink:#FFB300; --blue:#CA8A04; --cyan:#FDE68A;
+    --green:#A3E635; --amber:#F59E0B; --red:#EF4444;
+    --text:#FFFFFF; --text2:#B0AA9A; --border:rgba(255,214,10,.09);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{ background:var(--bg); color:var(--text); font-family:'Manrope',sans-serif; padding:56px 24px 100px; }
+  .wrap{max-width:1120px; margin:0 auto;}
+  code, .mono{font-family:'JetBrains Mono',monospace;}
+
+  /* Page header */
+  .page-head{margin-bottom:56px;}
+  .page-head .kicker{font-size:12px; font-weight:700; color:var(--purple); text-transform:uppercase; letter-spacing:1.2px; margin-bottom:10px;}
+  .page-head h1{font-size:34px; font-weight:800; margin-bottom:8px;}
+  .page-head p{font-size:14.5px; color:var(--text2); max-width:640px; line-height:1.6;}
+
+  .section{margin-bottom:64px;}
+  .section-title{display:flex; align-items:baseline; gap:12px; margin-bottom:20px;}
+  .section-title h2{font-size:20px; font-weight:800;}
+  .section-title span{font-size:12px; color:var(--text2); font-family:'JetBrains Mono',monospace;}
+
+  /* Color swatches */
+  .swatch-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:14px;}
+  .swatch{border-radius:16px; overflow:hidden; border:1px solid var(--border); background:var(--card);}
+  .swatch .fill{height:76px;}
+  .swatch .meta{padding:10px 12px;}
+  .swatch .name{font-size:12.5px; font-weight:700;}
+  .swatch .hex{font-size:11px; color:var(--text2); font-family:'JetBrains Mono',monospace; margin-top:2px;}
+  .swatch .use{font-size:10px; color:var(--text2); margin-top:4px; line-height:1.4;}
+
+  /* Typography */
+  .type-list{background:var(--card); border:1px solid var(--border); border-radius:18px; padding:8px 24px;}
+  .type-row{display:flex; align-items:baseline; justify-content:space-between; gap:20px; padding:18px 0; border-bottom:1px solid var(--border);}
+  .type-row:last-child{border-bottom:none;}
+  .type-sample{flex:1; min-width:0;}
+  .type-meta{font-size:11.5px; color:var(--text2); font-family:'JetBrains Mono',monospace; white-space:nowrap; text-align:right;}
+
+  /* Spacing / radius */
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+  .spec-card{background:var(--card); border:1px solid var(--border); border-radius:18px; padding:20px;}
+  .spec-card h3{font-size:13.5px; font-weight:700; margin-bottom:14px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px;}
+  .space-row{display:flex; align-items:center; gap:14px; margin-bottom:10px;}
+  .space-row .bar{height:14px; background:linear-gradient(135deg,var(--purple),var(--pink)); border-radius:3px;}
+  .space-row .lbl{font-size:12px; font-family:'JetBrains Mono',monospace; color:var(--text2); width:56px; flex-shrink:0;}
+  .radius-row{display:flex; align-items:center; gap:14px; margin-bottom:12px;}
+  .radius-box{width:44px; height:44px; background:var(--card2); border:1.5px solid var(--purple); flex-shrink:0;}
+  .radius-row .lbl{font-size:12px; font-family:'JetBrains Mono',monospace; color:var(--text2);}
+
+  /* Component specimens */
+  .comp-card{background:var(--card); border:1px solid var(--border); border-radius:18px; padding:22px; margin-bottom:16px;}
+  .comp-card h3{font-size:13px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; margin-bottom:16px;}
+  .comp-row{display:flex; flex-wrap:wrap; gap:14px; align-items:center;}
+
+  .btn{padding:13px 22px; border-radius:16px; font-weight:700; font-size:13.5px; border:none; cursor:pointer; display:inline-flex; align-items:center; gap:6px;}
+  .btn-primary{background:linear-gradient(135deg,var(--purple),var(--pink)); color:#fff; box-shadow:0 8px 20px -8px rgba(245,196,0,.6);}
+  .btn-secondary{background:rgba(255,255,255,.06); color:#fff; border:1px solid rgba(255,255,255,.25);}
+  .btn-cta{background:linear-gradient(135deg,var(--purple),var(--blue)); color:#fff; box-shadow:0 8px 20px -8px rgba(245,196,0,.6);}
+  .btn-disabled{background:var(--card2); color:var(--text2); cursor:not-allowed;}
+  .btn-danger{background:rgba(239,68,68,.08); color:var(--red); border:1px solid rgba(239,68,68,.3);}
+
+  .chip{font-size:11.5px; font-weight:600; padding:8px 14px; border-radius:20px; background:var(--card2); color:var(--text2); border:1px solid var(--border);}
+  .chip.active{background:linear-gradient(135deg,var(--purple),var(--violet)); color:#fff; border-color:transparent;}
+
+  .switch{width:40px; height:23px; border-radius:20px; background:var(--card2); position:relative;}
+  .switch .knob{position:absolute; top:2px; left:2px; width:19px; height:19px; border-radius:50%; background:#fff;}
+  .switch.on{background:linear-gradient(135deg,var(--purple),var(--violet));}
+  .switch.on .knob{left:19px;}
+
+  .badge{width:16px; height:16px; border-radius:50%; background:var(--red); color:#fff; font-size:9px; font-weight:800; display:flex; align-items:center; justify-content:center;}
+  .status-pill{font-size:10.5px; font-weight:700; padding:4px 10px; border-radius:20px; display:inline-flex; align-items:center; gap:4px;}
+
+  .mini-card{background:var(--card2); border:1px solid var(--border); border-radius:16px; padding:14px; width:150px;}
+  .mini-card .l{font-size:10.5px; color:var(--text2); margin-bottom:6px;}
+  .mini-card .v{font-size:18px; font-weight:800;}
+
+  .ring-demo{position:relative; width:64px; height:64px;}
+  .ring-demo svg{transform:rotate(-90deg);}
+  .ring-demo .n{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800;}
+
+  .bar-demo{width:180px; height:8px; background:var(--card2); border-radius:6px; overflow:hidden;}
+  .bar-demo .f{height:100%; width:68%; background:linear-gradient(90deg,var(--purple),var(--cyan)); border-radius:6px;}
+
+  .nav-demo{display:flex; gap:6px; background:var(--card2); border-radius:16px; padding:8px; width:fit-content;}
+  .nav-demo-item{padding:8px 14px; border-radius:12px; font-size:11px; font-weight:600; color:var(--text2); display:flex; align-items:center; gap:6px;}
+  .nav-demo-item.active{color:var(--purple); background:rgba(245,196,0,.12);}
+  .fab-demo{width:44px; height:44px; border-radius:50%; background:linear-gradient(135deg,var(--purple),var(--pink)); display:flex; align-items:center; justify-content:center; color:#fff;}
+
+  .hex-demo{width:56px; height:56px; clip-path:polygon(50% 0%, 95% 25%, 95% 75%, 50% 100%, 5% 75%, 5% 25%); background:linear-gradient(160deg,#FFD60A,#CA8A04); display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px; font-weight:800;}
+
+  .icon-row{display:flex; gap:16px; flex-wrap:wrap;}
+  .icon-tile{width:40px; height:40px; border-radius:11px; background:var(--card2); display:flex; align-items:center; justify-content:center; color:var(--text2);}
+  .icon-tile svg{width:19px; height:19px; stroke:currentColor;}
+
+  .gradient-row{display:flex; gap:14px; flex-wrap:wrap;}
+  .gradient-swatch{width:150px; height:70px; border-radius:14px; display:flex; align-items:flex-end; padding:10px; font-size:10.5px; font-weight:700; color:#fff;}
+
+  .footer-note{margin-top:60px; padding-top:24px; border-top:1px solid var(--border); font-size:12px; color:var(--text2); line-height:1.7;}
+  .footer-note b{color:var(--text);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="page-head">
+    <div class="kicker">FitAI Pro · Design System v1.0</div>
+    <h1>Style Guide & Component Reference</h1>
+    <p>Dark, premium fitness app system — color tokens, type scale, spacing, and component specimens used across the Workout, Analytics, Recovery, Dashboard, and Profile screens. Hand this to a developer as a build spec, or use it as a shared Figma library reference.</p>
+  </div>
+
+  <!-- COLORS -->
+  <div class="section">
+    <div class="section-title"><h2>Color Palette</h2><span>--variables</span></div>
+    <div class="swatch-grid">
+      <div class="swatch"><div class="fill" style="background:#0A0A0A;"></div><div class="meta"><div class="name">Background</div><div class="hex">--bg #0A0A0A</div><div class="use">App base, screen background</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#161616;"></div><div class="meta"><div class="name">Card</div><div class="hex">--card #161616</div><div class="use">All cards & panels</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#101010;"></div><div class="meta"><div class="name">Card Inset</div><div class="hex">--card2 #101010</div><div class="use">Nested elements, tracks, thumbnails</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#F5C400;"></div><div class="meta"><div class="name">Gold</div><div class="hex">--purple #F5C400</div><div class="use">Primary action, active states</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#FFD60A;"></div><div class="meta"><div class="name">Bright Yellow</div><div class="hex">--violet #FFD60A</div><div class="use">Gradient partner to purple</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#FFB300;"></div><div class="meta"><div class="name">Amber Gold</div><div class="hex">--pink #FFB300</div><div class="use">CTA gradient, FAB</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#CA8A04;"></div><div class="meta"><div class="name">Dark Gold</div><div class="hex">--blue #CA8A04</div><div class="use">Secondary data, charts</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#FDE68A;"></div><div class="meta"><div class="name">Pale Gold</div><div class="hex">--cyan #FDE68A</div><div class="use">AI accents, gauge highlight</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#A3E635;"></div><div class="meta"><div class="name">Lime</div><div class="hex">--green #A3E635</div><div class="use">Success, recovered, positive</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#F59E0B;"></div><div class="meta"><div class="name">Amber</div><div class="hex">--amber #F59E0B</div><div class="use">Caution, recovering, moderate</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#EF4444;"></div><div class="meta"><div class="name">Red</div><div class="hex">--red #EF4444</div><div class="use">Danger, high fatigue, missed</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#B0AA9A;"></div><div class="meta"><div class="name">Text Secondary</div><div class="hex">--text2 #B0AA9A</div><div class="use">Labels, captions, meta</div></div></div>
+    </div>
+
+    <div style="height:20px;"></div>
+    <div class="gradient-row">
+      <div class="gradient-swatch" style="background:linear-gradient(135deg,#F5C400,#FFB300);">Gold → Amber (CTAs)</div>
+      <div class="gradient-swatch" style="background:linear-gradient(135deg,#F5C400,#CA8A04);">Gold → Dark Gold (Recovery CTA)</div>
+      <div class="gradient-swatch" style="background:linear-gradient(160deg,#1c1c1c,#0a0a0a); color:#F5C400;">Hero (Workout)</div>
+      <div class="gradient-swatch" style="background:linear-gradient(120deg,#111111,#191919); border:1px solid rgba(250,204,21,.22); color:#F5C400;">Hero (Recovery)</div>
+      <div class="gradient-swatch" style="background:linear-gradient(135deg,#F5C400,#FDE68A); color:#3a2a08;">Gold → Pale Gold (AI/Data)</div>
+    </div>
+  </div>
+
+  <!-- TYPOGRAPHY -->
+  <div class="section">
+    <div class="section-title"><h2>Typography</h2><span>Manrope, 400–800</span></div>
+    <div class="type-list">
+      <div class="type-row"><div class="type-sample" style="font-size:32px; font-weight:800;">Metric / Display 32</div><div class="type-meta">Manrope 800 · 32px<br>Fitness score, big numbers</div></div>
+      <div class="type-row"><div class="type-sample" style="font-size:22px; font-weight:800;">Hero Title 22–28</div><div class="type-meta">Manrope 800 · 22–28px<br>Hero card titles</div></div>
+      <div class="type-row"><div class="type-sample" style="font-size:19px; font-weight:800;">Section Metric 19</div><div class="type-meta">Manrope 800 · 19px<br>Card stat values</div></div>
+      <div class="type-row"><div class="type-sample" style="font-size:16px; font-weight:700;">Section Title 16</div><div class="type-meta">Manrope 700 · 16px<br>"Today's Exercises", etc.</div></div>
+      <div class="type-row"><div class="type-sample" style="font-size:13.5px; font-weight:700;">Card Title / Body Bold 13.5</div><div class="type-meta">Manrope 700 · 13.5px<br>Card headings, list titles</div></div>
+      <div class="type-row"><div class="type-sample" style="font-size:12.5px; font-weight:400; color:var(--text2);">Body / Description 12.5</div><div class="type-meta">Manrope 400 · 12.5px<br>Descriptions, AI text</div></div>
+      <div class="type-row"><div class="type-sample" style="font-size:11px; font-weight:600; color:var(--text2);">Caption / Meta 10.5–11</div><div class="type-meta">Manrope 600 · 10.5–11px<br>Timestamps, sub-labels</div></div>
+      <div class="type-row"><div class="type-sample" style="font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--text2);">Overline / Tag 9.5</div><div class="type-meta">Manrope 700 · 9.5px · uppercase<br>Section labels, hero pill</div></div>
+    </div>
+  </div>
+
+  <!-- SPACING & RADIUS -->
+  <div class="section">
+    <div class="section-title"><h2>Spacing & Radius</h2><span>8pt grid</span></div>
+    <div class="grid2">
+      <div class="spec-card">
+        <h3>Spacing scale</h3>
+        <div class="space-row"><span class="lbl">4px</span><div class="bar" style="width:4px;"></div></div>
+        <div class="space-row"><span class="lbl">8px</span><div class="bar" style="width:8px;"></div></div>
+        <div class="space-row"><span class="lbl">12px</span><div class="bar" style="width:12px;"></div></div>
+        <div class="space-row"><span class="lbl">16px</span><div class="bar" style="width:16px;"></div></div>
+        <div class="space-row"><span class="lbl">20px</span><div class="bar" style="width:20px;"></div></div>
+        <div class="space-row"><span class="lbl">24px</span><div class="bar" style="width:24px;"></div></div>
+        <div class="space-row"><span class="lbl">32px</span><div class="bar" style="width:32px;"></div></div>
+      </div>
+      <div class="spec-card">
+        <h3>Radius scale</h3>
+        <div class="radius-row"><div class="radius-box" style="border-radius:10px;"></div><span class="lbl">10px — chips, small icons</span></div>
+        <div class="radius-row"><div class="radius-box" style="border-radius:14px;"></div><span class="lbl">14px — buttons, mini cards</span></div>
+        <div class="radius-row"><div class="radius-box" style="border-radius:18px;"></div><span class="lbl">18px — list cards</span></div>
+        <div class="radius-row"><div class="radius-box" style="border-radius:22px;"></div><span class="lbl">22–24px — hero cards</span></div>
+        <div class="radius-row"><div class="radius-box" style="border-radius:50%;"></div><span class="lbl">50% — avatars, nav dots, FAB</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPONENTS -->
+  <div class="section">
+    <div class="section-title"><h2>Components</h2><span>specimens</span></div>
+
+    <div class="comp-card">
+      <h3>Buttons</h3>
+      <div class="comp-row">
+        <button class="btn btn-primary">Start Workout</button>
+        <button class="btn btn-secondary">Customize</button>
+        <button class="btn btn-cta">Start Recovery Routine</button>
+        <button class="btn btn-danger">Log Out</button>
+        <button class="btn btn-disabled" disabled>Disabled</button>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <h3>Chips (multi/single select)</h3>
+      <div class="comp-row">
+        <span class="chip active">Dumbbells</span>
+        <span class="chip">Barbell</span>
+        <span class="chip active">Lose Weight</span>
+        <span class="chip">Endurance</span>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <h3>Toggle switches</h3>
+      <div class="comp-row">
+        <div class="switch on"><div class="knob"></div></div>
+        <div class="switch"><div class="knob"></div></div>
+        <span style="font-size:12px; color:var(--text2);">On / Off states — 40×23px, knob 19px</span>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <h3>Progress — rings & bars</h3>
+      <div class="comp-row">
+        <div class="ring-demo">
+          <svg width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="27" fill="none" stroke="#241F14" stroke-width="7"/><circle cx="32" cy="32" r="27" fill="none" stroke="url(#gg)" stroke-width="7" stroke-linecap="round" stroke-dasharray="170" stroke-dashoffset="42"/><defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#F5C400"/><stop offset="100%" stop-color="#FDE68A"/></linearGradient></defs></svg>
+          <div class="n">85</div>
+        </div>
+        <div class="bar-demo"><div class="f"></div></div>
+        <span style="font-size:12px; color:var(--text2);">Gradient stroke, rounded caps, 1s ease-out draw-in on load</span>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <h3>Cards & stat tiles</h3>
+      <div class="comp-row">
+        <div class="mini-card"><div class="l">Recovery Score</div><div class="v" style="color:var(--green)">89%</div></div>
+        <div class="mini-card"><div class="l">Heart Rate</div><div class="v">62 bpm</div></div>
+        <div class="hex-demo">100</div>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <h3>Status pills & badges</h3>
+      <div class="comp-row">
+        <span class="status-pill" style="background:rgba(163,230,53,.15); color:var(--green);">● Excellent</span>
+        <span class="status-pill" style="background:rgba(245,158,11,.15); color:var(--amber);">Recovering</span>
+        <span class="status-pill" style="background:rgba(245,196,0,.15); color:var(--purple);">✦ PRO MEMBER</span>
+        <div class="badge">3</div>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <h3>Navigation</h3>
+      <div class="comp-row">
+        <div class="nav-demo">
+          <div class="nav-demo-item">Home</div>
+          <div class="nav-demo-item active">Workout</div>
+          <div class="nav-demo-item">Analytics</div>
+        </div>
+        <div class="fab-demo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg></div>
+      </div>
+    </div>
+
+    <div class="comp-card">
+      <h3>Iconography — rounded outline, stroke-width 2</h3>
+      <div class="icon-row">
+        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2s6 6.5 6 11a6 6 0 1 1-12 0c0-4.5 6-11 6-11z"/></svg></div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg></div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 4.9L19 9l-4.9 1.9L12 16l-1.9-5.1L5 9l5.1-1.9L12 3z"/></svg></div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></div>
+        <div class="icon-tile"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    <b>Handoff notes:</b> Font is Manrope (Google Fonts) as a web-safe substitute for SF Pro Display. All icons are hand-drawn inline SVG at stroke-width 2 — swap for the Lucide icon set 1:1 by name in production. Radii and spacing follow an 8pt grid throughout. Gradients run 120°–160° diagonal. Card background never uses pure black — always <code>#161616</code> — to keep depth against the <code>#0A0A0A</code> base.
+  </div>
+
+</div>
+</body>
+</html>

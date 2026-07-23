@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Progress & Analytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0A0A0A; --card:#161616; --card2:#101010;
+    --purple:#F5C400; --violet:#FFD60A; --pink:#FFB300; --blue:#CA8A04; --cyan:#FDE68A;
+    --green:#A3E635; --amber:#F59E0B; --red:#EF4444;
+    --text:#FFFFFF; --text2:#B0AA9A; --border:rgba(255,214,10,.09);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{ background:#000; min-height:100vh; display:flex; align-items:center; justify-content:center;
+    padding:40px 16px; font-family:'Manrope',sans-serif; color:var(--text); }
+  .frame{ width:390px; height:844px; background:var(--bg); border-radius:52px; border:10px solid #000;
+    box-shadow:0 50px 100px -25px rgba(0,0,0,.9); overflow:hidden; position:relative; }
+  .notch{position:absolute; top:0; left:50%; transform:translateX(-50%); width:120px; height:26px; background:#000; border-radius:0 0 18px 18px; z-index:20;}
+  .statusbar{display:flex; justify-content:space-between; align-items:center; padding:16px 24px 4px; font-size:15px; font-weight:700;}
+  .statusbar .icons{display:flex; gap:5px; align-items:center;}
+  .scroll{height:calc(100% - 34px); overflow-y:auto; padding:6px 20px 100px;}
+  .scroll::-webkit-scrollbar{display:none;}
+
+  .topbar{display:flex; justify-content:space-between; align-items:center; margin:10px 0 16px;}
+  .topbar .left{display:flex; align-items:center; gap:12px;}
+  .back{width:34px; height:34px; display:flex; align-items:center; justify-content:center; color:var(--text2);}
+  .topbar h1{font-size:19px; font-weight:800;}
+  .cal-btn{width:38px; height:38px; border-radius:12px; background:var(--card); display:flex; align-items:center; justify-content:center; color:var(--text2);}
+
+  .segment{display:flex; background:var(--card); border:1px solid var(--border); border-radius:14px; padding:4px; margin-bottom:16px;}
+  .segment span{flex:1; text-align:center; padding:9px 0; border-radius:10px; font-size:12px; font-weight:700; color:var(--text2); cursor:pointer; transition:all .2s ease;}
+  .segment span.active{background:linear-gradient(135deg,var(--purple),var(--violet)); color:#fff;}
+
+  .card{background:var(--card); border:1px solid var(--border); border-radius:20px; padding:16px; margin-bottom:12px;}
+  .fscore-top{display:flex; justify-content:space-between; align-items:flex-start;}
+  .fscore-left .lbl{font-size:13px; font-weight:700; color:var(--text2); margin-bottom:8px;}
+  .fscore-left .big{font-size:32px; font-weight:800;}
+  .fscore-left .big small{font-size:15px; color:var(--text2); font-weight:600;}
+  .fscore-left .msg{font-size:12px; color:var(--green); font-weight:600; margin-top:4px;}
+  .fscore-ring{position:relative; width:88px; height:88px;}
+  .fscore-ring svg{transform:rotate(-90deg);}
+  .fscore-center{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800;}
+  .fscore-side{display:flex; flex-direction:column; gap:10px; align-items:flex-end;}
+  .fscore-item{display:flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; color:var(--text2); text-align:right;}
+  .fscore-item svg{width:15px; height:15px; flex-shrink:0;}
+  .fscore-item b{color:var(--text); display:block; font-size:12.5px;}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .mini{background:var(--card); border:1px solid var(--border); border-radius:18px; padding:14px; margin-bottom:12px;}
+  .mini-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;}
+  .mini-head h4{font-size:12.5px; font-weight:700;}
+  .mini-head .tag{font-size:10.5px; font-weight:700;}
+  .mini .stat{font-size:19px; font-weight:800; margin:4px 0 6px;}
+  .mini .foot{display:flex; justify-content:space-between; font-size:9px; color:var(--text2); margin-top:4px;}
+  .legend{display:flex; flex-direction:column; gap:6px; font-size:10px; color:var(--text2); margin-top:6px;}
+  .legend .row{display:flex; align-items:center; justify-content:space-between;}
+  .legend .row .l{display:flex; align-items:center; gap:5px;}
+  .legend .d{width:7px; height:7px; border-radius:50%;}
+  .nring-labels{display:flex; justify-content:space-around; margin-top:8px;}
+  .nring-labels div{text-align:center; font-size:9.5px; color:var(--text2);}
+  .nring-labels b{display:block; font-size:12px; color:var(--text); font-weight:800;}
+
+  .section-head{display:flex; justify-content:space-between; align-items:center; margin:18px 0 12px;}
+  .section-head h3{font-size:16px; font-weight:700;}
+  .section-head span{font-size:12.5px; color:var(--purple); font-weight:700; cursor:pointer;}
+  .achieve-row{display:flex; gap:10px; overflow-x:auto; padding-bottom:6px; margin-bottom:12px;}
+  .achieve-row::-webkit-scrollbar{display:none;}
+  .achieve{flex-shrink:0; width:88px; text-align:center;}
+  .hex{width:64px; height:64px; margin:0 auto 8px; clip-path:polygon(50% 0%, 95% 25%, 95% 75%, 50% 100%, 5% 75%, 5% 25%); display:flex; align-items:center; justify-content:center; flex-direction:column;}
+  .hex svg{width:22px; height:22px; margin-bottom:2px;}
+  .hex .num{font-size:12px; font-weight:800; color:#fff;}
+  .achieve .t{font-size:11px; font-weight:700;}
+
+  .bottomnav{position:absolute; bottom:0; left:0; right:0; height:80px; background:rgba(10,10,10,.9); backdrop-filter:blur(20px);
+    border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-around; z-index:15; padding:0 8px;}
+  .navitem{display:flex; flex-direction:column; align-items:center; gap:3px; color:var(--text2); font-size:10px; font-weight:600; cursor:pointer; padding:8px 14px; border-radius:16px; transition:background .2s ease;}
+  .navitem svg{width:20px; height:20px;}
+  .navitem.active{color:var(--purple); background:rgba(245,196,0,.12);}
+  .fab{width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg,var(--purple),var(--pink)); display:flex; align-items:center; justify-content:center; color:#fff; box-shadow:0 10px 24px -6px rgba(245,196,0,.6); margin-top:-24px; cursor:pointer;}
+  .fab svg{width:22px; height:22px;}
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="notch"></div>
+  <div class="statusbar">
+    <span>9:41</span>
+    <div class="icons">
+      <svg width="18" height="10" viewBox="0 0 18 10" fill="#fff"><rect x="0" y="6" width="3" height="4" rx="1"/><rect x="5" y="4" width="3" height="6" rx="1"/><rect x="10" y="2" width="3" height="8" rx="1"/><rect x="15" y="0" width="3" height="10" rx="1"/></svg>
+      <svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="#fff" stroke-width="1.4"><path d="M1 4a11 11 0 0114 0M3.5 6.8a7 7 0 019 0M6.2 9.5a3 3 0 013.6 0"/><circle cx="8" cy="10.6" r="1" fill="#fff"/></svg>
+      <svg width="25" height="12" viewBox="0 0 25 12" fill="none"><rect x="0.5" y="0.5" width="21" height="11" rx="2.5" stroke="#fff"/><rect x="2" y="2" width="18" height="8" rx="1.5" fill="#fff"/><rect x="22.5" y="4" width="2" height="4" rx="1" fill="#fff"/></svg>
+    </div>
+  </div>
+
+  <div class="scroll">
+    <div class="topbar">
+      <div class="left">
+        <div class="back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M15 18l-6-6 6-6"/></svg></div>
+        <h1>Progress & Analytics</h1>
+      </div>
+      <div class="cal-btn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
+    </div>
+
+    <div class="segment" id="segment">
+      <span>7D</span><span class="active">30D</span><span>90D</span><span>1Y</span>
+    </div>
+
+    <div class="card">
+      <div class="fscore-top">
+        <div class="fscore-left">
+          <div class="lbl">Fitness Score</div>
+          <div class="big" id="fsBig">0<small>/100</small></div>
+          <div class="msg">Great Progress! 🔥</div>
+        </div>
+        <div class="fscore-ring">
+          <svg width="88" height="88" viewBox="0 0 88 88">
+            <circle cx="44" cy="44" r="37" fill="none" stroke="#241F14" stroke-width="8"/>
+            <circle id="fsRing" cx="44" cy="44" r="37" fill="none" stroke="url(#fsGrad)" stroke-width="8" stroke-linecap="round" stroke-dasharray="232" stroke-dashoffset="232"/>
+            <defs><linearGradient id="fsGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#F5C400"/><stop offset="100%" stop-color="#FDE68A"/></linearGradient></defs>
+          </svg>
+          <div class="fscore-center" id="fsCenter">0</div>
+        </div>
+        <div class="fscore-side">
+          <div class="fscore-item"><svg viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2"><path d="M12 2s6 6.5 6 11a6 6 0 1 1-12 0c0-4.5 6-11 6-11z"/></svg><b>24 Days</b>Streak</div>
+          <div class="fscore-item"><svg viewBox="0 0 24 24" fill="none" stroke="var(--text2)" stroke-width="2"><path d="M4 12h4m8 0h4M8 12a4 4 0 018 0"/></svg><b>5/6</b>Workouts</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="mini">
+        <div class="mini-head"><h4>Weight Progress</h4><span class="tag" style="color:var(--green)">↓ 2.8 kg</span></div>
+        <div class="stat">68.4 <small style="font-size:12px; color:var(--text2); font-weight:600;">kg</small></div>
+        <svg width="100%" height="46" viewBox="0 0 150 46" preserveAspectRatio="none">
+          <polyline points="0,18 20,24 40,12 60,20 80,8 100,16 120,6 150,14" fill="none" stroke="var(--pink)" stroke-width="2.2"/>
+        </svg>
+        <div class="foot"><span>Apr 22</span><span>May 6</span><span>May 20</span></div>
+      </div>
+
+      <div class="mini">
+        <div class="mini-head"><h4>Strength Progress</h4><span class="tag" style="color:var(--green)">+18%</span></div>
+        <svg width="100%" height="98" viewBox="0 0 100 100">
+          <polygon points="50,8 90,34 76,86 24,86 10,34" fill="none" stroke="#241F14" stroke-width="1.2"/>
+          <polygon points="50,26 72,42 64,72 36,72 28,42" fill="none" stroke="#241F14" stroke-width="1.2"/>
+          <polygon id="radarShape" points="50,50 50,50 50,50 50,50 50,50" fill="rgba(245,196,0,.4)" stroke="var(--purple)" stroke-width="1.6"/>
+          <text x="50" y="4" text-anchor="middle" fill="#B0AA9A" font-size="6.5" font-family="Manrope">Overhead</text>
+          <text x="94" y="36" text-anchor="start" fill="#B0AA9A" font-size="6.5" font-family="Manrope">Squat</text>
+          <text x="76" y="96" text-anchor="middle" fill="#B0AA9A" font-size="6.5" font-family="Manrope">Deadlift</text>
+          <text x="24" y="96" text-anchor="middle" fill="#B0AA9A" font-size="6.5" font-family="Manrope">Pull-up</text>
+          <text x="6" y="36" text-anchor="end" fill="#B0AA9A" font-size="6.5" font-family="Manrope">Bench</text>
+        </svg>
+      </div>
+
+      <div class="mini">
+        <div class="mini-head"><h4>Workout Completion</h4></div>
+        <div style="display:flex; justify-content:center;">
+          <div style="position:relative; width:78px; height:78px;">
+            <svg width="78" height="78" viewBox="0 0 78 78">
+              <circle cx="39" cy="39" r="32" fill="none" stroke="#241F14" stroke-width="9"/>
+              <circle id="donutRing" cx="39" cy="39" r="32" fill="none" stroke="url(#donutGrad)" stroke-width="9" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="201" transform="rotate(-90 39 39)"/>
+              <defs><linearGradient id="donutGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#F5C400"/><stop offset="100%" stop-color="#CA8A04"/></linearGradient></defs>
+            </svg>
+            <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:17px; font-weight:800;" id="donutText">0%</div>
+          </div>
+        </div>
+        <div class="legend">
+          <div class="row"><span class="l"><span class="d" style="background:var(--blue)"></span>Completed</span><b>19</b></div>
+          <div class="row"><span class="l"><span class="d" style="background:var(--red)"></span>Missed</span><b>6</b></div>
+          <div class="row"><span class="l"><span class="d" style="background:var(--cyan)"></span>Skipped</span><b>3</b></div>
+        </div>
+      </div>
+
+      <div class="mini">
+        <div class="mini-head"><h4>Calories Burned</h4></div>
+        <div style="font-size:10.5px; color:var(--text2); margin-bottom:6px;">Avg 420 kcal</div>
+        <div style="display:flex; align-items:flex-end; gap:4px; height:60px;" id="calBars">
+          <div class="cb" data-h="55" style="flex:1; border-radius:3px 3px 0 0; background:var(--blue); height:0%;"></div>
+          <div class="cb" data-h="35" style="flex:1; border-radius:3px 3px 0 0; background:var(--blue); height:0%;"></div>
+          <div class="cb" data-h="70" style="flex:1; border-radius:3px 3px 0 0; background:var(--blue); height:0%;"></div>
+          <div class="cb" data-h="45" style="flex:1; border-radius:3px 3px 0 0; background:var(--blue); height:0%;"></div>
+          <div class="cb" data-h="90" style="flex:1; border-radius:3px 3px 0 0; background:var(--blue); height:0%;"></div>
+          <div class="cb" data-h="60" style="flex:1; border-radius:3px 3px 0 0; background:var(--blue); height:0%;"></div>
+          <div class="cb" data-h="100" style="flex:1; border-radius:3px 3px 0 0; background:var(--blue); height:0%;"></div>
+        </div>
+        <div class="foot"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div>
+      </div>
+
+      <div class="mini">
+        <div class="mini-head"><h4>Recovery Trend</h4><span class="tag" style="color:var(--green)">+ Good</span></div>
+        <svg width="100%" height="46" viewBox="0 0 150 46" preserveAspectRatio="none">
+          <polyline points="0,30 20,20 40,26 60,12 80,18 100,6 120,14 150,4" fill="none" stroke="var(--green)" stroke-width="2.2"/>
+        </svg>
+        <div class="foot"><span>Apr 22</span><span>May 6</span><span>May 20</span></div>
+      </div>
+
+      <div class="mini">
+        <div class="mini-head"><h4>Nutrition Compliance</h4></div>
+        <div style="display:flex; justify-content:center; align-items:center;">
+          <svg width="72" height="72" viewBox="0 0 72 72">
+            <circle cx="36" cy="36" r="31" fill="none" stroke="#241F14" stroke-width="4"/>
+            <circle class="nring" data-o="0.92" cx="36" cy="36" r="31" fill="none" stroke="var(--green)" stroke-width="4" stroke-linecap="round" stroke-dasharray="195" stroke-dashoffset="195" transform="rotate(-90 36 36)"/>
+            <circle cx="36" cy="36" r="24" fill="none" stroke="#241F14" stroke-width="4"/>
+            <circle class="nring" data-o="0.87" cx="36" cy="36" r="24" fill="none" stroke="var(--purple)" stroke-width="4" stroke-linecap="round" stroke-dasharray="151" stroke-dashoffset="151" transform="rotate(-90 36 36)"/>
+            <circle cx="36" cy="36" r="17" fill="none" stroke="#241F14" stroke-width="4"/>
+            <circle class="nring" data-o="0.95" cx="36" cy="36" r="17" fill="none" stroke="var(--cyan)" stroke-width="4" stroke-linecap="round" stroke-dasharray="107" stroke-dashoffset="107" transform="rotate(-90 36 36)"/>
+          </svg>
+        </div>
+        <div class="nring-labels">
+          <div><b style="color:var(--green)">92%</b>Protein<br>Goal: 120g</div>
+          <div><b style="color:var(--purple)">87%</b>Calories<br>Goal: 2200</div>
+          <div><b style="color:var(--cyan)">95%</b>Water<br>Goal: 3L</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-head"><h3>Achievements</h3><span>View All</span></div>
+    <div class="achieve-row">
+      <div class="achieve">
+        <div class="hex" style="background:linear-gradient(160deg,#FFD60A,#CA8A04);"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 01-10 0V4z"/></svg><span class="num">100</span></div>
+        <div class="t">Workouts</div>
+      </div>
+      <div class="achieve">
+        <div class="hex" style="background:linear-gradient(160deg,#FB923C,#C2410C);"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M12 2s6 6.5 6 11a6 6 0 1 1-12 0c0-4.5 6-11 6-11z"/></svg><span class="num">5KG</span></div>
+        <div class="t">Lost</div>
+      </div>
+      <div class="achieve">
+        <div class="hex" style="background:linear-gradient(160deg,#F97316,#B91C1C);"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span class="num">30</span></div>
+        <div class="t">Day Streak</div>
+      </div>
+      <div class="achieve">
+        <div class="hex" style="background:linear-gradient(160deg,#CA8A04,#78350F);"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M6 9H3a1 1 0 01-1-1V5a1 1 0 011-1h3m12 5h3a1 1 0 001-1V5a1 1 0 00-1-1h-3M6 4h12v6a6 6 0 01-12 0V4z"/></svg></div>
+        <div class="t">New PR</div>
+      </div>
+      <div class="achieve">
+        <div class="hex" style="background:linear-gradient(160deg,#FBBF24,#B45309);"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M2 6l4 3 6-6 6 6 4-3-2 13H4L2 6z"/></svg></div>
+        <div class="t">Consistency King</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:4px; margin-bottom:70px;">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M12 3l1.9 4.9L19 9l-4.9 1.9L12 16l-1.9-5.1L5 9l5.1-1.9L12 3z"/></svg>
+        <span style="font-size:15px; font-weight:700;">AI Insights</span>
+      </div>
+      <div style="font-size:12.5px; color:var(--text2); line-height:1.6; margin-bottom:12px;">Consistency improved by 18%. Increase lower body intensity next week to keep strength gains balanced.</div>
+      <button style="padding:10px 16px; border-radius:12px; border:1px solid var(--border); background:rgba(255,255,255,.05); color:#fff; font-size:12.5px; font-weight:700; cursor:pointer;">See Details</button>
+    </div>
+
+  </div>
+
+  <div class="bottomnav">
+    <div class="navitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 11l9-8 9 8M5 10v10h14V10"/></svg>Home</div>
+    <div class="navitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6.5 6.5l11 11M2 8l3-3m14 14l3-3M7 17l-3 3M17 7l3-3"/><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/></svg>Workout</div>
+    <div class="fab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"/></svg></div>
+    <div class="navitem active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 15l4-4 3 3 5-6"/></svg>Analytics</div>
+    <div class="navitem"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Profile</div>
+  </div>
+</div>
+<script>
+  document.getElementById('segment').querySelectorAll('span').forEach(s=>{
+    s.addEventListener('click', ()=>{
+      document.getElementById('segment').querySelectorAll('span').forEach(o=>o.classList.remove('active'));
+      s.classList.add('active');
+    });
+  });
+
+  window.addEventListener('load', ()=>{
+    // Fitness score ring + numbers
+    const ring = document.getElementById('fsRing');
+    const center = document.getElementById('fsCenter');
+    const big = document.getElementById('fsBig');
+    const CIRC = 232, TARGET = 85;
+    let start=null;
+    function anim(ts){
+      if(!start) start=ts;
+      const p = Math.min((ts-start)/1000,1);
+      const v = TARGET*(1-Math.pow(1-p,3));
+      ring.style.strokeDashoffset = CIRC-(CIRC*v/100);
+      center.textContent = Math.round(v);
+      big.innerHTML = Math.round(v) + '<small>/100</small>';
+      if(p<1) requestAnimationFrame(anim);
+    }
+    requestAnimationFrame(anim);
+
+    // Donut
+    setTimeout(()=>{
+      document.getElementById('donutRing').style.transition='stroke-dashoffset 1s cubic-bezier(.3,.8,.3,1)';
+      document.getElementById('donutRing').style.strokeDashoffset = 201-(201*0.76);
+      let dv=0; const dInt=setInterval(()=>{ dv+=2; document.getElementById('donutText').textContent=Math.min(dv,76)+'%'; if(dv>=76) clearInterval(dInt); },18);
+    },150);
+
+    // Nutrition rings
+    document.querySelectorAll('.nring').forEach(r=>{
+      const circ = parseFloat(r.getAttribute('stroke-dasharray'));
+      const pct = parseFloat(r.dataset.o);
+      r.style.transition='stroke-dashoffset 1s cubic-bezier(.3,.8,.3,1)';
+      setTimeout(()=>{ r.style.strokeDashoffset = circ - (circ*pct); }, 250);
+    });
+
+    // Calorie bars
+    document.querySelectorAll('.cb').forEach((b,i)=>{
+      setTimeout(()=>{ b.style.transition='height .6s cubic-bezier(.3,.8,.3,1)'; b.style.height = b.dataset.h+'%'; }, 150+i*60);
+    });
+
+    // Radar draw-in
+    const radarTarget = [[50,10],[86,34],[73,80],[27,80],[14,34]];
+    let start2=null;
+    function radarAnim(ts){
+      if(!start2) start2=ts;
+      const p = Math.min((ts-start2)/800,1);
+      const pts = radarTarget.map(pt=>{
+        const x = 50+(pt[0]-50)*p, y=50+(pt[1]-50)*p;
+        return x+','+y;
+      }).join(' ');
+      document.getElementById('radarShape').setAttribute('points', pts);
+      if(p<1) requestAnimationFrame(radarAnim);
+    }
+    setTimeout(()=>requestAnimationFrame(radarAnim), 200);
+  });
+</script>
+</body>
+</html>

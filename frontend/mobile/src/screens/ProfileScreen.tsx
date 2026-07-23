@@ -1,0 +1,587 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  SafeAreaView,
+  StyleSheet,
+  Image,
+  Dimensions,
+  Platform,
+  StatusBar as RNStatusBar,
+} from 'react-native';
+import Svg, { Ellipse, Rect, Line, Circle, Path } from 'react-native-svg';
+import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withSpring,
+  withRepeat,
+  withDelay,
+  useAnimatedSensor,
+  SensorType,
+  Easing,
+  interpolate,
+  interpolateColor,
+  Extrapolation,
+  useAnimatedScrollHandler,
+  useDerivedValue,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import MaskedView from '@react-native-masked-view/masked-view';
+import MeshGradientBackground from '../components/MeshGradientBackground';
+import { DarkColors, LightColors, ThemeColors, F } from '../theme';
+
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+
+// ─── SVG Icons ────────────────────────────────────────────────────────────────
+type IconProps = { size?: number; color?: string };
+const Icons = {
+  notifications: ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5S10.5 3.17 10.5 4v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" /></Svg>
+  ),
+  bolt: ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M7 2v11h3v9l7-12h-4l4-8z" /></Svg>
+  ),
+  edit: ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" /></Svg>
+  ),
+  'fitness-center': ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z" /></Svg>
+  ),
+  'directions-run': ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M13.49 5.48c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm-3.6 13.9l1-4.4 2.1 2v6h2v-7.5l-2.1-2 .6-3c1.3 1.5 3.3 2.5 5.5 2.5v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1l-5.2 2.2v4.7h2v-3.4l1.8-.7-1.6 8.1-4.9-1-.4 2 7 1.4z" /></Svg>
+  ),
+  'flash-on': ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M7 2v11h3v9l7-12h-4l4-8z" /></Svg>
+  ),
+  'monitor-weight': ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M19 3H5C3.9 3 3 3.9 3 5v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5 0 1.58-1.06 2.9-2.5 3.35V19h-2v-6.15c-1.44-.45-2.5-1.78-2.5-3.35C8.5 7.57 10.07 6 12 6z" /></Svg>
+  ),
+  watch: ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M20 12c0-2.54-1.19-4.81-3.04-6.27L16 2H8l-.95 3.73C5.19 7.19 4 9.45 4 12s1.19 4.81 3.05 6.27L8 22h8l.96-3.73C18.81 16.81 20 14.54 20 12zm-8 5c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z" /></Svg>
+  ),
+  'expand-more': ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6z" /></Svg>
+  ),
+  'expand-less': ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z" /></Svg>
+  ),
+  'favorite-border': ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z" /></Svg>
+  ),
+  'add-circle-outline': ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M13 7h-2v4H7v2h4v4h2v-4h4v-2h-4V7zm-1-5C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z" /></Svg>
+  ),
+  home: ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></Svg>
+  ),
+  insights: ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M21 8c-1.45 0-2.26 1.44-1.93 2.51l-3.55 3.56c-.3-.09-.74-.09-1.04 0l-2.55-2.55C12.26 10.44 11.45 9 10 9c-1.45 0-2.26 1.46-1.93 2.53l-4.56 4.57C2.44 15.74 1 16.55 1 18c0 1.1.9 2 2 2 1.45 0 2.26-1.44 1.93-2.51l4.55-4.56c.3.09.74.09 1.04 0l2.55 2.55C12.74 16.56 13.55 18 15 18c1.45 0 2.26-1.46 1.93-2.53l3.56-3.55c1.07.33 2.51-.48 2.51-1.92 0-1.1-.9-2-2-2z" /></Svg>
+  ),
+  settings: ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" /></Svg>
+  ),
+  person: ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" /></Svg>
+  ),
+  'smart-toy': ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M20 9V7c0-1.1-.9-2-2-2h-3c0-1.66-1.34-3-3-3S9 3.34 9 5H6c-1.1 0-2 .9-2 2v2c-1.66 0-3 1.34-3 3s1.34 3 3 3v4c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-4c1.66 0 3-1.34 3-3s-1.34-3-3-3zM7.5 11.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5S9.83 13 9 13s-1.5-.67-1.5-1.5zm7.5 6.5H9v-1.5h6V18zm.5-5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" /></Svg>
+  ),
+  'light-mode': ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0l1.06-1.06z" /></Svg>
+  ),
+  'dark-mode': ({ size = 24, color = '#fff' }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}><Path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-3.03 0-5.5-2.47-5.5-5.5 0-1.82.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z" /></Svg>
+  ),
+};
+
+function Icon({ name, size = 24, color = '#fff' }: { name: keyof typeof Icons; size?: number; color?: string }) {
+  const Component = Icons[name];
+  return Component ? <Component size={size} color={color} /> : null;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const hapticFeedback = () => {
+  if (Platform.OS !== 'web') {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }
+};
+
+// ─── Shared Components ────────────────────────────────────────────────────────
+
+function GradientText({ text, style, C }: { text: string; style: any; C: ThemeColors }) {
+  if (Platform.OS === 'web') {
+    return <Text style={[style, { color: C.primary }]}>{text}</Text>;
+  }
+  return (
+    <MaskedView maskElement={<Text style={[style, { backgroundColor: 'transparent' }]}>{text}</Text>}>
+      <LinearGradient colors={[C.primary, C.primaryDim]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+        <Text style={[style, { opacity: 0 }]}>{text}</Text>
+      </LinearGradient>
+    </MaskedView>
+  );
+}
+
+function AnimatedCard({ children, index, style }: { children: React.ReactNode; index: number; style?: any }) {
+  const opacity = useSharedValue(0);
+  const translateY = useSharedValue(30);
+  useEffect(() => {
+    opacity.value = withDelay(index * 150, withTiming(1, { duration: 600 }));
+    translateY.value = withDelay(index * 150, withSpring(0, { damping: 20, stiffness: 100 }));
+  }, []);
+  const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value, transform: [{ translateY: translateY.value }] }));
+  return <Animated.View style={[animStyle, style]}>{children}</Animated.View>;
+}
+
+function PressableScale({ children, onPress, style, disabled = false }: any) {
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  return (
+    <TouchableOpacity
+      activeOpacity={1}
+      disabled={disabled}
+      onPressIn={() => { scale.value = withSpring(0.97, { damping: 15, stiffness: 300 }); }}
+      onPressOut={() => { scale.value = withSpring(1, { damping: 15, stiffness: 300 }); }}
+      onPress={() => { hapticFeedback(); onPress?.(); }}
+      style={style}
+    >
+      <Animated.View style={animatedStyle}>{children}</Animated.View>
+    </TouchableOpacity>
+  );
+}
+
+function TiltCard({ children, style, tiltEnabled = true, C }: { children: React.ReactNode; style?: any; tiltEnabled?: boolean; C: ThemeColors }) {
+  const animatedSensor = useAnimatedSensor(SensorType.ROTATION, { interval: 20 });
+  
+  // Smarter 3D Tilt: Dampen gyroscope noise using withSpring
+  const dampPitch = useDerivedValue(() => withSpring(animatedSensor.sensor.value.pitch, { damping: 20, stiffness: 90 }));
+  const dampRoll = useDerivedValue(() => withSpring(animatedSensor.sensor.value.roll, { damping: 20, stiffness: 90 }));
+
+  const animatedStyle = useAnimatedStyle(() => {
+    if (!tiltEnabled || Platform.OS === 'web') return {};
+    const rotateX = interpolate(dampPitch.value, [-Math.PI / 4, Math.PI / 4], [3, -3], Extrapolation.CLAMP);
+    const rotateY = interpolate(dampRoll.value, [-Math.PI / 4, Math.PI / 4], [-3, 3], Extrapolation.CLAMP);
+    return {
+      transform: [{ perspective: 800 }, { rotateX: `${rotateX}deg` }, { rotateY: `${rotateY}deg` }],
+    };
+  });
+
+  return (
+    <Animated.View style={[animatedStyle, style]}>
+      <BlurView intensity={30} tint={C.blurTint} style={[
+        { borderRadius: 20, padding: 20, overflow: 'hidden' },
+        { backgroundColor: C.surface, borderWidth: 1, borderColor: C.outlineVariant }
+      ]}>
+        {children}
+      </BlurView>
+    </Animated.View>
+  );
+}
+
+function SpinningAvatarRing({ children, C }: { children: React.ReactNode; C: ThemeColors }) {
+  const rotation = useSharedValue(0);
+  useEffect(() => {
+    rotation.value = withRepeat(withTiming(360, { duration: 10000, easing: Easing.linear }), -1, false);
+  }, []);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
+
+  return (
+    <View style={{ width: 72, height: 72, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View style={[StyleSheet.absoluteFill, animatedStyle]}>
+        <Svg width="100%" height="100%" viewBox="0 0 100 100">
+          <Circle cx="50" cy="50" r="48" fill="none" stroke={C.primary} strokeWidth="1.5" strokeDasharray="12, 8" strokeOpacity={0.6} />
+          <Circle cx="50" cy="50" r="42" fill="none" stroke={C.cyan} strokeWidth="1" strokeDasharray="40, 20" strokeOpacity={0.3} />
+        </Svg>
+      </Animated.View>
+      <View style={{ width: 62, height: 62, borderRadius: 31, overflow: 'hidden' }}>{children}</View>
+    </View>
+  );
+}
+
+function Toggle({ on, onChange, C }: { on: boolean; onChange: () => void; C: ThemeColors }) {
+  const pos = useSharedValue(on ? 1 : 0);
+  useEffect(() => {
+    pos.value = withSpring(on ? 1 : 0, { damping: 15, stiffness: 200, overshootClamping: false });
+  }, [on]);
+
+  const tx = useAnimatedStyle(() => ({
+    transform: [{ translateX: interpolate(pos.value, [0, 1], [2, 18]) }],
+  }));
+  const bgStyle = useAnimatedStyle(() => ({
+    backgroundColor: pos.value > 0.5 ? C.primary : C.glassInset,
+  }));
+
+  return (
+    <PressableScale onPress={onChange} style={{ padding: 4, margin: -4 }}>
+      <Animated.View style={[{ width: 44, height: 26, borderRadius: 13, borderWidth: 1, borderColor: C.outlineVariant, justifyContent: 'center' }, bgStyle]}>
+        <Animated.View style={[{ width: 20, height: 20, borderRadius: 10, backgroundColor: C.onSurface }, on && { backgroundColor: C.onPrimary }, tx]} />
+      </Animated.View>
+    </PressableScale>
+  );
+}
+
+function BodyMapSVG({ C }: { C: ThemeColors }) {
+  const pulse = useSharedValue(0);
+  useEffect(() => {
+    pulse.value = withRepeat(withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }), -1, true);
+  }, []);
+  const glowStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(pulse.value, [0, 1], [0.4, 1]),
+    transform: [{ scale: interpolate(pulse.value, [0, 1], [1, 1.2]) }],
+  }));
+
+  const wire = C.primary;
+  const wireL = C.outline;
+
+  return (
+    <View style={{ height: 220, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={160} height={220} viewBox="0 0 140 200">
+        <Ellipse cx={70} cy={18} rx={16} ry={18} fill="none" stroke={wire} strokeWidth={1.5} />
+        <Rect x={63} y={35} width={14} height={10} fill="none" stroke={wireL} strokeWidth={1} />
+        <Path d="M30,58 Q50,48 70,48 Q90,48 110,58" fill="none" stroke={wire} strokeWidth={1.5} />
+        <Path d="M38,58 L34,115 Q70,125 106,115 L102,58" fill="none" stroke={wire} strokeWidth={1.5} />
+        <Line x1={70} y1={48} x2={70} y2={115} stroke={wireL} strokeWidth={1} strokeDasharray="4,3" />
+        <Line x1={40} y1={75} x2={100} y2={75} stroke={wireL} strokeWidth={1} />
+        <Line x1={38} y1={95} x2={102} y2={95} stroke={wireL} strokeWidth={1} />
+        <Ellipse cx={70} cy={117} rx={22} ry={8} fill="none" stroke={wire} strokeWidth={1.2} />
+        <Path d="M38,58 L18,95 L15,130" fill="none" stroke={wire} strokeWidth={1.5} strokeLinecap="round" />
+        <Path d="M102,58 L122,95 L125,130" fill="none" stroke={wire} strokeWidth={1.5} strokeLinecap="round" />
+        <Path d="M55,122 L50,162 L48,192" fill="none" stroke={wire} strokeWidth={1.5} strokeLinecap="round" />
+        <Path d="M85,122 L90,162 L92,192" fill="none" stroke={wire} strokeWidth={1.5} strokeLinecap="round" />
+        <Circle cx={50} cy={162} r={4} fill="none" stroke={wireL} strokeWidth={1} />
+        <Circle cx={90} cy={162} r={4} fill="none" stroke={wireL} strokeWidth={1} />
+        
+        <Circle cx={108} cy={58} r={8} fill={`${C.error}33`} stroke={C.error} strokeWidth={1.5} />
+        <Circle cx={108} cy={58} r={3} fill={C.error} />
+        <Circle cx={50} cy={162} r={8} fill={`${C.success}33`} stroke={C.success} strokeWidth={1.5} />
+        <Circle cx={50} cy={162} r={3} fill={C.success} />
+      </Svg>
+      <Animated.View style={[{ position: 'absolute', width: 24, height: 24, borderRadius: 12, backgroundColor: C.error, top: 50, right: 18 }, glowStyle]} pointerEvents="none" />
+    </View>
+  );
+}
+
+function BatteryRing({ percentage, C }: { percentage: number; C: ThemeColors }) {
+  const dashOffset = 62 * (1 - (percentage / 100));
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24">
+      <Circle cx="12" cy="12" r="10" fill="none" stroke={C.outlineVariant} strokeWidth="3" />
+      <Circle cx="12" cy="12" r="10" fill="none" stroke={percentage > 20 ? C.success : C.error} strokeWidth="3" strokeDasharray="62" strokeDashoffset={dashOffset} strokeLinecap="round" transform="rotate(-90 12 12)" />
+    </Svg>
+  );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+export default function ProfileScreen({ onNavigateToBuilder }: { onNavigateToBuilder?: () => void }) {
+  const [isDark, setIsDark] = useState(true);
+  const C = isDark ? DarkColors : LightColors;
+  const S = useMemo(() => getStyles(C), [C]);
+
+  const [goals, setGoals] = useState({ hypertrophy: true, endurance: false, power: false, leanMass: true });
+  const [ai, setAi] = useState({ adaptive: true, formFeedback: false, nutritionSync: true });
+  const [deviceExpanded, setDeviceExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState(4); 
+
+  const toggleGoal = (k: keyof typeof goals) => {
+    setGoals(g => ({ ...g, [k]: !g[k] }));
+  };
+
+  const navDotPos = useSharedValue(SCREEN_W - (SCREEN_W / 5) * 0.5 - 28);
+  useEffect(() => {
+    const tabWidth = SCREEN_W / 5;
+    const centerOffset = tabWidth / 2 - 2;
+    navDotPos.value = withSpring(activeTab * tabWidth + centerOffset, { damping: 14, stiffness: 120 });
+  }, [activeTab]);
+  const navDotStyle = useAnimatedStyle(() => ({ transform: [{ translateX: navDotPos.value }] }));
+
+  // Dynamic Scroll Header
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler((e) => { scrollY.value = e.contentOffset.y; });
+  
+  const headerBlurStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, 30], [0, 1], Extrapolation.CLAMP),
+  }));
+  const headerBorderStyle = useAnimatedStyle(() => ({
+    borderBottomColor: interpolateColor(scrollY.value, [20, 40], ['transparent', C.outlineVariant]) as any,
+  }));
+  const titleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(scrollY.value, [0, 40], [1, 0.95], Extrapolation.CLAMP) }],
+  }));
+
+  // FAB Breathing Ripple
+  const rippleScale = useSharedValue(1);
+  const rippleOpacity = useSharedValue(0.5);
+  useEffect(() => {
+    rippleScale.value = withRepeat(withTiming(1.6, { duration: 2000, easing: Easing.out(Easing.ease) }), -1, false);
+    rippleOpacity.value = withRepeat(withTiming(0, { duration: 2000, easing: Easing.out(Easing.ease) }), -1, false);
+  }, []);
+  const rippleStyle = useAnimatedStyle(() => ({ transform: [{ scale: rippleScale.value }], opacity: rippleOpacity.value }));
+
+  const bgColors = (isDark 
+    ? [C.bg, '#1a1813', '#081a20', C.bg]
+    : [C.bg, '#e8e6df', '#dff0f5', C.bg]) as readonly [string, string, ...string[]];
+
+  return (
+    <View style={S.safe}>
+      <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
+      <SafeAreaView style={{ flex: 1 }}>
+        
+        {/* ── Dynamic Top Bar ── */}
+        <Animated.View style={[S.topBar, headerBorderStyle]}>
+          <Animated.View style={[StyleSheet.absoluteFill, headerBlurStyle]}>
+            <BlurView intensity={80} tint={C.blurTint} style={StyleSheet.absoluteFill} />
+          </Animated.View>
+          <Animated.View style={[{ paddingHorizontal: 24, paddingVertical: 14, paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight ?? 0 + 14 : 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', zIndex: 10 }, headerBorderStyle]}>
+            <Animated.View style={titleStyle}>
+              <GradientText text="FitAI X" style={S.appTitle} C={C} />
+            </Animated.View>
+            <View style={S.topBarRight}>
+              <PressableScale onPress={() => setIsDark(d => !d)} style={S.iconBtn}>
+                <Icon name={isDark ? 'light-mode' : 'dark-mode'} size={24} color={C.onSurfaceVariant} />
+              </PressableScale>
+              <PressableScale style={S.iconBtn}>
+                <Icon name="notifications" size={24} color={C.onSurfaceVariant} />
+              </PressableScale>
+              <PressableScale style={S.iconBtn}>
+                <Icon name="bolt" size={24} color={C.onSurfaceVariant} />
+              </PressableScale>
+            </View>
+          </Animated.View>
+        </Animated.View>
+
+        <Animated.ScrollView 
+          onScroll={scrollHandler} 
+          scrollEventThrottle={16} 
+          style={S.scroll} 
+          contentContainerStyle={S.scrollContent} 
+          showsVerticalScrollIndicator={false}
+        >
+          
+          {/* ═══ HERO CARD ═══ */}
+          <AnimatedCard index={0}>
+            <TiltCard C={C} style={{ marginBottom: 12 }}>
+              <View style={S.heroContentRow}>
+                <SpinningAvatarRing C={C}>
+                  <Image source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBs0aRM5s6_f22oY_Jya-UvvMNGSGivaANAH0MtLocja2ltBy7WlqZeS2oUNL3Zvy6owK1y_pwI5FivaELc03lFVhin35MuIoem0gQbILbNX03ETq0_QfalXIE11fR8gSfatGNKiTM5UHUcXeUREBTIQnsqfCOv-lVzd2UHfHF0ol6VGxWOMUyRrVbPn0wBe0r0vnv6qEHKZrcQuocSrjc90qTqTugxMws-mJKpaNGCdkJ1Doc2pp9muvMYhuqjOcMhq95kAuCkjpk' }} style={S.avatar} />
+                </SpinningAvatarRing>
+                <View style={S.heroTextBlock}>
+                  <View style={S.nameRow}>
+                    <Text style={S.heroName}>Alex Mercer</Text>
+                    {Platform.OS !== 'web' ? (
+                      <LinearGradient colors={[C.primary, C.primaryDim]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={S.proBadge} />
+                    ) : (
+                      <View style={[S.proBadge, { backgroundColor: C.primary }]} />
+                    )}
+                    <Text style={S.proBadgeTextAbs}>PRO</Text>
+                  </View>
+                  <Text style={S.heroEmail}>alex.mercer@elite.fit</Text>
+                </View>
+                <PressableScale><Icon name="edit" size={22} color={C.outline} /></PressableScale>
+              </View>
+            </TiltCard>
+          </AnimatedCard>
+
+          {/* ═══ FITNESS PROFILE ═══ */}
+          <AnimatedCard index={1}>
+            <View style={S.section}>
+              <Text style={S.sectionLabel}>FITNESS PROFILE</Text>
+              <TiltCard C={C} tiltEnabled={false}>
+                <View style={S.statsGrid}>
+                  {[{ label: 'Height', val: '185', unit: 'cm' }, { label: 'Weight', val: '82', unit: 'kg' }, { label: 'Age', val: '29', unit: '' }].map((s, i) => (
+                    <View key={i} style={[S.statCell, i < 2 && S.statCellBorder]}>
+                      <Text style={S.statLabel}>{s.label}</Text>
+                      <View style={S.statValueRow}>
+                        <GradientText text={s.val} style={S.statNum} C={C} />
+                        {s.unit ? <Text style={S.statUnit}>{s.unit}</Text> : null}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </TiltCard>
+            </View>
+          </AnimatedCard>
+
+          {/* ═══ DYNAMIC GOALS ═══ */}
+          <AnimatedCard index={2}>
+            <View style={S.section}>
+              <Text style={S.sectionLabel}>DYNAMIC GOALS</Text>
+              <TiltCard C={C} tiltEnabled={false}>
+                <View style={S.chipsWrap}>
+                  {([
+                    { key: 'hypertrophy', label: 'Hypertrophy', icon: 'fitness-center' },
+                    { key: 'endurance', label: 'Endurance', icon: 'directions-run' },
+                    { key: 'power', label: 'Power', icon: 'flash-on' },
+                    { key: 'leanMass', label: 'Lean Mass', icon: 'monitor-weight' },
+                  ] as const).map(g => (
+                    <PressableScale key={g.key} onPress={() => toggleGoal(g.key)}>
+                      <View style={[S.chip, goals[g.key] && S.chipActive]}>
+                        <Icon name={g.icon as any} size={14} color={goals[g.key] ? C.primary : C.onSurfaceVariant} />
+                        <Text style={[S.chipText, goals[g.key] && S.chipTextActive]}>{g.label}</Text>
+                        {goals[g.key] ? <View style={S.chipGlow} pointerEvents="none" /> : null}
+                      </View>
+                    </PressableScale>
+                  ))}
+                </View>
+              </TiltCard>
+            </View>
+          </AnimatedCard>
+
+          {/* ═══ INJURY PROTOCOL ═══ */}
+          <AnimatedCard index={3}>
+            <View style={S.section}>
+              <Text style={S.sectionLabel}>INJURY PROTOCOL</Text>
+              <TiltCard C={C}>
+                <View style={S.pillsRow}>
+                  <View style={S.pillRed}><Text style={S.pillRedText}>Right Shoulder</Text></View>
+                  <View style={S.pillGreen}><Text style={S.pillGreenText}>Left Knee</Text></View>
+                </View>
+                <BodyMapSVG C={C} />
+                <View style={S.divider} />
+                <Text style={S.injuryNote}>AI Coach is currently routing around heavy overhead pressing movements.</Text>
+              </TiltCard>
+            </View>
+          </AnimatedCard>
+
+          {/* ═══ AI COACHING ENGINE ═══ */}
+          <AnimatedCard index={4}>
+            <View style={S.section}>
+              <Text style={S.sectionLabel}>AI COACHING ENGINE</Text>
+              <TiltCard C={C}>
+                {([
+                  { key: 'adaptive', label: 'Adaptive Progression', sub: 'Auto-adjust weights based on previous sets' },
+                  { key: 'formFeedback', label: 'Real-time Form Feedback', sub: 'Voice alerts during working sets' },
+                  { key: 'nutritionSync', label: 'Nutrition Auto-Sync', sub: 'Adjust macros based on workout intensity' },
+                ] as const).map((item, idx) => (
+                  <View key={item.key}>
+                    {idx > 0 ? <View style={S.divider} /> : null}
+                    <View style={S.toggleRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={S.toggleLabel}>{item.label}</Text>
+                        <Text style={S.toggleSub}>{item.sub}</Text>
+                      </View>
+                      <Toggle on={ai[item.key]} onChange={() => setAi(a => ({ ...a, [item.key]: !a[item.key] }))} C={C} />
+                    </View>
+                  </View>
+                ))}
+              </TiltCard>
+            </View>
+          </AnimatedCard>
+
+          {/* ═══ TELEMETRY DEVICES ═══ */}
+          <AnimatedCard index={5}>
+            <View style={S.section}>
+              <Text style={S.sectionLabel}>TELEMETRY DEVICES</Text>
+              <TiltCard C={C} tiltEnabled={false}>
+                <PressableScale onPress={() => setDeviceExpanded(e => !e)}>
+                  <View style={S.deviceRow}>
+                    <View style={S.deviceIconBox}><Icon name="watch" size={20} color={C.primary} /></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={S.deviceName}>Oura Ring Gen 3</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        <BatteryRing percentage={84} C={C} />
+                        <Text style={S.deviceConnected}>Connected</Text>
+                      </View>
+                    </View>
+                    <Icon name={deviceExpanded ? 'expand-less' : 'expand-more'} size={22} color={C.outline} />
+                  </View>
+                  {deviceExpanded ? (
+                    <View style={S.deviceDetails}>
+                      <View style={S.deviceDetailChip}><Text style={S.deviceDetailKey}>HRV</Text><Text style={S.deviceDetailVal}>45ms</Text></View>
+                      <View style={S.deviceDetailChip}><Text style={S.deviceDetailKey}>Sleep</Text><Text style={[S.deviceDetailVal, { color: C.primary }]}>88</Text></View>
+                    </View>
+                  ) : null}
+                </PressableScale>
+                <View style={S.divider} />
+                <View style={[S.deviceRow, { opacity: 0.6 }]}>
+                  <View style={S.deviceIconBox}>
+                    <Icon name="favorite-border" size={20} color={C.onSurfaceVariant} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={S.deviceName}>Polar H10</Text>
+                    <Text style={S.deviceDisconnected}>Searching...</Text>
+                  </View>
+                  <PressableScale><Icon name="add-circle-outline" size={22} color={C.outline} /></PressableScale>
+                </View>
+              </TiltCard>
+            </View>
+          </AnimatedCard>
+
+          <View style={{ height: 100 }} />
+        </Animated.ScrollView>
+      </SafeAreaView>
+
+    </View>
+  );
+}
+
+// ─── Dynamic Styles ───────────────────────────────────────────────────────────
+const getStyles = (C: ThemeColors) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: C.bg },
+  topBar: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50, borderBottomWidth: 1, borderBottomColor: 'transparent' },
+  appTitle: { fontSize: 26, fontFamily: F.header, letterSpacing: -1, height: 32 },
+  topBarRight: { flexDirection: 'row', gap: 4 },
+  iconBtn: { padding: 6 },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 0) + 70 : 70, gap: 24 },
+  section: { gap: 8 },
+  
+  heroContentRow: { flexDirection: 'row', alignItems: 'center' },
+  avatar: { width: '100%', height: '100%' },
+  heroTextBlock: { flex: 1, marginLeft: 16 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
+  heroName: { fontSize: 20, fontFamily: F.header, color: C.onSurface },
+  proBadge: { width: 44, height: 18, borderRadius: 4 },
+  proBadgeTextAbs: { position: 'absolute', right: -50, top: 2, fontSize: 10, fontFamily: F.header, color: C.onPrimary, letterSpacing: 1 },
+  heroEmail: { fontSize: 13, fontFamily: F.body, color: C.onSurfaceVariant },
+
+  sectionLabel: { fontSize: 11, fontFamily: F.header, color: C.onSurfaceVariant, letterSpacing: 1.5, marginLeft: 8 },
+  statsGrid: { flexDirection: 'row' },
+  statCell: { flex: 1, alignItems: 'center', gap: 4 },
+  statCellBorder: { borderRightWidth: 1, borderRightColor: C.outlineVariant },
+  statLabel: { fontSize: 12, fontFamily: F.bodyMed, color: C.onSurfaceVariant },
+  statValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },
+  statNum: { fontSize: 28, fontFamily: F.num, letterSpacing: -1, height: 32 },
+  statUnit: { fontSize: 13, fontFamily: F.bodyMed, color: C.outlineVariant },
+
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, backgroundColor: C.glassInset, borderWidth: 1, borderColor: 'transparent' },
+  chipActive: { borderColor: C.primary },
+  chipText: { fontSize: 13, fontFamily: F.bodyMed, color: C.onSurfaceVariant },
+  chipTextActive: { color: C.primary },
+  chipGlow: { position: 'absolute', inset: 0, borderRadius: 12, backgroundColor: C.primary, opacity: 0.1 },
+
+  pillsRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  pillRed: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: `${C.error}26`, borderWidth: 1, borderColor: `${C.error}4D` },
+  pillRedText: { fontSize: 11, fontFamily: F.header, color: C.error, letterSpacing: 0.5 },
+  pillGreen: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: `${C.success}26`, borderWidth: 1, borderColor: `${C.success}4D` },
+  pillGreenText: { fontSize: 11, fontFamily: F.header, color: C.success, letterSpacing: 0.5 },
+  
+  injuryNote: { fontSize: 13, fontFamily: F.body, color: C.onSurfaceVariant, lineHeight: 20 },
+
+  toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16, paddingVertical: 6 },
+  toggleLabel: { fontSize: 16, fontFamily: F.bodyMed, color: C.onSurface, marginBottom: 2 },
+  toggleSub: { fontSize: 13, fontFamily: F.body, color: C.onSurfaceVariant, lineHeight: 18 },
+
+  divider: { height: 1, backgroundColor: C.outlineVariant, marginVertical: 16, opacity: 0.5 },
+
+  deviceRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  deviceIconBox: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.glassInset, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  deviceName: { fontSize: 16, fontFamily: F.bodyMed, color: C.onSurface, marginBottom: 2 },
+  deviceConnected: { fontSize: 13, fontFamily: F.bodyMed, color: C.primary },
+  deviceDisconnected: { fontSize: 13, fontFamily: F.body, color: C.onSurfaceVariant },
+  deviceDetails: { flexDirection: 'row', gap: 12, paddingLeft: 60, paddingTop: 12 },
+  deviceDetailChip: { backgroundColor: C.glassInset, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, gap: 2, alignItems: 'center' },
+  deviceDetailKey: { fontSize: 10, fontFamily: F.header, color: C.onSurfaceVariant, letterSpacing: 0.5 },
+  deviceDetailVal: { fontSize: 16, fontFamily: F.num, color: C.onSurface },
+
+  bottomNav: { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', paddingBottom: Platform.OS === 'ios' ? 24 : 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: C.outlineVariant },
+  navActiveDot: { position: 'absolute', top: 6, width: 6, height: 6, borderRadius: 3, backgroundColor: C.primary, shadowColor: C.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 6 },
+  navItem: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8 },
+  fabContainer: { position: 'absolute', top: -28, left: '50%', marginLeft: -28 },
+  fab: { width: 56, height: 56, borderRadius: 28, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center', shadowColor: C.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 12 },
+});
