@@ -35,6 +35,8 @@ import MaskedView from '@react-native-masked-view/masked-view';
 import MeshGradientBackground from '../components/MeshGradientBackground';
 import RadarChart from '../components/charts/RadarChart';
 import { DarkColors, LightColors, ThemeColors, F } from '../theme';
+import { useQuery } from '@tanstack/react-query';
+import { fetchProfileData } from '../services/api/profile';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -294,6 +296,8 @@ export default function ProfileScreen({ onNavigateToBuilder }: { onNavigateToBui
   const [deviceExpanded, setDeviceExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState(4); 
 
+  const { data: profileData } = useQuery({ queryKey: ['profile'], queryFn: fetchProfileData }); 
+
   const toggleGoal = (k: keyof typeof goals) => {
     setGoals(g => ({ ...g, [k]: !g[k] }));
   };
@@ -448,7 +452,7 @@ export default function ProfileScreen({ onNavigateToBuilder }: { onNavigateToBui
                     size={180}
                     color={C.cyan}
                     highlightLabel="Back"
-                    data={[
+                    data={profileData?.radarChart || [
                       { label: 'Chest', value: 0.8 },
                       { label: 'Back', value: 0.6 },
                       { label: 'Legs', value: 0.9 },

@@ -4,6 +4,8 @@ import { MaterialIcons as Icon } from '@expo/vector-icons';
 import Animated, { FadeInUp, FadeInDown, FadeOutDown, Layout, useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, withDelay, interpolateColor } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
+import { useQuery } from '@tanstack/react-query';
+import { fetchCoachMessages } from '../services/api/coach';
 import { DarkColors, F } from '../theme';
 import MeshGradientBackground from '../components/MeshGradientBackground';
 
@@ -45,9 +47,22 @@ function TypingIndicator() {
 }
 
 export default function CoachScreen() {
-  const [messages, setMessages] = useState<Message[]>([
-    { id: '1', type: 'ai', text: 'Hey! I noticed you logged knee pain after your last session. How are you feeling today?' },
-  ]);
+  const { data: initialMessages = [] } = useQuery({ queryKey: ['coachMessages'], queryFn: fetchCoachMessages });
+  
+  const [messages, setMessages] = useState<Message[]>([]);
+  
+  useEffect(() => {
+    if (initialMessages.length > 0 && messages.length === 0) {
+      // Map API data to UI structure
+      const mapped = initialMessages.map((m: any) => ({
+        id: m.id,
+        type: m.sender as MessageType,
+        text: (m as any).text || ''
+      }));
+      setMessages(mapped);
+    }
+  }, [initialMessages]);
+
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);

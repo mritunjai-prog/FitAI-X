@@ -37,6 +37,8 @@ import ExerciseCard from "../components/ExerciseCard";
 import AnimatedPressable from "../components/AnimatedPressable";
 import { LinearGradient } from "expo-linear-gradient";
 import DraggableFlatList, { RenderItemParams } from "react-native-draggable-flatlist";
+import { useQuery } from '@tanstack/react-query';
+import { fetchCurrentWorkout } from '../services/api/workout';
 
 const { width: SCREEN_W } = require("react-native").Dimensions.get("window");
 
@@ -186,40 +188,19 @@ export default function WorkoutBuilderScreen({ onNavigateBack }: { onNavigateBac
   const [activeSimulation, setActiveSimulation] = useState("V3 (Current)");
   const simulations = ["V3 (Current)", "V2 (Original)", "20 min Quick", "Home (No Equip)"];
 
-  const [exercises, setExercises] = useState([
-    {
-      id: "1",
-      name: "Barbell Bench Press",
-      sets: 4,
-      reps: "8-10",
-      muscle: "Chest",
-    },
-    {
-      id: "2",
-      name: "Incline Dumbbell Press",
-      sets: 3,
-      reps: "10-12",
-      muscle: "Chest",
-    },
-    {
-      id: "3",
-      name: "Overhead Press",
-      sets: 4,
-      reps: "8-10",
-      muscle: "Shoulders",
-    },
-    {
-      id: "4",
-      name: "Triceps Pushdown",
-      sets: 3,
-      reps: "12-15",
-      muscle: "Arms",
-    },
-  ]);
+  const { data: currentWorkout } = useQuery({ queryKey: ['currentWorkout'], queryFn: fetchCurrentWorkout });
+
+  const [exercises, setExercises] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    if (currentWorkout?.exercises) {
+      setExercises(currentWorkout.exercises);
+    }
+  }, [currentWorkout]);
 
   // Mock profile data
   const injuredMuscles = ["Shoulders"]; // User has a reported shoulder injury
-  const targetedMuscles = Array.from(new Set(exercises.map((e) => e.muscle)));
+  const targetedMuscles = Array.from(new Set(exercises.map((e) => e.muscle || 'Full Body')));
 
   // Real-time conflict detection (FR-008)
   const conflicts = targetedMuscles.filter((m) => injuredMuscles.includes(m));

@@ -72,6 +72,34 @@ npx expo start -c
 2. Scan the QR code that appears in your terminal.
 3. The app will bundle and load directly on your phone, allowing you to test the haptic feedback and native performance!
 
----
+### Step 4: Start the Backend API (Core-API)
+The frontend relies on the `core-api` backend (Node.js + PostgreSQL + Prisma). 
 
-*Note: The backend API (Node.js/Express) and specific ML integrations are documented in the `FitAI_X_BRD_Updated.md` and will be initialized in the `backend/` folder in future development phases.*
+Open a **new** terminal and navigate to the backend folder:
+```bash
+cd backend/core-api
+```
+
+Install the backend dependencies:
+```bash
+npm install
+```
+
+Start the PostgreSQL database via Docker:
+```bash
+docker-compose up -d
+```
+
+Push the database schema and seed the initial mock data:
+```bash
+npx prisma db push
+npm run seed
+```
+
+Finally, start the backend server:
+```bash
+npm run dev
+# or
+npx tsx src/index.ts
+```
+The Core API Server and Realtime Socket Server will start on port `4000`.

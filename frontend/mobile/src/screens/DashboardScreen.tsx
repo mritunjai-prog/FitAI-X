@@ -5,6 +5,7 @@ import Animated, { FadeInUp, Layout, useAnimatedScrollHandler, useSharedValue, u
 import Svg, { Text as SvgText, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { DarkColors, LightColors, ThemeColors, F } from "../theme";
 import MeshGradientBackground from "../components/MeshGradientBackground";
@@ -14,6 +15,8 @@ import RadarChart from "../components/charts/RadarChart";
 import BarChart from "../components/charts/BarChart";
 import SplineChart from "../components/charts/SplineChart";
 import AnimatedPressable from "../components/AnimatedPressable";
+import { fetchFeed, fetchActiveUsers, fetchVitals, FeedItem } from '../services/api/dashboard';
+import { socket } from '../services/socket/socketClient';
 
 const isDark = true;
 const C = isDark ? DarkColors : LightColors;
@@ -27,32 +30,30 @@ export default function DashboardScreen({ onOpenCommandPalette }: { onOpenComman
       : [C.bg, "#e8e6df", "#dff0f5", C.bg]
   ) as readonly [string, string, ...string[]];
 
-  // Feed state with progress
-  const [feed, setFeed] = useState([
-    { id: '1', type: 'workout', user: 'Sarah J.', avatar: 'https://i.pravatar.cc/100?img=5', msg: 'Crushed "Leg Day V2"', time: '2m ago', likes: 12, bpm: 142 },
-    { id: '2', type: 'ai', user: 'Rachel (AI)', msg: 'Analyzing your sleep data to adjust today\'s load.', time: '10m ago' },
-    { id: '3', type: 'workout', user: 'David M.', avatar: 'https://i.pravatar.cc/100?img=11', msg: 'Completed a 5k Run', time: '1h ago', likes: 8, bpm: 156 }
-  ]);
+  const queryClient = useQueryClient();
+
+  const { data: initialFeed } = useQuery({ queryKey: ['feed'], queryFn: fetchFeed });
+  const { data: activeUsers = [] } = useQuery({ queryKey: ['activeUsers'], queryFn: fetchActiveUsers });
+  const { data: vitals } = useQuery({ queryKey: ['vitals'], queryFn: fetchVitals, refetchInterval: 5000 });
+
+  const [feed, setFeed] = useState<FeedItem[]>([]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setFeed(prev => [
-        { id: Math.random().toString(), type: 'ai', user: 'Rachel (AI)', msg: 'Based on your HRV, I recommend switching to a lighter Recovery Flow today.', time: 'Just now' },
-        ...prev
-      ]);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }, 12000);
-    return () => clearTimeout(timer);
-  }, []);
+    if (initialFeed) {
+      setFeed(initialFeed);
+    }
+  }, [initialFeed]);
 
-  const ACTIVE_USERS = [
-    { id: 'u1', name: 'You', img: 'https://i.pravatar.cc/100?img=33', isLive: true },
-    { id: 'u2', name: 'Sarah', img: 'https://i.pravatar.cc/100?img=5', isLive: true },
-    { id: 'u3', name: 'Mike', img: 'https://i.pravatar.cc/100?img=12', isLive: false },
-    { id: 'u4', name: 'Emma', img: 'https://i.pravatar.cc/100?img=9', isLive: true },
-    { id: 'u5', name: 'Chris', img: 'https://i.pravatar.cc/100?img=11', isLive: false },
-    { id: 'u6', name: 'Jessica', img: 'https://i.pravatar.cc/100?img=20', isLive: true }
-  ];
+  useEffect(() => {
+    socket.on('feed_update', (newItem: FeedItem) => {
+      setFeed(prev => [newItem, ...prev]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    });
+
+    return () => {
+      socket.off('feed_update');
+    };
+  }, []);
 
   // Parallax Scroll Header
   const scrollY = useSharedValue(0);
@@ -137,12 +138,12 @@ export default function DashboardScreen({ onOpenCommandPalette }: { onOpenComman
           {/* Active Users Horizontal List */}
           <Animated.View entering={FadeInUp.delay(100).springify()}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeUsersContainer}>
-              {ACTIVE_USERS.map((u, i) => (
+              {activeUsers.map((u, i) => (
                 <View key={u.id} style={styles.userAvatarWrapper}>
                   {u.isLive && (
                     <Animated.View style={[styles.liveRing, liveRingStyle]} />
                   )}
-                  <Image source={{ uri: u.img }} style={[styles.userAvatar, u.isLive && { borderWidth: 2, borderColor: C.primary }]} />
+                  <Image source={{ uri: u.img || `https://i.pravatar.cc/100?img=${i}` }} style={[styles.userAvatar, u.isLive && { borderWidth: 2, borderColor: C.primary }]} />
                   <Text style={styles.userName} numberOfLines={1}>{u.name}</Text>
                   {u.isLive && <View style={styles.liveDot} />}
                 </View>
@@ -193,7 +194,7 @@ export default function DashboardScreen({ onOpenCommandPalette }: { onOpenComman
                               </LinearGradient>
                             </Defs>
                             <SvgText x="0" y="32" fontSize="36" fontFamily={F.header} fill="url(#textGrad)">
-                              68
+                              {vitals?.bpm || 68}
                             </SvgText>
                           </Svg>
                         </Animated.View>
@@ -225,10 +226,10 @@ export default function DashboardScreen({ onOpenCommandPalette }: { onOpenComman
                         size={100}
                         color={C.primary}
                         data={[
-                          { label: 'UPR', value: 0.4 },
-                          { label: 'LWR', value: 0.9 },
-                          { label: 'COR', value: 0.7 },
-                          { label: 'CRD', value: 0.5 },
+                          { label: 'UPR', value: vitals?.recoveryUpr || 0.4 },
+                          { label: 'LWR', value: vitals?.recoveryLwr || 0.9 },
+                          { label: 'COR', value: vitals?.recoveryCor || 0.7 },
+                          { label: 'CRD', value: vitals?.recoveryCrd || 0.5 },
                         ]}
                       />
                     </View>

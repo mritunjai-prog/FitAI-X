@@ -10,6 +10,9 @@ import { View, Text, Platform } from 'react-native';
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { FadeIn, Easing } from 'react-native-reanimated';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+const queryClient = new QueryClient();
 
 import DashboardScreen from './src/screens/DashboardScreen';
 import CoachScreen from './src/screens/CoachScreen';
@@ -64,37 +67,39 @@ export default function App() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <Animated.View key={currentScreen} entering={FadeIn.duration(400).easing(Easing.out(Easing.cubic))} style={{ flex: 1 }}>
-        {currentScreen === 'Onboarding' ? (
-          <OnboardingScreen onComplete={() => setCurrentScreen('Dashboard')} />
-        ) : currentScreen === 'Profile' ? (
-          <ProfileScreen onNavigateToBuilder={() => setCurrentScreen('WorkoutBuilder')} />
-        ) : currentScreen === 'WorkoutBuilder' ? (
-          <WorkoutBuilderScreen onNavigateBack={() => setCurrentScreen('Profile')} />
-        ) : currentScreen === 'Coach' ? (
-          <CoachScreen />
-        ) : (
-          <DashboardScreen onOpenCommandPalette={() => setIsCommandOpen(true)} />
+    <QueryClientProvider client={queryClient}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <Animated.View key={currentScreen} entering={FadeIn.duration(400).easing(Easing.out(Easing.cubic))} style={{ flex: 1 }}>
+          {currentScreen === 'Onboarding' ? (
+            <OnboardingScreen onComplete={() => setCurrentScreen('Dashboard')} />
+          ) : currentScreen === 'Profile' ? (
+            <ProfileScreen onNavigateToBuilder={() => setCurrentScreen('WorkoutBuilder')} />
+          ) : currentScreen === 'WorkoutBuilder' ? (
+            <WorkoutBuilderScreen onNavigateBack={() => setCurrentScreen('Profile')} />
+          ) : currentScreen === 'Coach' ? (
+            <CoachScreen />
+          ) : (
+            <DashboardScreen onOpenCommandPalette={() => setIsCommandOpen(true)} />
+          )}
+        </Animated.View>
+        
+        {currentScreen !== 'WorkoutBuilder' && currentScreen !== 'Onboarding' && (
+          <BottomNavigation 
+            currentScreen={currentScreen as 'Dashboard' | 'Profile' | 'Coach'} 
+            onNavigate={(screen) => setCurrentScreen(screen)} 
+            onNavigateToBuilder={() => setCurrentScreen('WorkoutBuilder')} 
+          />
         )}
-      </Animated.View>
-      
-      {currentScreen !== 'WorkoutBuilder' && currentScreen !== 'Onboarding' && (
-        <BottomNavigation 
-          currentScreen={currentScreen as 'Dashboard' | 'Profile' | 'Coach'} 
-          onNavigate={(screen) => setCurrentScreen(screen)} 
-          onNavigateToBuilder={() => setCurrentScreen('WorkoutBuilder')} 
+
+        {/* Global Command Palette */}
+        <CommandPaletteModal 
+          isVisible={isCommandOpen} 
+          onClose={() => setIsCommandOpen(false)} 
+          onNavigate={(screen) => { setCurrentScreen(screen); setIsCommandOpen(false); }} 
         />
-      )}
 
-      {/* Global Command Palette */}
-      <CommandPaletteModal 
-        isVisible={isCommandOpen} 
-        onClose={() => setIsCommandOpen(false)} 
-        onNavigate={(screen) => { setCurrentScreen(screen); setIsCommandOpen(false); }} 
-      />
-
-      <StatusBar style="light" />
-    </GestureHandlerRootView>
+        <StatusBar style="light" />
+      </GestureHandlerRootView>
+    </QueryClientProvider>
   );
 }

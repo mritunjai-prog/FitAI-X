@@ -9,6 +9,8 @@
     "@expo/vector-icons": "^15.0.2",
     "@react-native-masked-view/masked-view": "0.3.2",
     "@shopify/react-native-skia": "2.6.2",
+    "@tanstack/react-query": "^5.101.4",
+    "axios": "^1.18.1",
     "expo": "~56.0.0",
     "expo-blur": "~56.0.4",
     "expo-font": "~56.0.7",
@@ -24,7 +26,8 @@
     "react-native-reanimated": "4.3.1",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-svg": "15.15.4",
-    "react-native-web": "^0.21.2"
+    "react-native-web": "^0.21.2",
+    "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
