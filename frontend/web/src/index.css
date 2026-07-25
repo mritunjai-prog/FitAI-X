@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+@theme {
+  --color-gold: #F5C400;
+  --color-gold-light: #FFD60A;
+  --color-gold-pale: #FDE68A;
+  --color-gold-border: rgba(255, 214, 10, 0.09);
+  
+  --color-brand-blue: #3B82F6;
+  --color-brand-green: #10B981;
+  --color-brand-amber: #F59E0B;
+  --color-brand-red: #EF4444;
+
+  /* Dark mode default */
+  --color-surface: #0A0A0A;
+  --color-card: #161616;
+  --color-card-inner: #101010;
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #B0AA9A;
+  --color-text-gold: #F5C400;
+  --color-btn-text: #101010;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+  html.light {
+    color-scheme: light;
+    --color-surface: #F8FAFC;
+    --color-card: #FFFFFF;
+    --color-card-inner: #F1F5F9;
+    --color-text-primary: #0F172A;
+    --color-text-secondary: #64748B;
+    --color-gold-border: rgba(0, 0, 0, 0.08); /* Subtle gray border in light mode */
+    --color-gold: #D97706; /* Darker amber-gold for contrast on white */
+    --color-text-gold: #B48500;
+    --color-btn-text: #000000;
+  }
+  
+  body {
+    @apply bg-surface text-text-primary antialiased font-sans transition-colors duration-300;
+  }
+
+  /* Custom Scrollbar for all scrollable areas */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-gold-border);
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-gold);
+  }
+}
+
+@layer utilities {
+  .bg-micro-grid {
+    background-image: none;
+  }
+  
+  html.light .bg-micro-grid {
+    background-image: none; /* Removed grid for light mode as it looked bad */
+  }
+
+  .shadow-glow {
+    box-shadow: 0 8px 24px -8px rgba(245, 196, 0, 0.6);
+  }
+
+  html.light .shadow-glow {
+    box-shadow: 0 8px 20px -6px rgba(245, 196, 0, 0.4), 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  }
+
+  .glass-card {
+    @apply bg-card/90 backdrop-blur-xl border border-gold-border rounded-[24px] transition-all duration-300 hover:border-gold/50 shadow-lg;
+  }
+  
+  html.light .glass-card {
+    box-shadow: 0 10px 40px -10px rgba(0,0,0,0.08);
+  }
+}

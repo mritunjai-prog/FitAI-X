@@ -140,9 +140,6 @@ export default function DashboardScreen({ onOpenCommandPalette }: { onOpenComman
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeUsersContainer}>
               {activeUsers.map((u, i) => (
                 <View key={u.id} style={styles.userAvatarWrapper}>
-                  {u.isLive && (
-                    <Animated.View style={[styles.liveRing, liveRingStyle]} />
-                  )}
                   <Image source={{ uri: u.img || `https://i.pravatar.cc/100?img=${i}` }} style={[styles.userAvatar, u.isLive && { borderWidth: 2, borderColor: C.primary }]} />
                   <Text style={styles.userName} numberOfLines={1}>{u.name}</Text>
                   {u.isLive && <View style={styles.liveDot} />}
