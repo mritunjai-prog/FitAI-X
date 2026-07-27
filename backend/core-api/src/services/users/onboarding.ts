@@ -7,7 +7,7 @@ const router = Router();
 // POST /api/v1/onboarding/complete
 router.post('/complete', async (req, res) => {
   try {
-    const { userId, age, weight, goal, equipment, diet } = req.body;
+    const { userId, age, weight, height, goal, equipment, diet } = req.body;
 
     if (!userId) {
       return res.status(400).json({ error: 'User ID is required' });
@@ -19,6 +19,7 @@ router.post('/complete', async (req, res) => {
       data: {
         age: parseInt(age) || null,
         weight: parseFloat(weight) || null,
+        height: parseFloat(height) || null,
         goal,
         equipment,
         diet,

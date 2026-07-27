@@ -18,6 +18,7 @@ model User {
   deletedAt      DateTime?
   age            Int?
   weight         Float?
+  height         Float?
   goal           String?
   equipment      String?
   diet           String?

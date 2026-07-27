@@ -99,10 +99,11 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   const [goal, setGoal] = useState<string>('');
   const [age, setAge] = useState<string>('25');
   const [weight, setWeight] = useState<string>('75');
+  const [height, setHeight] = useState<string>('175');
   const [equipment, setEquipment] = useState<string>('');
   const [diet, setDiet] = useState<string>('');
 
-  const [activeInput, setActiveInput] = useState<'age' | 'weight' | null>(null);
+  const [activeInput, setActiveInput] = useState<'age' | 'weight' | 'height' | null>(null);
 
   const handleNext = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -115,11 +116,12 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
       const processOnboarding = async () => {
         try {
           if (user?.id) {
-            await submitOnboardingProfile({
-              userId: user.id,
-              age,
-              weight,
-              goal,
+              await submitOnboardingProfile({
+                userId: user.id,
+                age,
+                weight,
+                height,
+                goal,
               equipment,
               diet
             });
@@ -203,10 +205,26 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
                   <Text style={styles.metricUnit}>kg</Text>
                 </View>
               </View>
+              {/* Height Input */}
+              <View style={styles.metricBlock}>
+                <Text style={styles.metricLabel}>Height</Text>
+                <View style={[styles.metricInputWrapper, activeInput === 'height' && styles.metricInputActive]}>
+                  <TextInput 
+                    style={styles.metricInput} 
+                    value={height} 
+                    onChangeText={setHeight} 
+                    keyboardType="numeric"
+                    onFocus={() => setActiveInput('height')}
+                    onBlur={() => setActiveInput(null)}
+                    maxLength={3}
+                  />
+                  <Text style={styles.metricUnit}>cm</Text>
+                </View>
+              </View>
             </Animated.View>
 
             <View style={styles.footer}>
-              <TouchableOpacity style={[styles.nextBtn, (!age || !weight) && styles.nextBtnDisabled]} disabled={!age || !weight} onPress={handleNext}>
+              <TouchableOpacity style={[styles.nextBtn, (!age || !weight || !height) && styles.nextBtnDisabled]} disabled={!age || !weight || !height} onPress={handleNext}>
                 <Text style={styles.nextBtnText}>Continue</Text>
               </TouchableOpacity>
             </View>

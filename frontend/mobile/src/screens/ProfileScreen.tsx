@@ -403,11 +403,11 @@ export default function ProfileScreen({ onNavigateToBuilder }: { onNavigateToBui
             <TiltCard C={C} style={{ marginBottom: 12 }}>
               <View style={S.heroContentRow}>
                 <SpinningAvatarRing C={C}>
-                  <Image source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBs0aRM5s6_f22oY_Jya-UvvMNGSGivaANAH0MtLocja2ltBy7WlqZeS2oUNL3Zvy6owK1y_pwI5FivaELc03lFVhin35MuIoem0gQbILbNX03ETq0_QfalXIE11fR8gSfatGNKiTM5UHUcXeUREBTIQnsqfCOv-lVzd2UHfHF0ol6VGxWOMUyRrVbPn0wBe0r0vnv6qEHKZrcQuocSrjc90qTqTugxMws-mJKpaNGCdkJ1Doc2pp9muvMYhuqjOcMhq95kAuCkjpk' }} style={S.avatar} />
+                  <Image source={{ uri: profileData?.identity?.avatar || user?.avatar || 'https://i.pravatar.cc/150?img=11' }} style={S.avatar} />
                 </SpinningAvatarRing>
                 <View style={S.heroTextBlock}>
                   <View style={S.nameRow}>
-                    <Text style={S.heroName}>Alex Mercer</Text>
+                    <Text style={S.heroName}>{profileData?.identity?.name || user?.name || 'Loading...'}</Text>
                     {Platform.OS !== 'web' ? (
                       <LinearGradient colors={[C.primary, C.primaryDim]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={S.proBadge} />
                     ) : (
@@ -415,7 +415,7 @@ export default function ProfileScreen({ onNavigateToBuilder }: { onNavigateToBui
                     )}
                     <Text style={S.proBadgeTextAbs}>PRO</Text>
                   </View>
-                  <Text style={S.heroEmail}>alex.mercer@elite.fit</Text>
+                  <Text style={S.heroEmail}>{profileData?.identity?.email || user?.email || ''}</Text>
                 </View>
                 <PressableScale><Icon name="edit" size={22} color={C.outline} /></PressableScale>
               </View>
@@ -428,7 +428,11 @@ export default function ProfileScreen({ onNavigateToBuilder }: { onNavigateToBui
               <Text style={S.sectionLabel}>FITNESS PROFILE</Text>
               <TiltCard C={C} tiltEnabled={false}>
                 <View style={S.statsGrid}>
-                  {[{ label: 'Height', val: '185', unit: 'cm' }, { label: 'Weight', val: '82', unit: 'kg' }, { label: 'Age', val: '29', unit: '' }].map((s, i) => (
+                  {[
+                    { label: 'Height', val: String(profileData?.fitnessProfile?.height || '—'), unit: 'cm' },
+                    { label: 'Weight', val: String(profileData?.fitnessProfile?.weight || '—'), unit: 'kg' },
+                    { label: 'Age', val: String(profileData?.fitnessProfile?.age || '—'), unit: '' }
+                  ].map((s, i) => (
                     <View key={i} style={[S.statCell, i < 2 && S.statCellBorder]}>
                       <Text style={S.statLabel}>{s.label}</Text>
                       <View style={S.statValueRow}>
@@ -609,6 +613,19 @@ export default function ProfileScreen({ onNavigateToBuilder }: { onNavigateToBui
                   </View>
                 ))}
               </TiltCard>
+            </View>
+          </AnimatedCard>
+
+          {/* ═══ LOGOUT BUTTON ═══ */}
+          <AnimatedCard index={7}>
+            <View style={{ paddingHorizontal: 24, marginTop: 12, marginBottom: 24 }}>
+              <TouchableOpacity 
+                activeOpacity={0.8} 
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); logout(); }}
+                style={{ backgroundColor: `${C.error}15`, padding: 16, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: `${C.error}33` }}
+              >
+                <Text style={{ color: C.error, fontFamily: F.bodyBold, fontSize: 16 }}>Log Out</Text>
+              </TouchableOpacity>
             </View>
           </AnimatedCard>
 

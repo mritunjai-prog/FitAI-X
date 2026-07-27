@@ -9,9 +9,13 @@ router.get('/', async (req, res) => {
   try {
     const userId = req.query.userId as string;
     
+    let user = null;
     let vitals = null;
     let memoryEvents = [];
     try {
+      if (userId) {
+        user = await prisma.user.findUnique({ where: { id: userId } });
+      }
       vitals = await prisma.vitals.findFirst()
       if (userId) {
         memoryEvents = await prisma.memoryEvent.findMany({
@@ -83,21 +87,21 @@ router.get('/', async (req, res) => {
         desc: `AI detected ${r.status} injury risk (${r.riskScore}%) based on fatigue and recovery.`
       }));
 
-    // Mock Profile Data based on BRD
+    // Mock Profile Data based on BRD (blended with real DB data where available)
     const profileData = {
       identity: {
-        name: 'Alex Mercer',
-        email: 'alex.mercer@elite.fit',
-        avatar: 'https://i.pravatar.cc/150?img=11',
-        totalWorkouts: 142,
-        currentStreak: 24,
+        name: user?.name || 'Alex Mercer',
+        email: user?.email || 'alex.mercer@elite.fit',
+        avatar: user?.avatar || 'https://i.pravatar.cc/150?img=11',
+        totalWorkouts: 142, // Would typically count from DB
+        currentStreak: user?.currentStreak || 24,
       },
       fitnessProfile: {
-        height: 185, // cm
-        weight: 82,  // kg
-        age: 29,
+        height: user?.height || 185, // cm
+        weight: user?.weight || 82,  // kg
+        age: user?.age || 29,
         goals: ['Hypertrophy', 'Endurance', 'Power', 'Lean Mass'],
-        activeGoals: ['Hypertrophy'] // Selected goals
+        activeGoals: [user?.goal || 'Hypertrophy'] // Selected goals
       },
       telemetry: telemetry,
       aiPreferences: {
