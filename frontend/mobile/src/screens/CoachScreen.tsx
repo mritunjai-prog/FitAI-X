@@ -5,12 +5,13 @@ import Animated, { FadeInUp, FadeInDown, FadeOutDown, Layout, useSharedValue, us
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useQuery } from '@tanstack/react-query';
-import { fetchCoachMessages } from '../services/api/coach';
+import { fetchCoachMessages, sendMessage } from '../services/api/coach';
 import { transcribeAudio } from '../services/api/transcribe';
 import { Audio } from 'expo-av';
 import { DarkColors, F } from '../theme';
 import MeshGradientBackground from '../components/MeshGradientBackground';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 type MessageType = 'user' | 'ai' | 'action';
 
@@ -68,6 +69,7 @@ export default function CoachScreen() {
   const { data: initialMessages = [] } = useQuery({ queryKey: ['coachMessages'], queryFn: fetchCoachMessages });
   
   const [messages, setMessages] = useState<Message[]>([]);
+  const { user } = useAuth();
   
   useEffect(() => {
     if (initialMessages.length > 0 && messages.length === 0) {
@@ -220,29 +222,26 @@ export default function CoachScreen() {
   };
 
 
-  const handleSend = () => {
-    if (!inputText.trim()) return;
+  const handleSend = async () => {
+    if (!inputText.trim() || !user?.id) return;
 
-    const newMsg: Message = { id: Date.now().toString(), type: 'user', text: inputText };
+    const userText = inputText;
+    const newMsg: Message = { id: Date.now().toString(), type: 'user', text: userText };
     setMessages(prev => [...prev, newMsg]);
     setInputText('');
     setIsTyping(true);
 
-    setTimeout(() => {
+    try {
+      const result = await sendMessage(userText, user.id);
       setIsTyping(false);
-      if (newMsg.text?.toLowerCase().includes('knee')) {
-        setMessages(prev => [
-          ...prev, 
-          { id: Date.now().toString() + 'a', type: 'ai', text: 'Got it. I strongly advise skipping heavy squats today. I have generated a modified lower body workout that focuses on glutes and hamstrings without loading the knee joint.' },
-          { id: Date.now().toString() + 'b', type: 'action', actionPayload: { type: 'WORKOUT_MODIFIED' } }
-        ]);
-      } else {
-        setMessages(prev => [
-          ...prev,
-          { id: Date.now().toString() + 'a', type: 'ai', text: 'Understood. I will keep that in mind for your upcoming sessions. Ready to crush today\'s workout?' }
-        ]);
-      }
-    }, 1800);
+      setMessages(prev => [
+        ...prev,
+        { id: result.aiMessage.id, type: 'ai', text: result.aiMessage.content }
+      ]);
+    } catch (err) {
+      setIsTyping(false);
+      alert('Rachel could not be reached right now.');
+    }
   };
 
   const renderMessage = (msg: Message) => {

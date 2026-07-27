@@ -1,10 +1,9 @@
 import { Router } from 'express';
 import multer from 'multer';
-import FormData from 'form-data';
 import fs from 'fs';
 import path from 'path';
 
-// Note: Using 'form-data' package or native FormData is required. We'll use form-data here.
+// Note: We use the native Web FormData built into Node 18+
 const router = Router();
 const upload = multer({ dest: 'uploads/' });
 
@@ -17,23 +16,21 @@ router.post('/', upload.single('audio'), async (req, res) => {
 
     const filePath = req.file.path;
     
-    // Read the file and prepare FormData for Groq API
+    // Read the file and prepare standard Web FormData for Groq API
+    const buffer = fs.readFileSync(filePath);
+    const blob = new Blob([buffer], { type: req.file.mimetype || 'audio/m4a' });
+    
     const formData = new FormData();
-    formData.append('file', fs.createReadStream(filePath), {
-      filename: req.file.originalname || 'audio.m4a',
-      contentType: req.file.mimetype || 'audio/m4a'
-    });
+    formData.append('file', blob, req.file.originalname || 'audio.m4a');
     formData.append('model', 'whisper-large-v3');
 
-    // Call Groq Whisper API
+    // Call Groq Whisper API natively
     const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-        // Let form-data set its own boundary header
-        ...formData.getHeaders()
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
       },
-      body: formData as any
+      body: formData
     });
 
     const data = await response.json();

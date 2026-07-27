@@ -3,17 +3,17 @@ import IORedis from 'ioredis';
 import prisma from '../db';
 import { generateText, tool } from 'ai';
 import { createGroq } from '@ai-sdk/groq';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
 import { getIo } from '../realtime/socket';
 
 const connection = new IORedis({
   host: '127.0.0.1',
   port: 6379,
-  maxRetriesPerRequest: null,
 });
 
-const groq = createGroq({
-  apiKey: process.env.GROQ_API_KEY || 'missing_key',
+const google = createGoogleGenerativeAI({
+  apiKey: process.env.GEMINI_API_KEY || 'missing_key',
 });
 
 export const startAiWorker = () => {
@@ -21,26 +21,57 @@ export const startAiWorker = () => {
     console.log(`[BullMQ] Processing AI Job ${job.id} of type ${job.name}`);
     
     if (job.name === 'generate_coach_response') {
-      const { userId, text } = job.data;
+      const { userId } = job.data;
       
       const io = getIo();
       
-      // Llama 3 from Groq
+      // Fetch comprehensive user context
+      const userProfile = await prisma.user.findUnique({ where: { id: userId } });
+      const calendar = await prisma.calendarEvent.findMany({ where: { userId }, orderBy: { dayIndex: 'asc' } });
+      const meals = await prisma.meal.findMany({ where: { userId }, take: 5, orderBy: { createdAt: 'desc' } });
+      const currentWorkout = await prisma.workout.findFirst({ where: { userId, isCurrent: true }, include: { exercises: true } });
+      
+      // Fetch chat history (last 10 messages)
+      const chatHistory = await prisma.coachMessage.findMany({
+        where: { userId },
+        orderBy: { id: 'desc' },
+        take: 10
+      });
+      
+      // Convert to AI SDK CoreMessage format (ordered chronologically)
+      const messages: any[] = chatHistory.reverse().map(msg => ({
+        role: msg.role === 'ai' ? 'assistant' : msg.role,
+        content: msg.content
+      }));
+      
+      // Build the contextual system prompt
+      const systemPrompt = `You are Rachel, an elite AI fitness coach for FitAI-X. 
+You are concise, precise, and accurate. Keep responses short and impactful. Do not ramble.
+You are fully autonomous and have direct access to the user's database ecosystem.
+
+--- CURRENT USER STATE ---
+Profile: ${JSON.stringify(userProfile, null, 2)}
+Calendar for the Week: ${JSON.stringify(calendar, null, 2)}
+Recent Meals: ${JSON.stringify(meals, null, 2)}
+Active Workout Plan: ${JSON.stringify(currentWorkout, null, 2)}
+--------------------------
+
+Instructions:
+1. Always base your answers on the user's actual data above. 
+2. If they ask about their weight, calendar, or meals, tell them exactly what their state is.
+3. Use your tools to actively manage their data. If they say "I weigh 65kg now", call updateProfileMetrics.
+4. If they log calories, call logCalories.
+5. You possess deep fitness knowledge. Answer questions like "what is upper body" clearly and intelligently without tools.
+6. ONLY mention updating things IF you actually used a tool. If the user just says "hi", just say hello back enthusiastically! DO NOT hallucinate tool calls or pretend you updated plans if you didn't.
+7. If the user explicitly asks for a workout plan or meal plan, use the \`generateWorkoutPlan\` or \`generateMealPlan\` tool to create it. Never write out a plan as plain text. Use the tool.`;
+
+      // Gemini 2.5 Flash from Google
       const { text: aiResponse, toolCalls, toolResults } = await generateText({
-        model: groq('llama-3.3-70b-versatile'),
+        model: google('gemini-2.5-flash'),
+        temperature: 0.3,
         maxSteps: 5,
-        system: `You are Rachel, an elite AI fitness coach for the FitAI-X platform. 
-        You have direct access to the user's entire database ecosystem and all UI pages. 
-        You are completely autonomous. You can manage everything:
-        1. If a user asks for a workout -> call generateWorkoutPlan
-        2. If a user asks to change their schedule -> call updateCalendar
-        3. If a user gets injured or changes a goal -> call logMemory
-        4. If a user asks for nutrition/meal advice -> call generateMealPlan
-        5. If a user wants to update their recovery score or vitals -> call updateVitals
-        6. If a user wants to announce a milestone to the feed -> call postToFeed
-        
-        Always be encouraging and explain your actions. If you invoke a tool, tell the user what you just updated!`,
-        prompt: text,
+        system: systemPrompt,
+        messages,
         tools: {
           logMemory: tool({
             description: 'Log an important memory or event (like an injury or goal change) to the user timeline.',
@@ -77,25 +108,32 @@ export const startAiWorker = () => {
           generateWorkoutPlan: tool({
             description: 'Generate a new workout plan.',
             parameters: z.object({
-              title: z.string(),
-              duration: z.string(),
+              title: z.string().optional().describe('Name of the workout'),
+              duration: z.string().optional().describe('e.g. 45 min'),
               exercises: z.array(z.object({
                 name: z.string(),
                 sets: z.number(),
                 reps: z.number(),
                 weight: z.string()
-              }))
+              })).optional()
             }),
             execute: async ({ title, duration, exercises }) => {
+              const safeTitle = title || 'Full Body Routine';
+              const safeDuration = duration || '45 min';
+              const safeExercises = (exercises && exercises.length > 0) ? exercises : [
+                { name: 'Push-ups', sets: 3, reps: 15, weight: 'Bodyweight' },
+                { name: 'Squats', sets: 3, reps: 15, weight: 'Bodyweight' }
+              ];
+              
               const workout = await prisma.workout.create({
                 data: {
                   userId,
-                  title,
-                  duration,
+                  title: safeTitle,
+                  duration: safeDuration,
                   versionNumber: 1,
                   isCurrent: true,
                   exercises: {
-                    create: exercises
+                    create: safeExercises
                   }
                 },
                 include: { exercises: true }
@@ -108,14 +146,19 @@ export const startAiWorker = () => {
           generateMealPlan: tool({
             description: 'Generate and log a meal plan for the user.',
             parameters: z.object({
-              name: z.string().describe('Name of the meal, e.g. "Grilled Chicken Salad"'),
-              type: z.string().describe('e.g. "Lunch", "Dinner", "Snack"'),
-              cals: z.number().describe('Total calories'),
-              cost: z.number().describe('Estimated cost in dollars')
+              name: z.string().optional().describe('Name of the meal, e.g. "Grilled Chicken Salad"'),
+              type: z.string().optional().describe('e.g. "Lunch", "Dinner", "Snack"'),
+              cals: z.number().optional().describe('Total calories'),
+              cost: z.number().optional().describe('Estimated cost in dollars')
             }),
             execute: async ({ name, type, cals, cost }) => {
+              const safeName = name || 'Healthy AI Meal';
+              const safeType = type || 'Lunch';
+              const safeCals = cals || 500;
+              const safeCost = cost || 0;
+              
               const meal = await prisma.meal.create({
-                data: { userId, name, type, cals, cost }
+                data: { userId, name: safeName, type: safeType, cals: safeCals, cost: safeCost }
               });
               io?.emit('system_notification', { message: `Rachel added ${name} to your Nutrition plan!` });
               io?.emit('nutrition_update', meal);
@@ -138,6 +181,41 @@ export const startAiWorker = () => {
               return `Vitals updated.`;
             },
           }),
+          updateProfileMetrics: tool({
+            description: 'Update the user\'s profile metrics like weight or goal.',
+            parameters: z.object({
+              weight: z.number().optional().describe('New weight of the user in their preferred unit'),
+              goal: z.string().optional().describe('New fitness goal (e.g. Weight Loss, Muscle Gain)')
+            }),
+            execute: async ({ weight, goal }) => {
+              const dataToUpdate: any = {};
+              if (weight !== undefined) dataToUpdate.weight = weight.toString();
+              if (goal) dataToUpdate.goal = goal;
+              
+              const updatedProfile = await prisma.user.update({
+                where: { id: userId },
+                data: dataToUpdate
+              });
+              io?.emit('system_notification', { message: 'Rachel updated your profile metrics!' });
+              io?.emit('profile_update', updatedProfile);
+              return `Successfully updated profile: weight=${weight}, goal=${goal}`;
+            }
+          }),
+          logCalories: tool({
+            description: 'Log consumed calories or a specific food item rapidly.',
+            parameters: z.object({
+              foodName: z.string().describe('Name of the food or "Quick Calories"'),
+              calories: z.number().describe('Amount of calories consumed')
+            }),
+            execute: async ({ foodName, calories }) => {
+              const meal = await prisma.meal.create({
+                data: { userId, name: foodName, type: 'Snack', cals: calories, cost: 0 }
+              });
+              io?.emit('system_notification', { message: `Rachel logged ${calories} calories for ${foodName}.` });
+              io?.emit('nutrition_update', meal);
+              return `Logged ${calories} calories.`;
+            }
+          }),
           postToFeed: tool({
             description: 'Broadcast an AI message to the social dashboard feed on behalf of the user.',
             parameters: z.object({
@@ -156,11 +234,35 @@ export const startAiWorker = () => {
       });
 
       // Save AI message to DB
+      console.log("[AI Job] toolCalls:", JSON.stringify(toolCalls, null, 2));
+      console.log("[AI Job] toolResults:", JSON.stringify(toolResults, null, 2));
+      // Calculate dynamic fallback if aiResponse is empty
+      let finalMessage = aiResponse;
+      if (!finalMessage && toolCalls && toolCalls.length > 0) {
+        const validTools = toolCalls.filter(tc => tc.args !== null && tc.input !== null);
+        if (validTools.length > 0) {
+          const toolNames = validTools.map(tc => tc.toolName);
+          if (toolNames.includes('generateWorkoutPlan')) {
+            finalMessage = "I've generated a new workout plan for you and saved it to your profile!";
+          } else if (toolNames.includes('generateMealPlan')) {
+            finalMessage = "I've logged a new meal plan for you!";
+          } else if (toolNames.includes('updateProfileMetrics')) {
+            finalMessage = "I've updated your profile metrics.";
+          } else if (toolNames.includes('logCalories')) {
+            finalMessage = "I've logged those calories for you.";
+          } else {
+            finalMessage = "I've updated your data.";
+          }
+        }
+      }
+
+      if (!finalMessage) finalMessage = "Got it! Is there anything specific you need help with today?";
+
       const aiMsg = await prisma.coachMessage.create({
         data: {
           userId: userId,
           role: 'ai',
-          content: aiResponse || "I have updated your plans across the ecosystem."
+          content: finalMessage
         }
       });
       
