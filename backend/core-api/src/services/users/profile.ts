@@ -118,6 +118,32 @@ router.get('/', async (req, res) => {
         desc: `AI detected ${r.status} injury risk (${r.riskScore}%) based on fatigue and recovery.`
       }));
 
+    if (user?.currentInjuries) {
+      const parts = user.currentInjuries.split(',').map(s => s.trim()).filter(Boolean);
+      parts.forEach(part => {
+        injuryModel.unshift({
+          id: `current-${part.toLowerCase()}`,
+          date: 'Current',
+          status: 'active',
+          part: part.charAt(0).toUpperCase() + part.slice(1).toLowerCase(),
+          desc: `User reported active injury: ${part}. AI is protecting this region.`
+        });
+      });
+    }
+
+    if (user?.pastInjuries) {
+      const parts = user.pastInjuries.split(',').map(s => s.trim()).filter(Boolean);
+      parts.forEach(part => {
+        injuryModel.push({
+          id: `past-${part.toLowerCase()}`,
+          date: 'Past',
+          status: 'reported',
+          part: part.charAt(0).toUpperCase() + part.slice(1).toLowerCase(),
+          desc: `User reported historical injury: ${part}. Monitoring for strain.`
+        });
+      });
+    }
+
     // Mock Profile Data based on BRD (blended with real DB data where available)
     const profileData = {
       identity: {

@@ -59,14 +59,15 @@ export default function CommandPaletteModal({ isVisible, onClose, onNavigate }: 
 
   const COMMANDS: Command[] = [
     { id: '1', title: 'Talk to Rachel AI', subtitle: 'Start a new coaching session', icon: 'auto-awesome', section: 'AI', action: () => { onClose(); onNavigate('Coach'); } },
-    { id: '2', title: 'Log Workout', subtitle: 'Start an empty session', icon: 'fitness-center', section: 'Quick Actions', action: () => { onClose(); onNavigate('WorkoutBuilder'); } },
-    { id: '3', title: 'Change Goal', subtitle: 'Currently: Hypertrophy', icon: 'track-changes', section: 'Quick Actions', action: () => { onClose(); onNavigate('Profile'); } },
-    { id: '4', title: 'Smart Calendar', subtitle: 'View AI schedule', icon: 'calendar-month', section: 'Navigation', action: () => { onClose(); onNavigate('Calendar'); } },
-    { id: '5', title: 'Meal Planner', subtitle: 'View nutrition targets', icon: 'local-dining', section: 'Navigation', action: () => { onClose(); onNavigate('Nutrition'); } },
+    { id: '2', title: 'Workout Tracker', subtitle: 'View today\'s AI workout', icon: 'fitness-center', section: 'Quick Actions', action: () => { onClose(); onNavigate('WorkoutHome'); } },
+    { id: '3', title: 'Recovery & Health', subtitle: 'View sleep, vitals and stress', icon: 'favorite', section: 'Quick Actions', action: () => { onClose(); onNavigate('Recovery'); } },
+    { id: '4', title: 'Change Goal', subtitle: 'Currently: Hypertrophy', icon: 'track-changes', section: 'Quick Actions', action: () => { onClose(); onNavigate('Profile'); } },
+    { id: '5', title: 'Smart Calendar', subtitle: 'View AI schedule', icon: 'calendar-month', section: 'Navigation', action: () => { onClose(); onNavigate('Calendar'); } },
+    { id: '5a', title: 'Meal Planner', subtitle: 'View nutrition targets', icon: 'local-dining', section: 'Navigation', action: () => { onClose(); onNavigate('Nutrition'); } },
     { id: '6', title: 'AI Coach (Chat)', icon: 'chat-bubble-outline', section: 'Navigation', action: () => { onClose(); onNavigate('Coach'); } },
     { id: '7', title: 'Dashboard', icon: 'dashboard', section: 'Navigation', action: () => { onClose(); onNavigate('Dashboard'); } },
-    { id: '8', title: 'Profile & Analytics', icon: 'insights', section: 'Navigation', action: () => { onClose(); onNavigate('Profile'); } },
-    { id: '9', title: 'Settings', icon: 'settings', section: 'System', action: () => { onClose(); } },
+    { id: '8', title: 'Progress & Analytics', subtitle: 'View charts and score', icon: 'insights', section: 'Navigation', action: () => { onClose(); onNavigate('Analytics'); } },
+    { id: '9', title: 'Settings', icon: 'settings', section: 'System', action: () => { onClose(); onNavigate('Settings'); } },
   ];
 
   const filtered = COMMANDS.filter(c => 

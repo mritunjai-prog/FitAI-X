@@ -40,6 +40,10 @@ model User {
   calendarEvents CalendarEvent[]
   memoryEvents   MemoryEvent[]
   medicalDocs    MedicalDocument[]
+  nutritionPref  NutritionPreference?
+  foodLogs       FoodLog[]
+  waterLogs      WaterLog[]
+  groceryLists   GroceryList[]
 }
 
 model MemoryEvent {
@@ -64,6 +68,8 @@ model Vitals {
   moveProgress  Float     @default(0.8)
   waterProgress Float     @default(0.6)
   trainProgress Float     @default(0.4)
+  waterGoalMl   Int       @default(2500)
+  dailyWaterMl  Int       @default(1500)
   loadM         Float     @default(0.2)
   loadT         Float     @default(0.8)
   loadW         Float     @default(0.5)
@@ -73,6 +79,15 @@ model Vitals {
   loadSu        Float     @default(0.6)
   user          User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
+
+model WaterLog {
+  id          String   @id @default(uuid())
+  userId      String
+  amountMl    Int
+  loggedAt    DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 
 model FeedItem {
   id        String    @id @default(uuid())
@@ -92,6 +107,14 @@ model Workout {
   title           String
   duration        String
   
+  // BRD Step 2: Extended Manual/AI fields
+  description     String?
+  goal            String?
+  difficulty      String?
+  equipment       String?
+  targetMuscles   String? // JSON array or comma separated
+  isFavorite      Boolean    @default(false)
+
   // FR-002: Workout Version Control
   parentVersionId String?
   versionNumber   Int        @default(1)
@@ -103,6 +126,7 @@ model Workout {
   deletedAt       DateTime?
 
   exercises       Exercise[]
+  sessions        WorkoutSession[]
   user            User       @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
@@ -113,8 +137,11 @@ model Exercise {
   sets      Int
   reps      Int
   weight    String
+  restTime  Int?      // in seconds
+  notes     String?
+  order     Int       @default(0)
   deletedAt DateTime?
-  workout   Workout   @relation(fields: [workoutId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  workout   Workout   @relation(fields: [workoutId], references: [id], onDelete: Cascade)
 }
 
 model CoachMessage {
@@ -136,6 +163,7 @@ model Meal {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
+  versions  MealVersion[]
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
@@ -160,4 +188,119 @@ model MedicalDocument {
   fileUrl   String
   uploadedAt DateTime @default(now())
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model NutritionPreference {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  dietType        String?  // Vegetarian, Vegan, Keto, etc.
+  allergies       String?  // JSON string or comma separated
+  dislikedFoods   String?
+  favoriteFoods   String?
+  budget          Float?
+  cookingSkill    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model MealVersion {
+  id              String   @id @default(uuid())
+  mealId          String
+  versionNumber   Int      @default(1)
+  name            String
+  cals            Int
+  cost            Float
+  protein         Float?
+  carbs           Float?
+  fats            Float?
+  aiExplanation   String?
+  recipe          String?
+  ingredients     String?  // JSON array of ingredients
+  prepTime        Int?     // in minutes
+  difficulty      String?
+  isCurrent       Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  meal            Meal     @relation(fields: [mealId], references: [id], onDelete: Cascade)
+}
+
+model FoodLog {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  cals        Int
+  protein     Float?
+  carbs       Float?
+  fats        Float?
+  loggedAt    DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model GroceryList {
+  id          String   @id @default(uuid())
+  userId      String
+  name        String
+  totalCost   Float?
+  createdAt   DateTime @default(now())
+  items       GroceryItem[]
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model GroceryItem {
+  id             String      @id @default(uuid())
+  groceryListId  String
+  name           String
+  quantity       String
+  cost           Float?
+  isChecked      Boolean     @default(false)
+  groceryList    GroceryList @relation(fields: [groceryListId], references: [id], onDelete: Cascade)
+}
+
+model WorkoutSession {
+  id              String   @id @default(uuid())
+  userId          String
+  workoutId       String?
+  title           String
+  startTime       DateTime @default(now())
+  endTime         DateTime?
+  duration        Int?     // in minutes
+  caloriesBurned  Int?
+  notes           String?
+  status          String   @default("COMPLETED") // COMPLETED, IN_PROGRESS
+  createdAt       DateTime @default(now())
+  
+  workout         Workout? @relation(fields: [workoutId], references: [id], onDelete: SetNull)
+  exercises       WorkoutSessionExercise[]
+}
+
+model WorkoutSessionExercise {
+  id              String   @id @default(uuid())
+  sessionId       String
+  name            String
+  order           Int      @default(0)
+  notes           String?
+  isSkipped       Boolean  @default(false)
+  
+  session         WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sets            WorkoutSessionSet[]
+}
+
+model WorkoutSessionSet {
+  id              String   @id @default(uuid())
+  sessionExId     String
+  setNumber       Int
+  reps            Int?
+  weight          Float?
+  isCompleted     Boolean  @default(false)
+  
+  exercise        WorkoutSessionExercise @relation(fields: [sessionExId], references: [id], onDelete: Cascade)
+}
+
+model WorkoutPR {
+  id              String   @id @default(uuid())
+  userId          String
+  exerciseName    String
+  weight          Float
+  reps            Int
+  dateAchieved    DateTime @default(now())
 }

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, StatusBar as RNStatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, StatusBar as RNStatusBar, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
@@ -29,8 +29,8 @@ import ExerciseCard from "../components/ExerciseCard";
 import AnimatedPressable from "../components/AnimatedPressable";
 import { LinearGradient } from "expo-linear-gradient";
 import DraggableFlatList, { RenderItemParams } from "react-native-draggable-flatlist";
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { fetchCurrentWorkout, saveWorkout } from '../services/api/workout';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { fetchCurrentWorkout, saveWorkout, fetchWorkoutVersions } from '../services/api/workout';
 import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_W } = require("react-native").Dimensions.get("window");
@@ -171,16 +171,22 @@ function ActiveBodyMap({
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
-export default function WorkoutBuilderScreen({ onNavigateBack }: { onNavigateBack?: () => void }) {
-  const { isDark, C, bgColors } = useTheme();
+export default function WorkoutBuilderScreen({ onNavigateBack, onStartWorkout }: { onNavigateBack?: () => void; onStartWorkout?: () => void }) {
+  const { C } = useTheme();
   const styles = useMemo(() => getStyles(C), [C]);
 
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [activeSimulation, setActiveSimulation] = useState("V3 (Current)");
-  const simulations = ["V3 (Current)", "V2 (Original)", "20 min Quick", "Home (No Equip)"];
+  const { data: currentWorkout } = useQuery({ queryKey: ['currentWorkout'], queryFn: () => fetchCurrentWorkout() });
+  
+  const { data: versionsData } = useQuery({
+    queryKey: ['workoutVersions', currentWorkout?.id],
+    queryFn: () => fetchWorkoutVersions(currentWorkout?.id!),
+    enabled: !!currentWorkout?.id
+  });
 
-  const { data: currentWorkout } = useQuery({ queryKey: ['currentWorkout'], queryFn: fetchCurrentWorkout });
+  const [activeSimulation, setActiveSimulation] = useState("Latest");
+  const simulations = ["Latest", "20 min Quick", "Home (No Equip)"];
+  const queryClient = useQueryClient();
 
   const [exercises, setExercises] = useState<any[]>([]);
 
@@ -193,16 +199,40 @@ export default function WorkoutBuilderScreen({ onNavigateBack }: { onNavigateBac
   const { mutate: saveWork } = useMutation({
     mutationFn: (data: any) => saveWorkout(data),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['currentWorkout'] });
+      queryClient.invalidateQueries({ queryKey: ['workoutVersions'] });
       onNavigateBack?.();
     }
   });
+
+  const [aiPrompt, setAiPrompt] = useState("");
+  const { mutate: aiGenerateWork, isPending: isAiGenerating } = useMutation({
+    mutationFn: (promptText: string) => {
+      const { generateWorkout } = require('../services/api/workout');
+      return generateWorkout(promptText, currentWorkout?.id);
+    },
+    onSuccess: (data) => {
+      if (data.exercises) {
+        setExercises(data.exercises);
+      }
+      setAiPrompt("");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  });
+
+  const handleAiGenerate = () => {
+    if (!aiPrompt.trim()) return;
+    haptic();
+    aiGenerateWork(aiPrompt);
+  };
 
   const handleSave = () => {
     haptic();
     saveWork({
       userId: 'demo-user-id',
-      title: 'Push Day — V3',
-      duration: 60,
+      title: currentWorkout?.title || 'Push Day',
+      duration: currentWorkout?.duration || '60',
+      parentVersionId: currentWorkout?.parentVersionId || currentWorkout?.id,
       exercises: exercises
     });
   };
@@ -336,6 +366,25 @@ export default function WorkoutBuilderScreen({ onNavigateBack }: { onNavigateBac
       <View style={{ marginTop: 24 }}>
         <Text style={styles.sectionTitle}>WORKOUT FLOW</Text>
       </View>
+      
+      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.glassInset, borderRadius: 16, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: C.outlineVariant }}>
+        <TextInput
+          placeholder="Ask AI (e.g. 'Add a tricep exercise')"
+          placeholderTextColor={C.onSurfaceVariant}
+          style={{ flex: 1, color: C.onSurface, fontFamily: F.body, fontSize: 14 }}
+          value={aiPrompt}
+          onChangeText={setAiPrompt}
+          onSubmitEditing={handleAiGenerate}
+          returnKeyType="send"
+        />
+        <TouchableOpacity onPress={handleAiGenerate} style={{ backgroundColor: C.primary, padding: 8, borderRadius: 12 }}>
+          {isAiGenerating ? (
+            <ActivityIndicator size="small" color={C.onPrimary} />
+          ) : (
+            <Icon name="add" size={16} color={C.onPrimary} />
+          )}
+        </TouchableOpacity>
+      </View>
     </>
   );
 
@@ -387,6 +436,17 @@ export default function WorkoutBuilderScreen({ onNavigateBack }: { onNavigateBac
                 onMoveUp={() => moveUp(index)}
                 onMoveDown={() => moveDown(index)}
                 onRemove={() => remove(item.id)}
+                onDuplicate={() => {
+                  const duplicated = { ...item, id: Math.random().toString(36).substring(7) };
+                  const newExercises = [...exercises];
+                  newExercises.splice(index + 1, 0, duplicated);
+                  setExercises(newExercises);
+                  if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+                onEdit={() => {
+                  if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  // Open an edit modal (we can just alert for now or implement a quick edit state)
+                }}
               />
             ))}
             {renderFooter()}
@@ -413,6 +473,16 @@ export default function WorkoutBuilderScreen({ onNavigateBack }: { onNavigateBac
                   onMoveUp={() => moveUp(index)}
                   onMoveDown={() => moveDown(index)}
                   onRemove={() => remove(item.id)}
+                  onDuplicate={() => {
+                    const duplicated = { ...item, id: Math.random().toString(36).substring(7) };
+                    const newExercises = [...exercises];
+                    newExercises.splice(index + 1, 0, duplicated);
+                    setExercises(newExercises);
+                    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                  onEdit={() => {
+                    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
                   drag={drag}
                   isActive={isActive}
                 />
@@ -457,26 +527,30 @@ export default function WorkoutBuilderScreen({ onNavigateBack }: { onNavigateBac
             <View style={styles.drawerHandle} />
             <Text style={styles.drawerTitle}>Version History</Text>
             
-            {/* Version 3 */}
-            <View style={[styles.historyItem, { borderColor: C.primary }]}>
-              <View style={styles.historyItemHeader}>
-                <Text style={styles.historyItemTitle}>V3 — Recovery Adjustment</Text>
-                <Text style={styles.historyItemTime}>Current</Text>
-              </View>
-              <Text style={styles.historyItemDesc}>AI reduced shoulder volume due to reported soreness.</Text>
-            </View>
-
-            {/* Version 2 */}
-            <View style={styles.historyItem}>
-              <View style={styles.historyItemHeader}>
-                <Text style={styles.historyItemTitle}>V2 — User Modified</Text>
-                <Text style={styles.historyItemTime}>10 min ago</Text>
-              </View>
-              <Text style={styles.historyItemDesc}>You swapped Bench Press for Dumbbell Press.</Text>
-              <TouchableOpacity style={styles.rollbackButton}>
-                <Text style={styles.rollbackButtonText}>Restore V2</Text>
-              </TouchableOpacity>
-            </View>
+            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+              {versionsData?.map((v: any, i: number) => (
+                <View key={v.id || i} style={[styles.historyItem, v.isCurrent && { borderColor: C.primary }]}>
+                  <View style={styles.historyItemHeader}>
+                    <Text style={styles.historyItemTitle}>Version {v.versionNumber} {v.isCurrent && '(Current)'}</Text>
+                    <Text style={styles.historyItemTime}>{new Date(v.createdAt).toLocaleDateString()}</Text>
+                  </View>
+                  <Text style={styles.historyItemDesc}>{v.aiExplanation || 'Manual edit.'}</Text>
+                  
+                  {!v.isCurrent && (
+                    <TouchableOpacity style={styles.rollbackButton} onPress={() => {
+                      haptic();
+                      setExercises(v.exercises);
+                      setIsHistoryOpen(false);
+                    }}>
+                      <Text style={styles.rollbackButtonText}>Restore this version</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+              {!versionsData?.length && (
+                <Text style={{ color: C.onSurfaceVariant, fontFamily: F.body }}>No version history found.</Text>
+              )}
+            </ScrollView>
           </Animated.View>
         </Animated.View>
       )}

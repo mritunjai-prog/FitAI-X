@@ -34,8 +34,15 @@ import CoachScreen from './src/screens/CoachScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import CalendarScreen from './src/screens/CalendarScreen';
 import NutritionScreen from './src/screens/NutritionScreen';
+import AnalyticsScreen from './src/screens/AnalyticsScreen';
+import RecoveryScreen from './src/screens/RecoveryScreen';
+import ActiveWorkoutScreen from './src/screens/ActiveWorkoutScreen';
+import NotificationsScreen from './src/screens/NotificationsScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
+import WorkoutHistoryScreen from './src/screens/WorkoutHistoryScreen';
 import BottomNavigation from './src/components/BottomNavigation';
 import CommandPaletteModal from './src/components/CommandPaletteModal';
+import WorkoutHomeScreen from './src/screens/WorkoutHomeScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -45,7 +52,7 @@ function MainApp() {
   const { isDark } = useTheme();
   const { user, isLoading, hasOnboarded, completeOnboarding } = useAuth();
   
-  const [currentScreen, setCurrentScreen] = useState<'Profile' | 'WorkoutBuilder' | 'Dashboard' | 'Coach' | 'Calendar' | 'Nutrition'>('Dashboard');
+  const [currentScreen, setCurrentScreen] = useState<'Profile' | 'WorkoutBuilder' | 'ActiveWorkout' | 'WorkoutHistory' | 'Dashboard' | 'Coach' | 'Calendar' | 'Nutrition' | 'Analytics' | 'Recovery' | 'Settings' | 'Notifications' | 'WorkoutHome'>('Dashboard');
   const [isCommandOpen, setIsCommandOpen] = useState(false);
 
   // Keyboard shortcut for Cmd+K / Ctrl+K on Web
@@ -53,11 +60,11 @@ function MainApp() {
     if (Platform.OS === 'web') {
       const handleKeyDown = (e: KeyboardEvent) => {
         if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-          e.preventDefault();
-          setIsCommandOpen(prev => !prev);
+           e.preventDefault();
+           setIsCommandOpen(prev => !prev);
         }
         if (e.key === 'Escape') {
-          setIsCommandOpen(false);
+           setIsCommandOpen(false);
         }
       };
       window.addEventListener('keydown', handleKeyDown);
@@ -103,22 +110,49 @@ function MainApp() {
       {!hasOnboarded ? (
         <OnboardingScreen onComplete={completeOnboarding} />
       ) : currentScreen === 'Profile' ? (
-        <ProfileScreen onNavigateToBuilder={() => setCurrentScreen('WorkoutBuilder')} />
+        <ProfileScreen 
+          onNavigateToBuilder={() => setCurrentScreen('WorkoutBuilder')} 
+          onNavigateToSettings={() => setCurrentScreen('Settings')}
+          onNavigateToNotifications={() => setCurrentScreen('Notifications')}
+          onNavigateToHistory={() => setCurrentScreen('WorkoutHistory')}
+        />
+      ) : currentScreen === 'WorkoutHistory' ? (
+        <WorkoutHistoryScreen onNavigateBack={() => setCurrentScreen('Profile')} />
+      ) : currentScreen === 'WorkoutHome' ? (
+        <WorkoutHomeScreen 
+          onNavigateBack={() => setCurrentScreen('Dashboard')}
+          onNavigateToBuilder={() => setCurrentScreen('WorkoutBuilder')}
+          onNavigateToActive={() => setCurrentScreen('ActiveWorkout')}
+          onNavigateToHistory={() => setCurrentScreen('WorkoutHistory')}
+        />
       ) : currentScreen === 'WorkoutBuilder' ? (
-        <WorkoutBuilderScreen onNavigateBack={() => setCurrentScreen('Profile')} />
+        <WorkoutBuilderScreen 
+          onNavigateBack={() => setCurrentScreen('WorkoutHome')} 
+          onStartWorkout={() => setCurrentScreen('ActiveWorkout')}
+        />
+      ) : currentScreen === 'ActiveWorkout' ? (
+        <ActiveWorkoutScreen onFinish={() => setCurrentScreen('Dashboard')} />
       ) : currentScreen === 'Coach' ? (
-        <CoachScreen />
+        <CoachScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} />
       ) : currentScreen === 'Calendar' ? (
-        <CalendarScreen />
+        <CalendarScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} />
       ) : currentScreen === 'Nutrition' ? (
-        <NutritionScreen />
+        <NutritionScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} />
+      ) : currentScreen === 'Analytics' ? (
+        <AnalyticsScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} />
+      ) : currentScreen === 'Recovery' ? (
+        <RecoveryScreen navigation={{ goBack: () => setCurrentScreen('Dashboard') }} onNavigateToNotifications={() => setCurrentScreen('Notifications')} />
+      ) : currentScreen === 'Settings' ? (
+        <SettingsScreen onNavigateBack={() => setCurrentScreen('Profile')} />
+      ) : currentScreen === 'Notifications' ? (
+        <NotificationsScreen onNavigateBack={() => setCurrentScreen('Profile')} />
       ) : (
-        <DashboardScreen onOpenCommandPalette={() => setIsCommandOpen(true)} />
+        <DashboardScreen onOpenCommandPalette={() => setIsCommandOpen(true)} onNavigateToNotifications={() => setCurrentScreen('Notifications')} />
       )}
       
-      {hasOnboarded && currentScreen !== 'WorkoutBuilder' && (
+      {hasOnboarded && !['WorkoutBuilder', 'ActiveWorkout', 'WorkoutHistory', 'Settings', 'Notifications', 'WorkoutHome'].includes(currentScreen) && (
         <BottomNavigation 
-          currentScreen={currentScreen as 'Dashboard' | 'Profile' | 'Coach' | 'Calendar' | 'Nutrition'} 
+          currentScreen={currentScreen as 'Dashboard' | 'Profile' | 'Coach' | 'Calendar' | 'Nutrition' | 'Analytics'} 
           onNavigate={(screen) => setCurrentScreen(screen)} 
           onOpenActionMenu={() => setIsCommandOpen(true)} 
         />

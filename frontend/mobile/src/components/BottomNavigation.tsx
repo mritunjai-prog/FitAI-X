@@ -10,8 +10,8 @@ import { useTheme } from '../context/ThemeContext';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 type BottomNavProps = {
-  currentScreen: 'Dashboard' | 'Profile' | 'Coach' | 'Calendar' | 'Nutrition';
-  onNavigate: (screen: 'Dashboard' | 'Profile' | 'Coach' | 'Calendar' | 'Nutrition') => void;
+  currentScreen: 'Dashboard' | 'Profile' | 'Coach' | 'Calendar' | 'Nutrition' | 'Analytics' | 'Recovery';
+  onNavigate: (screen: 'Dashboard' | 'Profile' | 'Coach' | 'Calendar' | 'Nutrition' | 'Analytics' | 'Recovery') => void;
   onOpenActionMenu: () => void;
 };
 
@@ -46,7 +46,7 @@ export default function BottomNavigation({ currentScreen, onNavigate, onOpenActi
     opacity: rippleOpacity.value
   }));
 
-  const handleNav = (screen: 'Dashboard' | 'Profile' | 'Coach' | 'Calendar' | 'Nutrition') => {
+  const handleNav = (screen: 'Dashboard' | 'Profile' | 'Coach' | 'Calendar' | 'Nutrition' | 'Analytics' | 'Recovery') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onNavigate(screen);
   };

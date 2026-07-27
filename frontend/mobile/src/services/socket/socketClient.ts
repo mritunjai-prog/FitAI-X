@@ -22,3 +22,13 @@ socket.on('connect', () => {
 socket.on('disconnect', () => {
   console.log('Disconnected from realtime server');
 });
+
+export const joinUserRoom = (userId: string) => {
+  if (socket.connected) {
+    socket.emit('join_room', userId);
+  } else {
+    socket.once('connect', () => {
+      socket.emit('join_room', userId);
+    });
+  }
+};

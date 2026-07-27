@@ -56,28 +56,28 @@ const AppleIcon = () => (
   </Svg>
 );
 
-// ─── Glowing AI Hero Element ────────────────────────────────────────────────
-function AIHero() {
-  const rotation = useSharedValue(0);
+import { Image } from 'react-native';
+
+// ─── Brand Logo ─────────────────────────────────────────────────────────────
+function BrandLogo() {
   const scale = useSharedValue(1);
 
   useEffect(() => {
-    rotation.value = withRepeat(withTiming(360, { duration: 20000, easing: Easing.linear }), -1, false);
     scale.value = withRepeat(withSequence(withTiming(1.05, { duration: 3000 }), withTiming(0.95, { duration: 3000 })), -1, true);
   }, []);
 
   const animStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }, { scale: scale.value }],
+    transform: [{ scale: scale.value }],
   }));
 
   return (
-    <View style={styles.heroContainer}>
-      <Animated.View style={[styles.heroGlow, animStyle]}>
-        <LinearGradient colors={[`${C.primary}80`, `${C.cyan}50`]} style={StyleSheet.absoluteFill} />
+    <View style={[styles.heroContainer, { width: 220, height: 220, backgroundColor: 'transparent' }]}>
+      <Animated.View style={[animStyle, { width: 200, height: 200, borderRadius: 100, overflow: 'hidden', borderWidth: 2, borderColor: '#F5C400', justifyContent: 'center', alignItems: 'center' }]}>
+        <Image 
+          source={require('../../assets/fiAIXlogo.png.png')} 
+          style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
+        />
       </Animated.View>
-      <View style={styles.heroInner}>
-        <Icon name="auto-awesome" size={48} color={C.primary} />
-      </View>
     </View>
   );
 }
@@ -174,11 +174,11 @@ export default function AuthScreen({ onAuthSuccess }: { onAuthSuccess?: () => vo
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           
-          {/* Header / Hero */}
-          <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.headerArea}>
-            <AIHero />
-            <Text style={styles.appTitle}>FitAI X</Text>
-            <Text style={styles.appSubtitle}>Neural fitness optimization.</Text>
+          {/* Logo and Titles */}
+          <Animated.View entering={FadeInUp.delay(200)} style={styles.headerArea}>
+            <BrandLogo />
+            <Text style={styles.appTitle}>FitAI<Text style={{ color: C.primary }}> X</Text></Text>
+            <Text style={styles.appSubtitle}>Train Smarter. Live Stronger.</Text>
           </Animated.View>
 
           {/* Glass Auth Card */}

@@ -12,6 +12,11 @@ export function setupSocket(io: Server) {
   io.on('connection', (socket: Socket) => {
     console.log(`Client connected: ${socket.id}`)
 
+    socket.on('join_room', (userId: string) => {
+      socket.join(userId);
+      console.log(`Client ${socket.id} joined room ${userId}`);
+    })
+
     socket.on('disconnect', () => {
       console.log(`Client disconnected: ${socket.id}`)
     })

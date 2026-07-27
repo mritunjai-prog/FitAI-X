@@ -19,4 +19,18 @@ router.get('/', async (req, res) => {
   }
 })
 
+// POST /api/v1/calendar
+router.post('/', async (req, res) => {
+  try {
+    const { userId, dayIndex, title, intensity, type } = req.body;
+    const event = await prisma.calendarEvent.create({
+      data: { userId, dayIndex, title, intensity, type: type || 'workout' }
+    });
+    res.json(event);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to create calendar event' });
+  }
+})
+
 export default router

@@ -47,7 +47,7 @@ function AISpinner() {
   );
 }
 
-export default function CalendarScreen() {
+export default function CalendarScreen({ onNavigateToNotifications }: any) {
   const { isDark, C, bgColors } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
   const { user } = useAuth();
@@ -103,8 +103,11 @@ export default function CalendarScreen() {
       <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.header}>
-          <Text style={styles.title}>Smart Calendar</Text>
-          <Text style={styles.subtitle}>Hold & drag to reschedule. AI adapts instantly.</Text>
+          <View>
+            <Text style={styles.title}>Smart Calendar</Text>
+            <Text style={styles.subtitle}>Hold & drag to reschedule. AI adapts instantly.</Text>
+          </View>
+
         </View>
 
       {warningMsg && (

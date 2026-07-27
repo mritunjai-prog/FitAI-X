@@ -19,6 +19,9 @@ import injuryPredictorRoutes from './services/18-ai-injury-predictor/index'
 import habitRoutes from './services/16-streak-protection/index'
 import documentRoutes from './services/users/documents'
 import versionRoutes from './services/02-workout-version-control/index'
+import analyticsRoutes from './services/09-analytics/analytics'
+import recoveryRoutes from './services/10-recovery/recovery'
+import notificationRoutes from './services/notifications/index'
 import path from 'path'
 
 // Event Driven Architecture & Jobs
@@ -56,6 +59,9 @@ app.use('/api/v1/injury-predictor', injuryPredictorRoutes)
 app.use('/api/v1/habits', habitRoutes)
 app.use('/api/v1/users', documentRoutes)
 app.use('/api/v1/version-control', versionRoutes)
+app.use('/api/v1/analytics', analyticsRoutes)
+app.use('/api/v1/recovery', recoveryRoutes)
+app.use('/api/v1/notifications', notificationRoutes)
 
 // Health Check
 app.get('/health', (req, res) => {

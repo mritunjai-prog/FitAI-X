@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, SafeAreaView, Platform, StatusBar as RNStatusBar, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, SafeAreaView, Platform, StatusBar as RNStatusBar, KeyboardAvoidingView, Alert } from 'react-native';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import Animated, { FadeInUp, FadeInDown, FadeOutDown, Layout, useSharedValue, useAnimatedStyle, withTiming, withRepeat, withSequence, withDelay, interpolateColor } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchCoachMessages, sendMessage } from '../services/api/coach';
 import { transcribeAudio } from '../services/api/transcribe';
 import { Audio } from 'expo-av';
@@ -12,6 +12,8 @@ import { DarkColors, F } from '../theme';
 import MeshGradientBackground from '../components/MeshGradientBackground';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { socket, joinUserRoom } from '../services/socket/socketClient';
+import Markdown from 'react-native-markdown-display';
 
 type MessageType = 'user' | 'ai' | 'action';
 
@@ -63,14 +65,27 @@ function TypingIndicator() {
   );
 }
 
-export default function CoachScreen() {
+export default function CoachScreen({ onNavigateToNotifications }: any) {
   const { C, isDark } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
-  const { data: initialMessages = [] } = useQuery({ queryKey: ['coachMessages'], queryFn: fetchCoachMessages });
   
-  const [messages, setMessages] = useState<Message[]>([]);
   const { user } = useAuth();
   
+  const { data: initialMessages = [] } = useQuery({ 
+    queryKey: ['coachMessages', user?.id], 
+    queryFn: () => fetchCoachMessages(user?.id as string),
+    enabled: !!user?.id
+  });
+  
+  const [messages, setMessages] = useState<Message[]>([]);
+  const queryClient = useQueryClient();
+  
+  useEffect(() => {
+    if (user?.id) {
+      joinUserRoom(user.id);
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     if (initialMessages.length > 0 && messages.length === 0) {
       const mapped = initialMessages.map((m: any) => ({
@@ -82,6 +97,56 @@ export default function CoachScreen() {
     }
   }, [initialMessages]);
 
+  useEffect(() => {
+    const handleStreamStart = ({ messageId }: { messageId: string }) => {
+      setIsTyping(false);
+      setMessages(prev => [...prev, { id: messageId, type: 'ai', text: '' }]);
+    };
+
+    const handleStreamChunk = ({ messageId, chunk }: { messageId: string; chunk: string }) => {
+      setMessages(prev => prev.map(m => 
+        m.id === messageId ? { ...m, text: (m.text || '') + chunk } : m
+      ));
+    };
+    
+    const handleStreamAction = ({ messageId, actionPayload }: { messageId: string; actionPayload: any }) => {
+      setIsTyping(false);
+      setMessages(prev => [...prev, { id: messageId + '-action', type: 'action', actionPayload }]);
+      // Invalidate relevant queries so those screens refresh automatically
+      if (actionPayload?.type === 'CALENDAR_UPDATED') {
+        queryClient.invalidateQueries({ queryKey: ['calendar'] });
+      } else if (actionPayload?.type === 'WORKOUT_CREATED') {
+        queryClient.invalidateQueries({ queryKey: ['currentWorkout'] });
+      } else if (actionPayload?.type === 'DIET_UPDATED') {
+        queryClient.invalidateQueries({ queryKey: ['userMeals'] });
+        queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
+      }
+    }
+
+    const handleStreamEnd = () => {
+      // Stream ended
+    };
+
+    const handleStreamError = ({ fallbackMessage }: any) => {
+      setIsTyping(false);
+      setMessages(prev => [...prev, { id: fallbackMessage.id, type: 'ai', text: fallbackMessage.content }]);
+    };
+
+    socket.on('ai_stream_start', handleStreamStart);
+    socket.on('ai_stream_chunk', handleStreamChunk);
+    socket.on('ai_stream_action', handleStreamAction);
+    socket.on('ai_stream_end', handleStreamEnd);
+    socket.on('ai_stream_error', handleStreamError);
+
+    return () => {
+      socket.off('ai_stream_start', handleStreamStart);
+      socket.off('ai_stream_chunk', handleStreamChunk);
+      socket.off('ai_stream_action', handleStreamAction);
+      socket.off('ai_stream_end', handleStreamEnd);
+      socket.off('ai_stream_error', handleStreamError);
+    };
+  }, []);
+
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
@@ -90,6 +155,18 @@ export default function CoachScreen() {
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const webRecognitionRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (recordingRef.current) {
+         recordingRef.current.stopAndUnloadAsync().catch(console.error);
+         recordingRef.current = null;
+      }
+      if (webRecognitionRef.current) {
+         webRecognitionRef.current.stop();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -138,7 +215,11 @@ export default function CoachScreen() {
     try {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (!SpeechRecognition) {
-        alert("Speech recognition not supported in this browser.");
+        if (Platform.OS === 'web') {
+           window.alert("Speech recognition not supported in this browser.");
+        } else {
+           Alert.alert("Error", "Speech recognition not supported.");
+        }
         return;
       }
       const recognition = new SpeechRecognition();
@@ -153,7 +234,11 @@ export default function CoachScreen() {
       };
       recognition.onerror = (event: any) => {
         console.error("Speech recognition error", event.error);
-        alert("Microphone error: " + event.error);
+        if (Platform.OS === 'web') {
+           window.alert("Microphone error: " + event.error);
+        } else {
+           Alert.alert("Error", "Microphone error: " + event.error);
+        }
       };
       recognition.onend = () => setIsRecording(false);
       
@@ -161,7 +246,8 @@ export default function CoachScreen() {
       webRecognitionRef.current = recognition;
     } catch (e) {
       console.error(e);
-      alert("Microphone access denied or failed.");
+      if (Platform.OS === 'web') window.alert("Microphone access denied or failed.");
+      else Alert.alert("Error", "Microphone access denied or failed.");
     }
   };
 
@@ -175,7 +261,7 @@ export default function CoachScreen() {
     try {
       const permission = await Audio.requestPermissionsAsync();
       if (permission.status !== 'granted') {
-        alert('Microphone permission is required to use voice input.');
+        Alert.alert("Permission Denied", 'Microphone permission is required to use voice input.');
         return;
       }
       await Audio.setAudioModeAsync({
@@ -187,7 +273,7 @@ export default function CoachScreen() {
       setIsRecording(true);
     } catch (err) {
       console.error('Failed to start recording', err);
-      alert('Failed to start recording. Please check settings.');
+      Alert.alert("Error", 'Failed to start recording. Please check settings.');
     }
   };
 
@@ -206,7 +292,7 @@ export default function CoachScreen() {
       }
     } catch (err: any) {
       console.error('Failed to process voice', err);
-      alert('Voice processing failed: ' + (err.message || 'Network error'));
+      Alert.alert("Error", 'Voice processing failed: ' + (err.message || 'Network error'));
     } finally {
       setIsProcessingVoice(false);
       recordingRef.current = null;
@@ -232,33 +318,72 @@ export default function CoachScreen() {
     setIsTyping(true);
 
     try {
-      const result = await sendMessage(userText, user.id);
-      setIsTyping(false);
-      setMessages(prev => [
-        ...prev,
-        { id: result.aiMessage.id, type: 'ai', text: result.aiMessage.content }
-      ]);
+      await sendMessage(userText, user.id);
+      // AI message will be added via socket.io events
     } catch (err) {
       setIsTyping(false);
-      alert('Rachel could not be reached right now.');
+      if (Platform.OS === 'web') {
+        window.alert('Rachel could not be reached right now.');
+      } else {
+        Alert.alert("Network Error", 'Rachel could not be reached right now.');
+      }
     }
   };
 
+  const markdownStyles = {
+    body: {
+      color: C.onSurface,
+      fontSize: 15,
+      fontFamily: F.body,
+      lineHeight: 22,
+    },
+    heading1: { color: C.onSurface, fontFamily: F.header, marginTop: 10, marginBottom: 5 },
+    heading2: { color: C.onSurface, fontFamily: F.header, marginTop: 8, marginBottom: 4 },
+    heading3: { color: C.onSurface, fontFamily: F.header, marginTop: 6, marginBottom: 3 },
+    code_block: { backgroundColor: 'rgba(0,0,0,0.1)', padding: 10, borderRadius: 8 },
+    fence: { backgroundColor: 'rgba(0,0,0,0.1)', padding: 10, borderRadius: 8 },
+  };
+
+  const renderActionCard = (msg: Message) => {
+    const payload = msg.actionPayload;
+    if (!payload) return null;
+
+    let icon: any = 'check-circle';
+    let title = 'Action Completed';
+    let lines: string[] = [];
+
+    if (payload.type === 'CALENDAR_UPDATED') {
+      icon = 'event';
+      title = `📅 Calendar Updated (${payload.count} session${payload.count > 1 ? 's' : ''})`;
+      lines = payload.summary?.split(', ') || [];
+    } else if (payload.type === 'WORKOUT_CREATED') {
+      icon = 'fitness-center';
+      title = `💪 Workout Plan Created`;
+      lines = [`"${payload.title}"`, `${payload.exerciseCount} exercises saved as your current plan`];
+    } else if (payload.type === 'DIET_UPDATED') {
+      icon = 'restaurant';
+      title = `🥗 Diet Plan Updated (${payload.count} meal${payload.count > 1 ? 's' : ''})`;
+      lines = [`Total: ${payload.totalCals} calories`, ...(payload.summary?.split(', ') || [])];
+    }
+
+    return (
+      <Animated.View key={msg.id} entering={FadeInUp.springify()} layout={Layout.springify()} style={styles.actionContainer}>
+        <View style={styles.actionHeader}>
+          <Icon name={icon} size={16} color={C.primary} />
+          <Text style={styles.actionTitle}>{title}</Text>
+        </View>
+        {lines.map((l: string, i: number) => (
+          <Text key={i} style={styles.actionDesc}>{l}</Text>
+        ))}
+        <View style={styles.actionDivider} />
+        <Text style={styles.actionHint}>✓ Saved to your app</Text>
+      </Animated.View>
+    );
+  };
+
   const renderMessage = (msg: Message) => {
-    if (msg.type === 'action' && msg.actionPayload?.type === 'WORKOUT_MODIFIED') {
-      return (
-        <Animated.View key={msg.id} entering={FadeInUp.springify()} layout={Layout.springify()} style={styles.actionContainer}>
-          <View style={styles.actionHeader}>
-            <Icon name="build" size={16} color={C.primary} />
-            <Text style={styles.actionTitle}>Workout Adjusted</Text>
-          </View>
-          <Text style={styles.actionDesc}>Removed: Barbell Back Squat</Text>
-          <Text style={styles.actionDesc}>Added: Romanian Deadlift</Text>
-          <TouchableOpacity style={styles.actionBtn}>
-            <Text style={styles.actionBtnText}>Review Changes</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      );
+    if (msg.type === 'action') {
+      return renderActionCard(msg);
     }
 
     const isUser = msg.type === 'user';
@@ -281,7 +406,9 @@ export default function CoachScreen() {
           </LinearGradient>
         ) : (
           <BlurView intensity={60} tint={isDark ? "dark" : "light"} style={[styles.bubble, styles.bubbleAI]}>
-            <Text style={[styles.msgText, styles.msgTextAI]}>{msg.text}</Text>
+            <Markdown style={markdownStyles}>
+              {msg.text || ''}
+            </Markdown>
           </BlurView>
         )}
       </Animated.View>
@@ -294,11 +421,16 @@ export default function CoachScreen() {
       
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <View style={styles.headerTitleRow}>
-            <Icon name="auto-awesome" size={24} color={C.primary} />
-            <Text style={styles.headerTitle}>Rachel</Text>
+          <View>
+            <View style={styles.headerTitleRow}>
+              <Icon name="auto-awesome" size={24} color={C.primary} />
+              <Text style={styles.headerTitle}>Rachel</Text>
+            </View>
+            <Text style={styles.headerSub}>AI Fitness Coach</Text>
           </View>
-          <Text style={styles.headerSub}>AI Fitness Coach</Text>
+          <TouchableOpacity onPress={() => { Haptics.selectionAsync(); onNavigateToNotifications?.(); }} style={{ padding: 8, backgroundColor: C.glassInset, borderRadius: 20 }}>
+            <Icon name="notifications" size={20} color={C.onSurface} />
+          </TouchableOpacity>
         </View>
 
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -400,6 +532,8 @@ const getStyles = (C: any) => StyleSheet.create({
   actionHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   actionTitle: { fontSize: 14, fontFamily: F.header, color: C.primary },
   actionDesc: { fontSize: 13, fontFamily: F.body, color: C.onSurface, marginBottom: 4 },
+  actionDivider: { height: 1, backgroundColor: 'rgba(245, 196, 0, 0.2)', marginVertical: 10 },
+  actionHint: { fontSize: 12, fontFamily: F.body, color: C.primary, opacity: 0.8 },
   actionBtn: { marginTop: 12, backgroundColor: C.primary, paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
   actionBtnText: { fontSize: 13, fontFamily: F.header, color: C.onPrimary },
 

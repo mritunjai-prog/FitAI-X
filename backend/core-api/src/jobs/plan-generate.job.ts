@@ -10,10 +10,11 @@ import { getIo } from '../realtime/socket';
 const connection = new IORedis({
   host: '127.0.0.1',
   port: 6379,
+  maxRetriesPerRequest: null
 });
 
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GEMINI_API_KEY || 'missing_key',
+const groq = createGroq({
+  apiKey: process.env.GROQ_API_KEY || 'missing_key',
 });
 
 export const startAiWorker = () => {
@@ -65,9 +66,9 @@ Instructions:
 6. ONLY mention updating things IF you actually used a tool. If the user just says "hi", just say hello back enthusiastically! DO NOT hallucinate tool calls or pretend you updated plans if you didn't.
 7. If the user explicitly asks for a workout plan or meal plan, use the \`generateWorkoutPlan\` or \`generateMealPlan\` tool to create it. Never write out a plan as plain text. Use the tool.`;
 
-      // Gemini 2.5 Flash from Google
+      // Groq Llama for AI
       const { text: aiResponse, toolCalls, toolResults } = await generateText({
-        model: google('gemini-2.5-flash'),
+        model: groq('llama-3.3-70b-versatile'),
         temperature: 0.3,
         maxSteps: 5,
         system: systemPrompt,

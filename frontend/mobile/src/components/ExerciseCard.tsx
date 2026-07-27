@@ -19,6 +19,8 @@ type ExerciseCardProps = {
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   onRemove: () => void;
+  onDuplicate?: () => void;
+  onEdit?: () => void;
   isFirst: boolean;
   isLast: boolean;
   drag?: () => void;
@@ -26,13 +28,15 @@ type ExerciseCardProps = {
 };
 
 // Simple Icon component for ExerciseCard
-function Icon({ name, size = 20, color = '#fff' }: { name: 'arrow-up' | 'arrow-down' | 'close' | 'play' | 'drag'; size?: number; color?: string }) {
+function Icon({ name, size = 20, color = '#fff' }: { name: 'arrow-up' | 'arrow-down' | 'close' | 'play' | 'drag' | 'copy' | 'edit'; size?: number; color?: string }) {
   const paths = {
     'arrow-up': "M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z",
     'arrow-down': "M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z",
     'close': "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z",
     'play': "M8 5v14l11-7z",
-    'drag': "M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"
+    'drag': "M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z",
+    'copy': "M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z",
+    'edit': "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"
   };
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
@@ -41,7 +45,7 @@ function Icon({ name, size = 20, color = '#fff' }: { name: 'arrow-up' | 'arrow-d
   );
 }
 
-export default function ExerciseCard({ exercise, isDark, onMoveUp, onMoveDown, onRemove, isFirst, isLast, drag, isActive }: ExerciseCardProps) {
+export default function ExerciseCard({ exercise, isDark, onMoveUp, onMoveDown, onRemove, onDuplicate, onEdit, isFirst, isLast, drag, isActive }: ExerciseCardProps) {
   const C = isDark ? DarkColors : LightColors;
   const styles = getStyles(C);
 
@@ -106,16 +110,14 @@ export default function ExerciseCard({ exercise, isDark, onMoveUp, onMoveDown, o
             <TouchableOpacity onPressIn={drag} style={styles.iconButton}>
               <Icon name="drag" size={20} color={C.onSurfaceVariant} />
             </TouchableOpacity>
-          ) : (
-            <View style={styles.reorderButtons}>
-              <TouchableOpacity onPress={onMoveUp} disabled={isFirst} style={[styles.iconButton, isFirst && styles.iconButtonDisabled]}>
-                <Icon name="arrow-up" size={16} color={isFirst ? C.outline : C.onSurfaceVariant} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={onMoveDown} disabled={isLast} style={[styles.iconButton, isLast && styles.iconButtonDisabled]}>
-                <Icon name="arrow-down" size={16} color={isLast ? C.outline : C.onSurfaceVariant} />
-              </TouchableOpacity>
-            </View>
-          )}
+          ) : null}
+          <TouchableOpacity onPress={onEdit} style={styles.iconButton}>
+            <Icon name="edit" size={16} color={C.onSurfaceVariant} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onDuplicate} style={styles.iconButton}>
+            <Icon name="copy" size={16} color={C.onSurfaceVariant} />
+          </TouchableOpacity>
+          <View style={{ width: 1, height: 20, backgroundColor: C.outlineVariant, marginHorizontal: 4 }} />
           <TouchableOpacity onPress={onRemove} style={[styles.iconButton, styles.removeButton]}>
             <Icon name="close" size={16} color={C.error} />
           </TouchableOpacity>

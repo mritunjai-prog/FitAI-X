@@ -13,6 +13,8 @@ import {
 import Svg, { Ellipse, Rect, Line, Circle, Path } from "react-native-svg";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -140,9 +142,24 @@ const Icons = {
       <Path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0l1.06-1.06z" />
     </Svg>
   ),
+  history: ({ size = 24, color = "#fff" }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <Path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z" />
+    </Svg>
+  ),
   "dark-mode": ({ size = 24, color = "#fff" }: IconProps) => (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
       <Path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9c0-.46-.04-.92-.1-1.36-.98 1.37-2.58 2.26-4.4 2.26-3.03 0-5.5-2.47-5.5-5.5 0-1.82.89-3.42 2.26-4.4-.44-.06-.9-.1-1.36-.1z" />
+    </Svg>
+  ),
+  download: ({ size = 24, color = "#fff" }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <Path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+    </Svg>
+  ),
+  "chevron-right": ({ size = 24, color = "#fff" }: IconProps) => (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <Path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
     </Svg>
   ),
 };
@@ -476,6 +493,25 @@ function BodyMapSVG({
     Calves: { x: 92, y: 180 },
   };
 
+  const getCoords = (partName: string) => {
+    if (!partName) return null;
+    const p = partName.toLowerCase();
+    if (p.includes('back')) return partMap['Back'];
+    if (p.includes('shoulder')) {
+      if (p.includes('left')) return partMap['Left Shoulder'];
+      if (p.includes('right')) return partMap['Right Shoulder'];
+      return partMap['Shoulders'];
+    }
+    if (p.includes('knee')) {
+      if (p.includes('left')) return partMap['Left Knee'];
+      if (p.includes('right')) return partMap['Right Knee'];
+      return partMap['Right Knee'];
+    }
+    const exact = Object.keys(partMap).find(k => k.toLowerCase() === p);
+    if (exact) return partMap[exact];
+    return null;
+  };
+
   return (
     <View
       style={{ height: 220, alignItems: "center", justifyContent: "center" }}
@@ -577,7 +613,7 @@ function BodyMapSVG({
         />
 
         {injuryModel.map((inj) => {
-          const coords = partMap[inj.part];
+          const coords = getCoords(inj.part);
           if (!coords) return null;
           const color =
             inj.status === "active" || inj.status === "reported"
@@ -636,11 +672,22 @@ function BatteryRing({
   );
 }
 
-// ─── Main Screen ──────────────────────────────────────────────────────────────
+const toSentenceCase = (str: string) => {
+  if (!str) return '';
+  const cleanStr = str.replace(/_/g, ' ');
+  return cleanStr.charAt(0).toUpperCase() + cleanStr.slice(1).toLowerCase();
+};
+
 export default function ProfileScreen({
   onNavigateToBuilder,
+  onNavigateToSettings,
+  onNavigateToNotifications,
+  onNavigateToHistory,
 }: {
   onNavigateToBuilder?: () => void;
+  onNavigateToSettings?: () => void;
+  onNavigateToNotifications?: () => void;
+  onNavigateToHistory?: () => void;
 }) {
   const { isDark, C, toggleTheme, bgColors } = useTheme();
   const { user, logout, resetOnboarding } = useAuth();
@@ -782,15 +829,15 @@ export default function ProfileScreen({
                   color={C.onSurfaceVariant}
                 />
               </PressableScale>
-              <PressableScale style={S.iconBtn}>
+              <PressableScale onPress={onNavigateToNotifications} style={S.iconBtn}>
                 <Icon
                   name="notifications"
                   size={24}
                   color={C.onSurfaceVariant}
                 />
               </PressableScale>
-              <PressableScale style={S.iconBtn}>
-                <Icon name="bolt" size={24} color={C.onSurfaceVariant} />
+              <PressableScale onPress={onNavigateToSettings} style={S.iconBtn}>
+                <Icon name="settings" size={24} color={C.onSurfaceVariant} />
               </PressableScale>
             </View>
           </Animated.View>
@@ -870,7 +917,7 @@ export default function ProfileScreen({
                       >
                         <Text style={S.statLabel}>{s.label}</Text>
                         <View style={S.statValueRow}>
-                          <GradientText text={s.val} style={S.statNum} C={C} />
+                          <GradientText text={s.label === 'Experience' || s.label === 'Gender' ? toSentenceCase(s.val) : s.val} style={S.statNum} C={C} />
                           {s.unit ? (
                             <Text style={S.statUnit}>{s.unit}</Text>
                           ) : null}
@@ -894,7 +941,7 @@ export default function ProfileScreen({
                       <View key={g} style={[S.chip, S.chipActive]}>
                         <Icon name="fitness-center" size={14} color={C.primary} />
                         <Text style={[S.chipText, S.chipTextActive]}>
-                          {g.replace(/_/g, ' ').toUpperCase()}
+                          {toSentenceCase(g)}
                         </Text>
                         <View style={S.chipGlow} pointerEvents="none" />
                       </View>
@@ -922,7 +969,7 @@ export default function ProfileScreen({
                         profileData.fitnessProfile.diet.map((d: string) => (
                           <View key={d} style={S.chip}>
                             <Text style={S.chipText}>
-                              {d.replace("_", " ")}
+                              {toSentenceCase(d)}
                             </Text>
                           </View>
                         ))
@@ -942,7 +989,7 @@ export default function ProfileScreen({
                           (e: string) => (
                             <View key={e} style={S.chip}>
                               <Text style={S.chipText}>
-                                {e.replace("_", " ")}
+                                {toSentenceCase(e)}
                               </Text>
                             </View>
                           ),
@@ -986,7 +1033,7 @@ export default function ProfileScreen({
                         <Text style={[S.statLabel, { marginBottom: 2 }]}>
                           {h.label}
                         </Text>
-                        <Text style={S.timelineEvent}>{h.val}</Text>
+                        <Text style={S.timelineEvent}>{h.label.includes('Injuries') ? toSentenceCase(h.val) : h.val}</Text>
                       </View>
                     ) : null,
                   )}
@@ -1001,20 +1048,18 @@ export default function ProfileScreen({
               <Text style={S.sectionLabel}>MUSCLE BALANCE</Text>
               <TiltCard C={C} tiltEnabled={false}>
                 <View style={{ alignItems: "center", marginVertical: 10 }}>
-                  <RadarChart
-                    size={180}
-                    color={C.cyan}
-                    highlightLabel="Back"
-                    data={
-                      profileData?.radarChart || [
-                        { label: "Chest", value: 0.8 },
-                        { label: "Back", value: 0.6 },
-                        { label: "Legs", value: 0.9 },
-                        { label: "Arms", value: 0.7 },
-                        { label: "Core", value: 0.5 },
-                      ]
-                    }
-                  />
+                  {profileData?.radarChart && profileData.radarChart.length > 0 ? (
+                    <RadarChart
+                      size={180}
+                      color={C.cyan}
+                      data={profileData.radarChart}
+                    />
+                  ) : (
+                    <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                      <Icon name="data-usage" size={48} color={C.outlineVariant} />
+                      <Text style={{ fontFamily: 'Inter_500Medium', color: C.onSurfaceVariant, marginTop: 12 }}>No muscle balance data available yet.</Text>
+                    </View>
+                  )}
                 </View>
                 <View
                   style={{
@@ -1034,14 +1079,14 @@ export default function ProfileScreen({
                   <Text
                     style={{
                       flex: 1,
-                      fontFamily: F.bodyMed,
+                      fontFamily: 'Inter_500Medium',
                       fontSize: 13,
                       color: C.onSurface,
                       lineHeight: 18,
                     }}
                   >
                     {profileData?.imbalanceMsg ||
-                      "Muscle balance looks healthy. Keep up the good work."}
+                      "Keep logging workouts to unlock muscle balance insights."}
                   </Text>
                 </View>
               </TiltCard>
@@ -1259,6 +1304,56 @@ export default function ProfileScreen({
                     </View>
                   ))}
               </TiltCard>
+            </View>
+          </AnimatedCard>
+
+          {/* ═══ DATA EXPORT ═══ */}
+          <AnimatedCard index={7.5}>
+            <View style={{ paddingHorizontal: 24, marginTop: 12, marginBottom: 12 }}>
+              <Text style={[S.sectionLabel, { marginBottom: 12 }]}>DATA EXPORT</Text>
+              
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={async () => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  if (profileData) {
+                    try {
+                      const dataStr = JSON.stringify(profileData, null, 2);
+                      const fileUri = FileSystem.documentDirectory + 'fitai_x_user_data.json';
+                      await FileSystem.writeAsStringAsync(fileUri, dataStr);
+                      if (await Sharing.isAvailableAsync()) {
+                        await Sharing.shareAsync(fileUri);
+                      } else {
+                        alert("Sharing is not available on this device.");
+                      }
+                    } catch (e) {
+                      console.error("Export failed:", e);
+                      alert("Failed to export data.");
+                    }
+                  } else {
+                    alert("No data available to export.");
+                  }
+                }}
+                style={{
+                  backgroundColor: C.surface,
+                  borderRadius: 20,
+                  borderWidth: 1,
+                  borderColor: C.outlineVariant,
+                  padding: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 16
+                }}
+              >
+                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: 'rgba(245, 196, 0, 0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="download" size={20} color="#F5C400" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.header, fontSize: 16, color: C.onSurface, marginBottom: 2 }}>Export My Data</Text>
+                  <Text style={{ fontFamily: F.body, fontSize: 13, color: C.onSurfaceVariant }}>Download as CSV or PDF</Text>
+                </View>
+                <Icon name="chevron-right" size={20} color={C.outline} />
+              </TouchableOpacity>
             </View>
           </AnimatedCard>
 

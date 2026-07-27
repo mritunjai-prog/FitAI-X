@@ -5,7 +5,7 @@ import { BlurView } from "expo-blur";
 import Animated, { FadeInUp, Layout, useAnimatedScrollHandler, useSharedValue, useAnimatedStyle, interpolate, Extrapolation, withRepeat, withSequence, withTiming, withSpring } from "react-native-reanimated";
 import Svg, { Text as SvgText, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
+import { MaterialIcons as Icon, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -18,11 +18,18 @@ import BarChart from "../components/charts/BarChart";
 import SplineChart from "../components/charts/SplineChart";
 import AnimatedPressable from "../components/AnimatedPressable";
 import { fetchFeed, fetchActiveUsers, fetchVitals, FeedItem } from '../services/api/dashboard';
+import { fetchWorkoutHistory } from '../services/api/workout';
 import { socket } from '../services/socket/socketClient';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 
-export default function DashboardScreen({ onOpenCommandPalette }: { onOpenCommandPalette?: () => void }) {
+export default function DashboardScreen({ 
+  onOpenCommandPalette,
+  onNavigateToNotifications
+}: { 
+  onOpenCommandPalette?: () => void;
+  onNavigateToNotifications?: () => void;
+}) {
   const { isDark, C, bgColors, toggleTheme } = useTheme();
   const { user } = useAuth();
   const styles = useMemo(() => getStyles(C), [C]);
@@ -31,7 +38,10 @@ export default function DashboardScreen({ onOpenCommandPalette }: { onOpenComman
 
   const { data: feed = [] } = useQuery({ queryKey: ['feed'], queryFn: fetchFeed });
   const { data: activeUsers = [] } = useQuery({ queryKey: ['activeUsers'], queryFn: fetchActiveUsers });
-  const { data: vitals } = useQuery({ queryKey: ['vitals'], queryFn: fetchVitals, refetchInterval: 5000 });
+  const { data: vitals } = useQuery({ queryKey: ['vitals'], queryFn: fetchVitals, refetchInterval: 3000 });
+  const { data: history } = useQuery({ queryKey: ['workoutHistory'], queryFn: () => fetchWorkoutHistory() });
+
+  const recentWorkout = history?.[0];
 
   useEffect(() => {
     const handleFeedUpdate = (newItem: FeedItem) => {
@@ -117,7 +127,7 @@ export default function DashboardScreen({ onOpenCommandPalette }: { onOpenComman
                 </View>
               )}
               <View>
-                <Text style={styles.greeting}>{user?.name}</Text>
+                <Text style={styles.greeting}>Welcome, {user?.name}</Text>
                 <Text style={styles.subGreeting}>Recovery is optimal. Ready?</Text>
               </View>
             </View>
@@ -128,7 +138,7 @@ export default function DashboardScreen({ onOpenCommandPalette }: { onOpenComman
               <TouchableOpacity style={styles.iconBtn} onPress={() => { Haptics.selectionAsync(); onOpenCommandPalette?.(); }}>
                 <Icon name="search" size={20} color={C.onSurface} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.iconBtn} onPress={() => Haptics.selectionAsync()}>
+              <TouchableOpacity style={styles.iconBtn} onPress={() => { Haptics.selectionAsync(); onNavigateToNotifications?.(); }}>
                 <Icon name="notifications" size={20} color={C.onSurface} />
                 <View style={styles.notificationBadge} />
               </TouchableOpacity>
@@ -169,8 +179,8 @@ export default function DashboardScreen({ onOpenCommandPalette }: { onOpenComman
                     <Icon name="fitness-center" size={24} color={C.onPrimary} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: F.header, fontSize: 18, color: C.onPrimary }}>Build a Workout</Text>
-                    <Text style={{ fontFamily: F.bodyMed, fontSize: 13, color: 'rgba(61,47,0,0.7)' }}>Tap to open quick actions</Text>
+                    <Text style={{ fontFamily: F.header, fontSize: 18, color: C.onPrimary }}>{recentWorkout ? "Continue Workout" : "Build a Workout"}</Text>
+                    <Text style={{ fontFamily: F.bodyMed, fontSize: 13, color: 'rgba(61,47,0,0.7)' }}>{recentWorkout ? recentWorkout.title : "Tap to open quick actions"}</Text>
                   </View>
                   <Icon name="chevron-right" size={24} color={C.onPrimary} />
                 </ExpoLinearGradient>
@@ -288,6 +298,32 @@ export default function DashboardScreen({ onOpenCommandPalette }: { onOpenComman
               </Animated.View>
             </View>
           </View>
+
+          {/* Nutrition Summary Section */}
+          <Animated.View entering={FadeInUp.delay(450).springify().damping(15)}>
+            <AnimatedPressable containerStyle={{ marginTop: 12, marginBottom: 12 }} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }}>
+              <View style={[styles.card, { padding: 20 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <Text style={styles.cardTitle}>NUTRITION SUMMARY</Text>
+                  <MaterialCommunityIcons name="food-apple-outline" size={24} color={C.primary} />
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View>
+                    <Text style={{ fontFamily: F.num, fontSize: 32, color: C.onSurface, letterSpacing: -1 }}>2,050 <Text style={{ fontSize: 16, color: C.onSurfaceVariant }}>kcal</Text></Text>
+                    <Text style={{ fontFamily: F.bodyMed, color: C.onSurfaceVariant, marginTop: 4 }}>Daily Target Achieved: 75%</Text>
+                  </View>
+                  <ActivityRings 
+                    size={64}
+                    rings={[
+                      { progress: 0.8, color: '#4ade80', radius: 24, strokeWidth: 6 }, // Protein
+                      { progress: 0.7, color: C.primary, radius: 16, strokeWidth: 6 }, // Carbs
+                      { progress: 0.6, color: '#38bdf8', radius: 8, strokeWidth: 6 },  // Fats
+                    ]}
+                  />
+                </View>
+              </View>
+            </AnimatedPressable>
+          </Animated.View>
 
           {/* Live Social Feed Section */}
           <Animated.View entering={FadeInUp.delay(500).springify().damping(15)}>
