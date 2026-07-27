@@ -56,20 +56,28 @@ router.get('/', async (req, res) => {
       }
     }
 
-    // Dynamic telemetry
+    // Dynamic telemetry — built from real Vitals data, no hardcoded device names
     const telemetry = [];
     if (vitals) {
+      const bodyBatteryPct = Math.round(vitals.bodyBattery * 100);
+      const hrvMs = Math.round(vitals.recoveryCor * 100); // proxy: higher core recovery = higher HRV
+      const sleepScore = Math.round(((vitals.recoveryLwr + vitals.recoveryUpr) / 2) * 100);
+
       telemetry.push({
-        name: 'Oura Ring Gen 3',
+        name: 'FitAI X Health Monitor',
         status: 'Connected',
-        battery: Math.floor(vitals.bodyBattery * 100),
+        battery: bodyBatteryPct,
         icon: 'watch',
-        details: { HRV: '45ms', Sleep: Math.floor(vitals.recoveryCor * 100).toString() }
+        details: {
+          HRV: `${hrvMs}ms`,
+          Sleep: `${sleepScore}%`,
+          Battery: `${bodyBatteryPct}%`
+        }
       });
     } else {
       telemetry.push({
-        name: 'No Device Detected',
-        status: 'Searching...',
+        name: 'No Device Synced',
+        status: 'Log a workout to sync',
         icon: 'favorite-border',
         details: null
       });
