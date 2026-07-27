@@ -10,6 +10,7 @@ import dashboardRoutes from './services/analytics/dashboard'
 import profileRoutes from './services/users/profile'
 import onboardingRoutes from './services/users/onboarding'
 import coachRoutes from './services/03-ai-decision-explanation/coach'
+import transcribeRoutes from './services/03-ai-decision-explanation/transcribe'
 import workoutRoutes from './services/01-adaptive-planning-engine/workouts'
 import nutritionRoutes from './services/14-meal-planner-budget/nutrition'
 import calendarRoutes from './services/17-smart-calendar/calendar'
@@ -45,6 +46,7 @@ app.use('/api/v1/auth', authRoutes)
 app.use('/api/v1/dashboard', dashboardRoutes)
 app.use('/api/v1/profile', profileRoutes)
 app.use('/api/v1/onboarding', onboardingRoutes)
+app.use('/api/v1/coach/transcribe', transcribeRoutes)
 app.use('/api/v1/coach', coachRoutes)
 app.use('/api/v1/workouts', workoutRoutes)
 app.use('/api/v1/nutrition', nutritionRoutes)

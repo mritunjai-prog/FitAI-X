@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, TextInput, Platform, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, TextInput, Platform, Pressable, ScrollView, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInRight, FadeOutLeft, SlideInRight, SlideOutLeft, Layout, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, Easing, withDelay, withSpring, interpolate } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DarkColors, F } from '../theme';
 import MeshGradientBackground from '../components/MeshGradientBackground';
 import { useTheme } from '../context/ThemeContext';
@@ -13,24 +14,48 @@ import { submitOnboardingProfile } from '../services/api/onboarding';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
-type Step = 1 | 2 | 3 | 4 | 5;
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 const GOALS = [
-  { id: 'lose_weight', label: 'Lose Weight', icon: 'local-fire-department' },
-  { id: 'build_muscle', label: 'Build Muscle', icon: 'fitness-center' },
-  { id: 'athletic', label: 'Athletic Performance', icon: 'directions-run' }
+  { id: 'weight_loss', label: 'Weight Loss', icon: 'monitor-weight' },
+  { id: 'fat_loss', label: 'Fat Loss', icon: 'local-fire-department' },
+  { id: 'muscle_gain', label: 'Muscle Gain', icon: 'fitness-center' },
+  { id: 'strength', label: 'Strength', icon: 'sports-martial-arts' },
+  { id: 'endurance', label: 'Endurance', icon: 'directions-run' },
+  { id: 'general_fitness', label: 'General Fitness', icon: 'favorite' },
+  { id: 'flexibility', label: 'Improve Flexibility', icon: 'accessibility' },
+  { id: 'custom', label: 'Custom Goal', icon: 'edit' }
+];
+
+const EXPERIENCE = [
+  { id: 'beginner', label: 'Beginner', icon: 'child-care' },
+  { id: 'intermediate', label: 'Intermediate', icon: 'fitness-center' },
+  { id: 'advanced', label: 'Advanced', icon: 'whatshot' }
 ];
 
 const EQUIPMENT = [
-  { id: 'bodyweight', label: 'Bodyweight Only', icon: 'accessibility' },
+  { id: 'none', label: 'None', icon: 'accessibility-new' },
+  { id: 'yoga_mat', label: 'Yoga Mat', icon: 'airline-seat-flat' },
   { id: 'dumbbells', label: 'Dumbbells', icon: 'fitness-center' },
-  { id: 'gym', label: 'Full Gym Access', icon: 'domain' }
+  { id: 'resistance_bands', label: 'Resistance Bands', icon: 'linear-scale' },
+  { id: 'barbell', label: 'Barbell', icon: 'horizontal-rule' },
+  { id: 'bench', label: 'Bench', icon: 'event-seat' },
+  { id: 'kettlebell', label: 'Kettlebell', icon: 'sports-baseball' },
+  { id: 'pullup_bar', label: 'Pull-up Bar', icon: 'power-input' },
+  { id: 'gym_machines', label: 'Gym Machines', icon: 'precision-manufacturing' },
+  { id: 'full_gym', label: 'Full Gym', icon: 'domain' },
+  { id: 'other', label: 'Other', icon: 'more-horiz' }
 ];
 
 const DIETS = [
-  { id: 'standard', label: 'Standard', icon: 'restaurant' },
-  { id: 'vegan', label: 'Vegan / Plant-Based', icon: 'eco' },
-  { id: 'keto', label: 'Keto', icon: 'set-meal' }
+  { id: 'vegetarian', label: 'Vegetarian', icon: 'eco' },
+  { id: 'vegan', label: 'Vegan', icon: 'spa' },
+  { id: 'eggetarian', label: 'Eggetarian', icon: 'egg' },
+  { id: 'non_vegetarian', label: 'Non-Vegetarian', icon: 'kebab-dining' },
+  { id: 'keto', label: 'Keto', icon: 'set-meal' },
+  { id: 'high_protein', label: 'High Protein', icon: 'fitness-center' },
+  { id: 'low_carb', label: 'Low Carb', icon: 'grass' },
+  { id: 'other', label: 'Other', icon: 'more-horiz' }
 ];
 
 // ─── Reusable Animated Pressable Card ─────────────────────────────────────────
@@ -51,7 +76,7 @@ function OptionCard({ item, isSelected, onPress }: { item: any, isSelected: bool
     >
       <Animated.View style={[styles.optionCard, isSelected && styles.optionCardActive, animatedStyle]}>
         <BlurView intensity={isDark ? 40 : 60} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
-        <Icon name={item.icon as any} size={28} color={isSelected ? C.primary : C.onSurface} />
+        <Icon name={item.icon as any} size={24} color={isSelected ? C.primary : C.onSurface} />
         <Text style={[styles.optionLabel, isSelected && { color: C.primary }]}>{item.label}</Text>
       </Animated.View>
     </Pressable>
@@ -95,45 +120,127 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   const { isDark, C, bgColors, toggleTheme } = useTheme();
   const { user } = useAuth();
   const styles = React.useMemo(() => getStyles(C), [C]);
-  const [step, setStep] = useState<Step>(1);
-  const [goal, setGoal] = useState<string>('');
-  const [age, setAge] = useState<string>('25');
-  const [weight, setWeight] = useState<string>('75');
-  const [height, setHeight] = useState<string>('175');
-  const [equipment, setEquipment] = useState<string>('');
-  const [diet, setDiet] = useState<string>('');
 
-  const [activeInput, setActiveInput] = useState<'age' | 'weight' | 'height' | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [step, setStep] = useState<Step>(1);
+
+  // Form State
+  const [name, setName] = useState('');
+  const [gender, setGender] = useState('');
+  const [age, setAge] = useState('');
+  const [weight, setWeight] = useState('');
+  const [height, setHeight] = useState('');
+  
+  const [goals, setGoals] = useState<string[]>([]);
+  const [experience, setExperience] = useState('');
+  const [equipment, setEquipment] = useState<string[]>([]);
+  const [diet, setDiet] = useState<string[]>([]);
+  
+  const [pastInjuries, setPastInjuries] = useState('');
+  const [currentInjuries, setCurrentInjuries] = useState('');
+  const [medicalConditions, setMedicalConditions] = useState('');
+  const [allergies, setAllergies] = useState('');
+  const [physicalLimitations, setPhysicalLimitations] = useState('');
+  const [medications, setMedications] = useState('');
+
+  const [activeInput, setActiveInput] = useState<string | null>(null);
+
+  // Load draft from AsyncStorage
+  useEffect(() => {
+    const loadDraft = async () => {
+      try {
+        const draftStr = await AsyncStorage.getItem('@onboarding_draft');
+        if (draftStr) {
+          const draft = JSON.parse(draftStr);
+          if (draft.step && draft.step < 7) setStep(draft.step);
+          if (draft.gender) setGender(draft.gender);
+          if (draft.age) setAge(draft.age);
+          if (draft.weight) setWeight(draft.weight);
+          if (draft.height) setHeight(draft.height);
+          if (draft.goals) setGoals(draft.goals);
+          if (draft.experience) setExperience(draft.experience);
+          if (draft.equipment) setEquipment(draft.equipment);
+          if (draft.diet) setDiet(draft.diet);
+          if (draft.pastInjuries) setPastInjuries(draft.pastInjuries);
+          if (draft.currentInjuries) setCurrentInjuries(draft.currentInjuries);
+          if (draft.medicalConditions) setMedicalConditions(draft.medicalConditions);
+          if (draft.allergies) setAllergies(draft.allergies);
+          if (draft.physicalLimitations) setPhysicalLimitations(draft.physicalLimitations);
+          if (draft.medications) setMedications(draft.medications);
+        }
+      } catch (e) {
+        console.error('Failed to load draft:', e);
+      } finally {
+        if (user?.name) setName(user.name);
+        setIsLoaded(true);
+      }
+    };
+    loadDraft();
+  }, [user]);
+
+  // Save draft
+  useEffect(() => {
+    if (!isLoaded || step === 7) return;
+    const saveDraft = async () => {
+      const draft = {
+        step, gender, age, weight, height, goals, experience, equipment, diet,
+        pastInjuries, currentInjuries, medicalConditions, allergies, physicalLimitations, medications
+      };
+      await AsyncStorage.setItem('@onboarding_draft', JSON.stringify(draft));
+    };
+    saveDraft();
+  }, [step, gender, age, weight, height, goals, experience, equipment, diet, pastInjuries, currentInjuries, medicalConditions, allergies, physicalLimitations, medications, isLoaded]);
+
+  const toggleSelection = (item: string, list: string[], setList: (v: string[]) => void) => {
+    if (list.includes(item)) {
+      setList(list.filter(i => i !== item));
+    } else {
+      setList([...list, item]);
+    }
+  };
 
   const handleNext = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (step < 5) setStep((s) => (s + 1) as Step);
+    if (step < 7) setStep((s) => (s + 1) as Step);
+  };
+
+  const handleBack = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (step > 1) setStep((s) => (s - 1) as Step);
   };
 
   useEffect(() => {
     let mounted = true;
-    if (step === 5) {
+    if (step === 7) {
       const processOnboarding = async () => {
         try {
           if (user?.id) {
-              await submitOnboardingProfile({
-                userId: user.id,
-                age,
-                weight,
-                height,
-                goal,
-              equipment,
-              diet
+            await submitOnboardingProfile({
+              userId: user.id,
+              age,
+              weight,
+              height,
+              gender,
+              experience,
+              goal: goals.join(','),
+              equipment: equipment.join(','),
+              diet: diet.join(','),
+              pastInjuries,
+              currentInjuries,
+              medicalConditions,
+              allergies,
+              physicalLimitations,
+              medications
             });
+            await AsyncStorage.removeItem('@onboarding_draft'); // Clear draft on success
           }
         } catch (e) {
           console.error('Failed to submit onboarding profile:', e);
         } finally {
           if (mounted) {
-            // Keep a tiny delay so they see the cool animation even if API is very fast
             setTimeout(() => {
               onComplete();
-            }, 2000);
+            }, 2500);
           }
         }
       };
@@ -143,143 +250,181 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
     return () => { mounted = false; };
   }, [step]);
 
+  if (!isLoaded) return <View style={styles.container} />;
+
   const renderStep = () => {
     switch(step) {
       case 1:
         return (
-          <Animated.View key="step1" style={styles.stepContainer}>
-            <Animated.Text entering={FadeInRight.delay(100).springify()} style={styles.title}>What is your primary goal?</Animated.Text>
-            <Animated.Text entering={FadeInRight.delay(200).springify()} style={styles.subtitle}>FitAI will dynamically optimize your daily plans.</Animated.Text>
+          <Animated.ScrollView key="step1" keyboardShouldPersistTaps="handled" style={styles.stepContainer} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <Animated.Text entering={FadeInRight.delay(100).springify()} style={styles.title}>Personal Information</Animated.Text>
+            <Animated.Text entering={FadeInRight.delay(200).springify()} style={styles.subtitle}>Let's get your baseline for accurate calculations.</Animated.Text>
             
-            <Animated.View entering={FadeInRight.delay(300).springify()} style={styles.optionsList}>
-              {GOALS.map(g => (
-                <OptionCard key={g.id} item={g} isSelected={goal === g.id} onPress={() => setGoal(g.id)} />
-              ))}
-            </Animated.View>
+            <Animated.View entering={FadeInRight.delay(300).springify()} style={styles.metricsContainerVertical}>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.metricLabel}>Full Name</Text>
+                <TextInput style={[styles.textInput, { opacity: 0.7 }]} value={name} editable={false} />
+              </View>
 
-            <Animated.View entering={FadeIn.delay(500)} style={styles.footer}>
-              <TouchableOpacity style={[styles.nextBtn, !goal && styles.nextBtnDisabled]} disabled={!goal} onPress={handleNext}>
-                <Text style={styles.nextBtnText}>Continue</Text>
-              </TouchableOpacity>
+              <View style={styles.inputGroup}>
+                <Text style={styles.metricLabel}>Gender</Text>
+                <View style={{ flexDirection: 'row', gap: 12 }}>
+                  {['Male', 'Female', 'Other'].map(g => (
+                    <TouchableOpacity key={g} style={[styles.pillBtn, gender === g && styles.pillBtnActive]} onPress={() => setGender(g)}>
+                      <Text style={[styles.pillBtnText, gender === g && { color: C.primary }]}>{g}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.metricRow}>
+                <View style={styles.metricBlock}>
+                  <Text style={styles.metricLabel}>Age</Text>
+                  <View style={[styles.metricInputWrapper, activeInput === 'age' && styles.metricInputActive]}>
+                    <TextInput style={styles.metricInput} value={age} onChangeText={setAge} keyboardType="numeric" onFocus={() => setActiveInput('age')} onBlur={() => setActiveInput(null)} maxLength={3} />
+                    <Text style={styles.metricUnit}>yrs</Text>
+                  </View>
+                </View>
+                
+                <View style={styles.metricBlock}>
+                  <Text style={styles.metricLabel}>Weight</Text>
+                  <View style={[styles.metricInputWrapper, activeInput === 'weight' && styles.metricInputActive]}>
+                    <TextInput style={styles.metricInput} value={weight} onChangeText={setWeight} keyboardType="numeric" onFocus={() => setActiveInput('weight')} onBlur={() => setActiveInput(null)} maxLength={3} />
+                    <Text style={styles.metricUnit}>kg</Text>
+                  </View>
+                </View>
+
+                <View style={styles.metricBlock}>
+                  <Text style={styles.metricLabel}>Height</Text>
+                  <View style={[styles.metricInputWrapper, activeInput === 'height' && styles.metricInputActive]}>
+                    <TextInput style={styles.metricInput} value={height} onChangeText={setHeight} keyboardType="numeric" onFocus={() => setActiveInput('height')} onBlur={() => setActiveInput(null)} maxLength={3} />
+                    <Text style={styles.metricUnit}>cm</Text>
+                  </View>
+                </View>
+              </View>
+
             </Animated.View>
-          </Animated.View>
+          </Animated.ScrollView>
         );
 
       case 2:
         return (
-          <Animated.View key="step2" style={styles.stepContainer}>
-            <Animated.Text entering={FadeInRight.delay(100).springify()} style={styles.title}>Let's get your baseline.</Animated.Text>
-            <Animated.Text entering={FadeInRight.delay(200).springify()} style={styles.subtitle}>This helps Rachel calculate your macros and load.</Animated.Text>
+          <Animated.ScrollView key="step2" keyboardShouldPersistTaps="handled" style={styles.stepContainer} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <Animated.Text entering={FadeInRight.delay(100).springify()} style={styles.title}>Fitness Goals</Animated.Text>
+            <Animated.Text entering={FadeInRight.delay(200).springify()} style={styles.subtitle}>Select all that apply. FitAI will optimize your plans.</Animated.Text>
             
-            <Animated.View entering={FadeInRight.delay(300).springify()} style={styles.metricsContainer}>
-              {/* Age Input */}
-              <View style={styles.metricBlock}>
-                <Text style={styles.metricLabel}>Age</Text>
-                <View style={[styles.metricInputWrapper, activeInput === 'age' && styles.metricInputActive]}>
-                  <TextInput 
-                    style={styles.metricInput} 
-                    value={age} 
-                    onChangeText={setAge} 
-                    keyboardType="numeric"
-                    onFocus={() => setActiveInput('age')}
-                    onBlur={() => setActiveInput(null)}
-                    maxLength={3}
-                  />
-                  <Text style={styles.metricUnit}>yrs</Text>
+            <Animated.View entering={FadeInRight.delay(300).springify()} style={styles.optionsGrid}>
+              {GOALS.map(g => (
+                <View key={g.id} style={{ width: '48%' }}>
+                  <OptionCard item={g} isSelected={goals.includes(g.id)} onPress={() => toggleSelection(g.id, goals, setGoals)} />
                 </View>
-              </View>
-              
-              {/* Weight Input */}
-              <View style={styles.metricBlock}>
-                <Text style={styles.metricLabel}>Weight</Text>
-                <View style={[styles.metricInputWrapper, activeInput === 'weight' && styles.metricInputActive]}>
-                  <TextInput 
-                    style={styles.metricInput} 
-                    value={weight} 
-                    onChangeText={setWeight} 
-                    keyboardType="numeric"
-                    onFocus={() => setActiveInput('weight')}
-                    onBlur={() => setActiveInput(null)}
-                    maxLength={3}
-                  />
-                  <Text style={styles.metricUnit}>kg</Text>
-                </View>
-              </View>
-              {/* Height Input */}
-              <View style={styles.metricBlock}>
-                <Text style={styles.metricLabel}>Height</Text>
-                <View style={[styles.metricInputWrapper, activeInput === 'height' && styles.metricInputActive]}>
-                  <TextInput 
-                    style={styles.metricInput} 
-                    value={height} 
-                    onChangeText={setHeight} 
-                    keyboardType="numeric"
-                    onFocus={() => setActiveInput('height')}
-                    onBlur={() => setActiveInput(null)}
-                    maxLength={3}
-                  />
-                  <Text style={styles.metricUnit}>cm</Text>
-                </View>
-              </View>
+              ))}
             </Animated.View>
-
-            <View style={styles.footer}>
-              <TouchableOpacity style={[styles.nextBtn, (!age || !weight || !height) && styles.nextBtnDisabled]} disabled={!age || !weight || !height} onPress={handleNext}>
-                <Text style={styles.nextBtnText}>Continue</Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
+          </Animated.ScrollView>
         );
 
       case 3:
         return (
-          <Animated.View key="step3" style={styles.stepContainer}>
-            <Animated.Text entering={FadeInRight.delay(100).springify()} style={styles.title}>What equipment do you have?</Animated.Text>
-            <Animated.Text entering={FadeInRight.delay(200).springify()} style={styles.subtitle}>Workouts adapt to your environment.</Animated.Text>
+          <Animated.ScrollView key="step3" keyboardShouldPersistTaps="handled" style={styles.stepContainer} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <Animated.Text entering={FadeInRight.delay(100).springify()} style={styles.title}>Fitness Experience</Animated.Text>
+            <Animated.Text entering={FadeInRight.delay(200).springify()} style={styles.subtitle}>How comfortable are you with working out?</Animated.Text>
             
             <Animated.View entering={FadeInRight.delay(300).springify()} style={styles.optionsList}>
-              {EQUIPMENT.map(e => (
-                <OptionCard key={e.id} item={e} isSelected={equipment === e.id} onPress={() => setEquipment(e.id)} />
+              {EXPERIENCE.map(e => (
+                <OptionCard key={e.id} item={e} isSelected={experience === e.id} onPress={() => setExperience(e.id)} />
               ))}
             </Animated.View>
-            
-            <View style={styles.footer}>
-              <TouchableOpacity style={[styles.nextBtn, !equipment && styles.nextBtnDisabled]} disabled={!equipment} onPress={handleNext}>
-                <Text style={styles.nextBtnText}>Continue</Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
+          </Animated.ScrollView>
         );
 
       case 4:
         return (
-          <Animated.View key="step4" style={styles.stepContainer}>
-            <Animated.Text entering={FadeInRight.delay(100).springify()} style={styles.title}>Any dietary preferences?</Animated.Text>
-            <Animated.Text entering={FadeInRight.delay(200).springify()} style={styles.subtitle}>Used for auto-syncing your nutrition plan.</Animated.Text>
+          <Animated.ScrollView key="step4" keyboardShouldPersistTaps="handled" style={styles.stepContainer} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <Animated.Text entering={FadeInRight.delay(100).springify()} style={styles.title}>Available Equipment</Animated.Text>
+            <Animated.Text entering={FadeInRight.delay(200).springify()} style={styles.subtitle}>Select what you have access to.</Animated.Text>
             
-            <Animated.View entering={FadeInRight.delay(300).springify()} style={styles.optionsList}>
-              {DIETS.map(d => (
-                <OptionCard key={d.id} item={d} isSelected={diet === d.id} onPress={() => setDiet(d.id)} />
+            <Animated.View entering={FadeInRight.delay(300).springify()} style={styles.optionsGrid}>
+              {EQUIPMENT.map(e => (
+                <View key={e.id} style={{ width: '48%' }}>
+                  <OptionCard item={e} isSelected={equipment.includes(e.id)} onPress={() => toggleSelection(e.id, equipment, setEquipment)} />
+                </View>
               ))}
             </Animated.View>
-
-            <View style={styles.footer}>
-              <TouchableOpacity style={[styles.nextBtn, !diet && styles.nextBtnDisabled]} disabled={!diet} onPress={handleNext}>
-                <Text style={styles.nextBtnText}>Analyze Profile</Text>
-              </TouchableOpacity>
-            </View>
-          </Animated.View>
+          </Animated.ScrollView>
         );
 
       case 5:
         return (
-          <Animated.View key="step5" entering={FadeIn.duration(800)} style={[styles.stepContainer, { justifyContent: 'center', alignItems: 'center' }]}>
+          <Animated.ScrollView key="step5" keyboardShouldPersistTaps="handled" style={styles.stepContainer} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <Animated.Text entering={FadeInRight.delay(100).springify()} style={styles.title}>Nutrition Preferences</Animated.Text>
+            <Animated.Text entering={FadeInRight.delay(200).springify()} style={styles.subtitle}>Used for auto-syncing your meal plans.</Animated.Text>
+            
+            <Animated.View entering={FadeInRight.delay(300).springify()} style={styles.optionsGrid}>
+              {DIETS.map(d => (
+                <View key={d.id} style={{ width: '48%' }}>
+                  <OptionCard item={d} isSelected={diet.includes(d.id)} onPress={() => toggleSelection(d.id, diet, setDiet)} />
+                </View>
+              ))}
+            </Animated.View>
+          </Animated.ScrollView>
+        );
+
+      case 6:
+        return (
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+            <Animated.ScrollView key="step6" keyboardShouldPersistTaps="handled" style={styles.stepContainer} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+              <Animated.Text entering={FadeInRight.delay(100).springify()} style={styles.title}>Health Information</Animated.Text>
+              <Animated.Text entering={FadeInRight.delay(200).springify()} style={styles.subtitle}>Optional but highly recommended for the Injury Predictor.</Animated.Text>
+              
+              <Animated.View entering={FadeInRight.delay(300).springify()} style={styles.metricsContainerVertical}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.metricLabel}>Past Injuries (Optional)</Text>
+                  <TextInput style={styles.textInput} placeholder="e.g. Torn ACL, Dislocated shoulder" placeholderTextColor={C.outline} value={pastInjuries} onChangeText={setPastInjuries} />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.metricLabel}>Current Injuries (Optional)</Text>
+                  <TextInput style={styles.textInput} placeholder="e.g. Lower back pain" placeholderTextColor={C.outline} value={currentInjuries} onChangeText={setCurrentInjuries} />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.metricLabel}>Medical Conditions (Optional)</Text>
+                  <TextInput style={styles.textInput} placeholder="e.g. Asthma, Hypertension" placeholderTextColor={C.outline} value={medicalConditions} onChangeText={setMedicalConditions} />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.metricLabel}>Allergies (Optional)</Text>
+                  <TextInput style={styles.textInput} placeholder="e.g. Peanuts, Dairy" placeholderTextColor={C.outline} value={allergies} onChangeText={setAllergies} />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.metricLabel}>Physical Limitations (Optional)</Text>
+                  <TextInput style={styles.textInput} placeholder="e.g. Cannot jump" placeholderTextColor={C.outline} value={physicalLimitations} onChangeText={setPhysicalLimitations} />
+                </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.metricLabel}>Medications (Optional)</Text>
+                  <TextInput style={styles.textInput} placeholder="e.g. Inhaler" placeholderTextColor={C.outline} value={medications} onChangeText={setMedications} />
+                </View>
+              </Animated.View>
+            </Animated.ScrollView>
+          </KeyboardAvoidingView>
+        );
+
+      case 7:
+        return (
+          <Animated.View key="step7" entering={FadeIn.duration(800)} style={[styles.stepContainer, { justifyContent: 'center', alignItems: 'center' }]}>
             <AIScanner />
             <Text style={[styles.title, { textAlign: 'center', marginTop: 40, fontSize: 28 }]}>Rachel is analyzing...</Text>
-            <Text style={[styles.subtitle, { textAlign: 'center' }]}>Generating your personalized neural model based on your profile.</Text>
+            <Text style={[styles.subtitle, { textAlign: 'center' }]}>Generating your personalized neural model based on your deep profile.</Text>
           </Animated.View>
         );
     }
+  };
+
+  const isNextDisabled = () => {
+    if (step === 1) return !gender || !age || !weight || !height;
+    if (step === 2) return goals.length === 0;
+    if (step === 3) return !experience;
+    if (step === 4) return equipment.length === 0;
+    if (step === 5) return diet.length === 0;
+    return false; // Step 6 is optional
   };
 
   return (
@@ -287,23 +432,37 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
       <MeshGradientBackground isDark={isDark} bgColors={bgColors} />
       <SafeAreaView style={{ flex: 1 }}>
         
-        {step < 5 && (
+        {step < 7 && (
           <View style={styles.header}>
             <View style={styles.headerTop}>
               <View style={[styles.progressBar, { flex: 1 }]}>
-                <Animated.View layout={Layout.springify().damping(18)} style={[styles.progressFill, { width: `${(step / 4) * 100}%` }]} />
+                <Animated.View layout={Layout.springify().damping(18)} style={[styles.progressFill, { width: `${(step / 6) * 100}%` }]} />
               </View>
               <TouchableOpacity onPress={toggleTheme} style={styles.themeToggleBtn}>
                 <Icon name={isDark ? "light-mode" : "dark-mode"} size={20} color={C.onSurfaceVariant} />
               </TouchableOpacity>
             </View>
-            <Text style={styles.stepText}>Step {step} of 4</Text>
+            <Text style={styles.stepText}>Step {step} of 6</Text>
           </View>
         )}
 
         <View style={styles.content}>
           {renderStep()}
         </View>
+
+        {step < 7 && (
+          <Animated.View entering={FadeIn.delay(300)} style={styles.footerRow}>
+            {step > 1 ? (
+              <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
+                <Icon name="arrow-back" size={24} color={C.onSurface} />
+              </TouchableOpacity>
+            ) : <View style={styles.backBtnPlaceholder} />}
+            
+            <TouchableOpacity style={[styles.nextBtn, isNextDisabled() && styles.nextBtnDisabled]} disabled={isNextDisabled()} onPress={handleNext}>
+              <Text style={styles.nextBtnText}>{step === 6 ? 'Analyze Profile' : 'Continue'}</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        )}
 
       </SafeAreaView>
     </View>
@@ -319,13 +478,15 @@ const getStyles = (C: any) => StyleSheet.create({
   themeToggleBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.glassInset, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.outlineVariant },
   stepText: { color: C.onSurfaceVariant, fontFamily: F.header, fontSize: 11, marginTop: 12, textTransform: 'uppercase', letterSpacing: 1.2 },
   
-  content: { flex: 1, paddingHorizontal: 24, paddingTop: 32 },
+  content: { flex: 1 },
   stepContainer: { flex: 1 },
+  scrollContent: { paddingHorizontal: 24, paddingTop: 32, paddingBottom: 40 },
   
   title: { color: C.onSurface, fontFamily: F.header, fontSize: 32, letterSpacing: -1, marginBottom: 8 },
-  subtitle: { color: C.onSurfaceVariant, fontFamily: F.body, fontSize: 15, marginBottom: 40, lineHeight: 22 },
+  subtitle: { color: C.onSurfaceVariant, fontFamily: F.body, fontSize: 15, marginBottom: 30, lineHeight: 22 },
   
   optionsList: { gap: 14 },
+  optionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, justifyContent: 'space-between' },
   optionCard: {
     height: 72,
     borderRadius: 18,
@@ -333,8 +494,8 @@ const getStyles = (C: any) => StyleSheet.create({
     borderColor: C.outlineVariant,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    gap: 16,
+    paddingHorizontal: 16,
+    gap: 12,
     overflow: 'hidden',
     backgroundColor: C.glassInset,
   },
@@ -342,17 +503,18 @@ const getStyles = (C: any) => StyleSheet.create({
     borderColor: C.primary,
     backgroundColor: 'rgba(245, 196, 0, 0.12)'
   },
-  optionLabel: { color: C.onSurface, fontFamily: F.bodyBold, fontSize: 16 },
+  optionLabel: { color: C.onSurface, fontFamily: F.bodyBold, fontSize: 14, flex: 1 },
 
-  metricsContainer: { flexDirection: 'row', gap: 24, justifyContent: 'center', marginTop: 20 },
+  metricsContainerVertical: { gap: 24, marginTop: 10 },
+  metricRow: { flexDirection: 'row', gap: 20, justifyContent: 'space-between' },
   metricBlock: { flex: 1 },
-  metricLabel: { color: C.onSurfaceVariant, fontFamily: F.header, fontSize: 12, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 },
+  metricLabel: { color: C.onSurfaceVariant, fontFamily: F.header, fontSize: 12, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
   metricInputWrapper: {
     flexDirection: 'row',
     alignItems: 'baseline',
     borderBottomWidth: 2,
     borderColor: C.outlineVariant,
-    paddingBottom: 8
+    paddingBottom: 4
   },
   metricInputActive: {
     borderColor: C.primary,
@@ -360,19 +522,40 @@ const getStyles = (C: any) => StyleSheet.create({
   metricInput: {
     color: C.onSurface,
     fontFamily: F.num,
-    fontSize: 56,
+    fontSize: 48,
     padding: 0,
     marginRight: 4,
+    minWidth: 60,
     outlineStyle: 'none' as any,
   },
   metricUnit: {
     color: C.primary,
     fontFamily: F.bodyBold,
-    fontSize: 18,
+    fontSize: 16,
   },
   
-  footer: { marginTop: 'auto', marginBottom: Platform.OS === 'ios' ? 20 : 40 },
+  inputGroup: { gap: 8 },
+  textInput: {
+    backgroundColor: C.glassInset,
+    borderWidth: 1,
+    borderColor: C.outlineVariant,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    color: C.onSurface,
+    fontFamily: F.bodyMed,
+    fontSize: 15
+  },
+  
+  pillBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20, backgroundColor: C.glassInset, borderWidth: 1, borderColor: C.outlineVariant },
+  pillBtnActive: { borderColor: C.primary, backgroundColor: 'rgba(245, 196, 0, 0.12)' },
+  pillBtnText: { color: C.onSurfaceVariant, fontFamily: F.bodyBold, fontSize: 14 },
+
+  footerRow: { flexDirection: 'row', paddingHorizontal: 24, gap: 16, marginTop: 'auto', marginBottom: Platform.OS === 'ios' ? 20 : 40, paddingTop: 10 },
+  backBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: C.glassInset, borderWidth: 1, borderColor: C.outlineVariant, alignItems: 'center', justifyContent: 'center' },
+  backBtnPlaceholder: { width: 56, height: 56 },
   nextBtn: {
+    flex: 1,
     backgroundColor: C.primary,
     height: 56,
     borderRadius: 28,

@@ -6,6 +6,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useQuery } from '@tanstack/react-query';
 import { fetchCoachMessages } from '../services/api/coach';
+import { transcribeAudio } from '../services/api/transcribe';
+import { Audio } from 'expo-av';
 import { DarkColors, F } from '../theme';
 import MeshGradientBackground from '../components/MeshGradientBackground';
 import { useTheme } from '../context/ThemeContext';
@@ -82,6 +84,10 @@ export default function CoachScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const [isFocused, setIsFocused] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const webRecognitionRef = useRef<any>(null);
 
   useEffect(() => {
     scrollViewRef.current?.scrollToEnd({ animated: true });
@@ -114,8 +120,105 @@ export default function CoachScreen() {
     }
   }, [inputText]);
 
-  const micStyle = useAnimatedStyle(() => ({ transform: [{ scale: micScale.value }], opacity: micScale.value }));
+  const micPulse = useSharedValue(1);
+  useEffect(() => {
+    if (isRecording) {
+      micPulse.value = withRepeat(withTiming(1.3, { duration: 500 }), -1, true);
+    } else {
+      micPulse.value = withTiming(1, { duration: 200 });
+    }
+  }, [isRecording]);
+
+  const micStyle = useAnimatedStyle(() => ({ transform: [{ scale: micScale.value }, { scale: micPulse.value }], opacity: micScale.value }));
   const sendStyle = useAnimatedStyle(() => ({ transform: [{ scale: sendScale.value }], opacity: sendScale.value, position: 'absolute' }));
+
+  const startWebRecording = () => {
+    try {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        alert("Speech recognition not supported in this browser.");
+        return;
+      }
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+      
+      recognition.onstart = () => setIsRecording(true);
+      recognition.onresult = (event: any) => {
+        const text = event.results[0][0].transcript;
+        setInputText(prev => prev ? prev + ' ' + text : text);
+      };
+      recognition.onerror = (event: any) => {
+        console.error("Speech recognition error", event.error);
+        alert("Microphone error: " + event.error);
+      };
+      recognition.onend = () => setIsRecording(false);
+      
+      recognition.start();
+      webRecognitionRef.current = recognition;
+    } catch (e) {
+      console.error(e);
+      alert("Microphone access denied or failed.");
+    }
+  };
+
+  const stopWebRecording = () => {
+    if (webRecognitionRef.current) {
+      webRecognitionRef.current.stop();
+    }
+  };
+
+  const startNativeRecording = async () => {
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (permission.status !== 'granted') {
+        alert('Microphone permission is required to use voice input.');
+        return;
+      }
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      recordingRef.current = recording;
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Failed to start recording', err);
+      alert('Failed to start recording. Please check settings.');
+    }
+  };
+
+  const stopNativeRecording = async () => {
+    if (!recordingRef.current) return;
+    setIsRecording(false);
+    setIsProcessingVoice(true);
+    try {
+      await recordingRef.current.stopAndUnloadAsync();
+      const uri = recordingRef.current.getURI();
+      if (uri) {
+        const text = await transcribeAudio(uri);
+        if (text) {
+          setInputText(prev => prev ? prev + ' ' + text : text);
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to process voice', err);
+      alert('Voice processing failed: ' + (err.message || 'Network error'));
+    } finally {
+      setIsProcessingVoice(false);
+      recordingRef.current = null;
+    }
+  };
+
+  const handleMicPress = () => {
+    if (isRecording) {
+      Platform.OS === 'web' ? stopWebRecording() : stopNativeRecording();
+    } else {
+      Platform.OS === 'web' ? startWebRecording() : startNativeRecording();
+    }
+  };
+
 
   const handleSend = () => {
     if (!inputText.trim()) return;
@@ -224,16 +327,28 @@ export default function CoachScreen() {
                 onBlur={() => setIsFocused(false)}
                 multiline={false}
               />
-              <TouchableOpacity style={styles.iconBtn} onPress={handleSend} disabled={!inputText.trim() && !isTyping}>
-                <Animated.View style={micStyle}>
-                  <Icon name="mic" size={24} color={C.onSurfaceVariant} />
+              <View style={styles.iconBtnWrapper}>
+                <Animated.View style={[micStyle, { position: 'absolute', right: 0 }]}>
+                  <TouchableOpacity 
+                    onPress={handleMicPress} 
+                    disabled={isProcessingVoice}
+                    style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <Icon name="mic" size={24} color={isRecording ? C.error : C.onSurfaceVariant} />
+                  </TouchableOpacity>
                 </Animated.View>
-                <Animated.View style={sendStyle}>
-                  <View style={{ backgroundColor: C.primary, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon name="arrow-upward" size={18} color={C.onPrimary} />
-                  </View>
+                <Animated.View style={[sendStyle, { position: 'absolute', right: 0 }]}>
+                  <TouchableOpacity 
+                    onPress={handleSend} 
+                    disabled={!inputText.trim() && !isTyping}
+                    style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    <View style={{ backgroundColor: C.primary, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon name="arrow-upward" size={18} color={C.onPrimary} />
+                    </View>
+                  </TouchableOpacity>
                 </Animated.View>
-              </TouchableOpacity>
+              </View>
             </Animated.View>
           </View>
         </KeyboardAvoidingView>
@@ -303,13 +418,24 @@ const getStyles = (C: any) => StyleSheet.create({
     height: 48,
     backgroundColor: C.glassInset,
     borderRadius: 24,
-    paddingLeft: 20,
-    paddingRight: 8,
+    paddingHorizontal: 16,
+    paddingRight: 45,
+    minHeight: 48,
+    maxHeight: 120,
     borderWidth: 1,
+  },
+  iconBtnWrapper: {
+    position: 'absolute',
+    right: 8,
+    bottom: 4,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center'
   },
   input: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,
     fontFamily: F.body,
     color: C.onSurface,
   },

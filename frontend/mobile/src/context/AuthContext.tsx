@@ -17,6 +17,7 @@ type AuthContextType = {
   signup: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   completeOnboarding: () => Promise<void>;
+  resetOnboarding: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -77,8 +78,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await AsyncStorage.setItem('@has_onboarded', 'true');
   };
 
+  const resetOnboarding = async () => {
+    setHasOnboarded(false);
+    await AsyncStorage.removeItem('@has_onboarded');
+    await AsyncStorage.removeItem('@onboarding_draft'); // clear any old draft
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, hasOnboarded, login, signup, logout, completeOnboarding }}>
+    <AuthContext.Provider value={{ user, isLoading, hasOnboarded, login, signup, logout, completeOnboarding, resetOnboarding }}>
       {children}
     </AuthContext.Provider>
   );

@@ -14,7 +14,30 @@ router.get('/', async (req, res) => {
     let memoryEvents = [];
     try {
       if (userId) {
-        user = await prisma.user.findUnique({ where: { id: userId } });
+        user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatar: true,
+            age: true,
+            weight: true,
+            height: true,
+            gender: true,
+            experience: true,
+            goal: true,
+            equipment: true,
+            diet: true,
+            pastInjuries: true,
+            currentInjuries: true,
+            medicalConditions: true,
+            allergies: true,
+            physicalLimitations: true,
+            medications: true,
+            currentStreak: true,
+          }
+        });
       }
       vitals = await prisma.vitals.findFirst()
       if (userId) {
@@ -98,18 +121,30 @@ router.get('/', async (req, res) => {
     // Mock Profile Data based on BRD (blended with real DB data where available)
     const profileData = {
       identity: {
-        name: user?.name || 'Alex Mercer',
-        email: user?.email || 'alex.mercer@elite.fit',
+        name: user?.name || 'Loading...',
+        email: user?.email || '',
         avatar: user?.avatar || 'https://i.pravatar.cc/150?img=11',
         totalWorkouts: 142, // Would typically count from DB
-        currentStreak: user?.currentStreak || 24,
+        currentStreak: user?.currentStreak || 0,
       },
       fitnessProfile: {
-        height: user?.height || 185, // cm
-        weight: user?.weight || 82,  // kg
-        age: user?.age || 29,
-        goals: ['Hypertrophy', 'Endurance', 'Power', 'Lean Mass'],
-        activeGoals: [user?.goal || 'Hypertrophy'] // Selected goals
+        height: user?.height || null, // cm
+        weight: user?.weight || null,  // kg
+        age: user?.age || null,
+        gender: user?.gender || null,
+        experience: user?.experience || null,
+        goals: user?.goal ? user.goal.split(',') : [],
+        activeGoals: user?.goal ? user.goal.split(',') : [],
+        equipment: user?.equipment ? user.equipment.split(',') : [],
+        diet: user?.diet ? user.diet.split(',') : []
+      },
+      healthProfile: {
+        pastInjuries: user?.pastInjuries || null,
+        currentInjuries: user?.currentInjuries || null,
+        medicalConditions: user?.medicalConditions || null,
+        allergies: user?.allergies || null,
+        physicalLimitations: user?.physicalLimitations || null,
+        medications: user?.medications || null
       },
       telemetry: telemetry,
       aiPreferences: {

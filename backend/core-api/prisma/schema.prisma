@@ -15,14 +15,22 @@ model User {
   avatar         String?
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
-  deletedAt      DateTime?
-  age            Int?
-  weight         Float?
-  height         Float?
-  goal           String?
-  equipment      String?
-  diet           String?
-  currentStreak  Int             @default(0)
+  deletedAt           DateTime?
+  age                 Int?
+  weight              Float?
+  height              Float?
+  gender              String?
+  experience          String?
+  goal                String?
+  equipment           String?
+  diet                String?
+  pastInjuries        String?
+  currentInjuries     String?
+  medicalConditions   String?
+  allergies           String?
+  physicalLimitations String?
+  medications         String?
+  currentStreak       Int             @default(0)
   
   coachMessages  CoachMessage[]
   feeds          FeedItem[]

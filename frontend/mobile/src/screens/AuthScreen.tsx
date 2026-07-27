@@ -104,7 +104,7 @@ function AuthInput({ icon, placeholder, value, onChangeText, isPassword = false,
 
   return (
     <Animated.View style={[styles.inputWrapper, borderStyle]}>
-      <Animated.Text style={[iconStyle, { fontFamily: 'MaterialIcons', fontSize: 20, marginRight: 12 }]}>{icon}</Animated.Text>
+      <Icon name={icon} size={20} color={isFocused ? C.primary : C.onSurfaceVariant} style={{ marginRight: 12 }} />
       <TextInput
         style={styles.input}
         placeholder={placeholder}
