@@ -35,33 +35,9 @@ io.on('connection', (socket) => {
   });
 });
 
-// Simulation Loop (runs every 1 second)
-setInterval(() => {
-  // Simulate natural heart rate fluctuation
-  const fluctuation = Math.floor(Math.random() * 5) - 2; // -2 to +2
-  currentHeartRate = Math.max(120, Math.min(180, currentHeartRate + fluctuation));
-  
-  io.emit('heart_rate_update', {
-    bpm: currentHeartRate,
-    timestamp: Date.now(),
-  });
-}, 1000);
+// Heart rate simulation removed (Real data should be pushed by connected devices)
 
-// Feed Activity Simulation (every 10 seconds)
-const activities = [
-  { name: 'Sarah J.', action: 'completed a Heavy Deadlift session', time: 'Just now' },
-  { name: 'Mike T.', action: 'hit a new PR on Bench Press', time: 'Just now' },
-  { name: 'Emma W.', action: 'finished a 5k recovery run', time: 'Just now' },
-  { name: 'David M.', action: 'started a hypertrophy leg day', time: 'Just now' },
-];
-
-setInterval(() => {
-  const randomActivity = activities[Math.floor(Math.random() * activities.length)];
-  io.emit('feed_update', {
-    ...randomActivity,
-    id: Math.random().toString(36).substring(7),
-  });
-}, 10000);
+// Feed Activity Simulation removed (Real feed should come from DB)
 
 const PORT = 3001;
 server.listen(PORT, () => {

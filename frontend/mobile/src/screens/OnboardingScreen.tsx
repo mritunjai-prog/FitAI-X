@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Dimensions, TextInput, Platform, Pressable } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, TextInput, Platform, Pressable } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInRight, FadeOutLeft, SlideInRight, SlideOutLeft, Layout, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, Easing, withDelay, withSpring, interpolate } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { DarkColors, F } from '../theme';
 import MeshGradientBackground from '../components/MeshGradientBackground';
+import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import { submitOnboardingProfile } from '../services/api/onboarding';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const C = DarkColors;
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -32,6 +35,8 @@ const DIETS = [
 
 // ─── Reusable Animated Pressable Card ─────────────────────────────────────────
 function OptionCard({ item, isSelected, onPress }: { item: any, isSelected: boolean, onPress: () => void }) {
+  const { C, isDark } = useTheme();
+  const styles = React.useMemo(() => getStyles(C), [C]);
   const scale = useSharedValue(1);
   
   const animatedStyle = useAnimatedStyle(() => ({
@@ -45,7 +50,7 @@ function OptionCard({ item, isSelected, onPress }: { item: any, isSelected: bool
       onPress={() => { Haptics.selectionAsync(); onPress(); }}
     >
       <Animated.View style={[styles.optionCard, isSelected && styles.optionCardActive, animatedStyle]}>
-        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+        <BlurView intensity={isDark ? 40 : 60} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
         <Icon name={item.icon as any} size={28} color={isSelected ? C.primary : C.onSurface} />
         <Text style={[styles.optionLabel, isSelected && { color: C.primary }]}>{item.label}</Text>
       </Animated.View>
@@ -55,6 +60,8 @@ function OptionCard({ item, isSelected, onPress }: { item: any, isSelected: bool
 
 // ─── AI Scanning Animation ────────────────────────────────────────────────────
 function AIScanner() {
+  const { C } = useTheme();
+  const styles = React.useMemo(() => getStyles(C), [C]);
   const pulse = useSharedValue(1);
 
   useEffect(() => {
@@ -85,6 +92,9 @@ interface OnboardingScreenProps {
 }
 
 export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
+  const { isDark, C, bgColors, toggleTheme } = useTheme();
+  const { user } = useAuth();
+  const styles = React.useMemo(() => getStyles(C), [C]);
   const [step, setStep] = useState<Step>(1);
   const [goal, setGoal] = useState<string>('');
   const [age, setAge] = useState<string>('25');
@@ -100,12 +110,35 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   };
 
   useEffect(() => {
+    let mounted = true;
     if (step === 5) {
-      const timer = setTimeout(() => {
-        onComplete();
-      }, 3500);
-      return () => clearTimeout(timer);
+      const processOnboarding = async () => {
+        try {
+          if (user?.id) {
+            await submitOnboardingProfile({
+              userId: user.id,
+              age,
+              weight,
+              goal,
+              equipment,
+              diet
+            });
+          }
+        } catch (e) {
+          console.error('Failed to submit onboarding profile:', e);
+        } finally {
+          if (mounted) {
+            // Keep a tiny delay so they see the cool animation even if API is very fast
+            setTimeout(() => {
+              onComplete();
+            }, 2000);
+          }
+        }
+      };
+      
+      processOnboarding();
     }
+    return () => { mounted = false; };
   }, [step]);
 
   const renderStep = () => {
@@ -233,13 +266,18 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
 
   return (
     <View style={styles.container}>
-      <MeshGradientBackground isDark={true} bgColors={['#0F172A', '#1E1B4B', '#312E81']} />
+      <MeshGradientBackground isDark={isDark} bgColors={bgColors} />
       <SafeAreaView style={{ flex: 1 }}>
         
         {step < 5 && (
           <View style={styles.header}>
-            <View style={styles.progressBar}>
-              <Animated.View layout={Layout.springify().damping(18)} style={[styles.progressFill, { width: `${(step / 4) * 100}%` }]} />
+            <View style={styles.headerTop}>
+              <View style={[styles.progressBar, { flex: 1 }]}>
+                <Animated.View layout={Layout.springify().damping(18)} style={[styles.progressFill, { width: `${(step / 4) * 100}%` }]} />
+              </View>
+              <TouchableOpacity onPress={toggleTheme} style={styles.themeToggleBtn}>
+                <Icon name={isDark ? "light-mode" : "dark-mode"} size={20} color={C.onSurfaceVariant} />
+              </TouchableOpacity>
             </View>
             <Text style={styles.stepText}>Step {step} of 4</Text>
           </View>
@@ -254,11 +292,13 @@ export default function OnboardingScreen({ onComplete }: OnboardingScreenProps) 
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (C: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   header: { paddingHorizontal: 24, paddingTop: 40 },
-  progressBar: { height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' },
+  headerTop: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  progressBar: { height: 6, backgroundColor: 'rgba(150,150,150,0.2)', borderRadius: 3, overflow: 'hidden' },
   progressFill: { height: '100%', backgroundColor: C.primary, borderRadius: 3 },
+  themeToggleBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.glassInset, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.outlineVariant },
   stepText: { color: C.onSurfaceVariant, fontFamily: F.header, fontSize: 11, marginTop: 12, textTransform: 'uppercase', letterSpacing: 1.2 },
   
   content: { flex: 1, paddingHorizontal: 24, paddingTop: 32 },
@@ -272,13 +312,13 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: C.outlineVariant,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
     gap: 16,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: C.glassInset,
   },
   optionCardActive: {
     borderColor: C.primary,
@@ -293,7 +333,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     borderBottomWidth: 2,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: C.outlineVariant,
     paddingBottom: 8
   },
   metricInputActive: {
@@ -305,6 +345,7 @@ const styles = StyleSheet.create({
     fontSize: 56,
     padding: 0,
     marginRight: 4,
+    outlineStyle: 'none' as any,
   },
   metricUnit: {
     color: C.primary,
@@ -325,7 +366,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
   },
   nextBtnDisabled: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(150,150,150,0.15)',
     shadowOpacity: 0,
   },
   nextBtnText: { color: C.onPrimary, fontFamily: F.header, fontSize: 16 },

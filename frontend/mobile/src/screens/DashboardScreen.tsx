@@ -1,8 +1,10 @@
 import React, { useMemo, useState, useEffect } from "react";
-import { View, Text, StyleSheet, SafeAreaView, Platform, StatusBar as RNStatusBar, TouchableOpacity, ScrollView, Image } from "react-native";
+import { View, Text, StyleSheet, Platform, StatusBar as RNStatusBar, TouchableOpacity, ScrollView, Image } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
 import Animated, { FadeInUp, Layout, useAnimatedScrollHandler, useSharedValue, useAnimatedStyle, interpolate, Extrapolation, withRepeat, withSequence, withTiming, withSpring } from "react-native-reanimated";
-import Svg, { Text as SvgText, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Svg, { Text as SvgText, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
+import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -17,43 +19,32 @@ import SplineChart from "../components/charts/SplineChart";
 import AnimatedPressable from "../components/AnimatedPressable";
 import { fetchFeed, fetchActiveUsers, fetchVitals, FeedItem } from '../services/api/dashboard';
 import { socket } from '../services/socket/socketClient';
-
-const isDark = true;
-const C = isDark ? DarkColors : LightColors;
+import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function DashboardScreen({ onOpenCommandPalette }: { onOpenCommandPalette?: () => void }) {
+  const { isDark, C, bgColors, toggleTheme } = useTheme();
+  const { user } = useAuth();
   const styles = useMemo(() => getStyles(C), [C]);
-
-  const bgColors = (
-    isDark
-      ? [C.bg, "#1a1813", "#081a20", C.bg]
-      : [C.bg, "#e8e6df", "#dff0f5", C.bg]
-  ) as readonly [string, string, ...string[]];
 
   const queryClient = useQueryClient();
 
-  const { data: initialFeed } = useQuery({ queryKey: ['feed'], queryFn: fetchFeed });
+  const { data: feed = [] } = useQuery({ queryKey: ['feed'], queryFn: fetchFeed });
   const { data: activeUsers = [] } = useQuery({ queryKey: ['activeUsers'], queryFn: fetchActiveUsers });
   const { data: vitals } = useQuery({ queryKey: ['vitals'], queryFn: fetchVitals, refetchInterval: 5000 });
 
-  const [feed, setFeed] = useState<FeedItem[]>([]);
-
   useEffect(() => {
-    if (initialFeed) {
-      setFeed(initialFeed);
-    }
-  }, [initialFeed]);
-
-  useEffect(() => {
-    socket.on('feed_update', (newItem: FeedItem) => {
-      setFeed(prev => [newItem, ...prev]);
+    const handleFeedUpdate = (newItem: FeedItem) => {
+      queryClient.setQueryData(['feed'], (old: FeedItem[] = []) => [newItem, ...old]);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    });
+    };
+
+    socket.on('feed_update', handleFeedUpdate);
 
     return () => {
-      socket.off('feed_update');
+      socket.off('feed_update', handleFeedUpdate);
     };
-  }, []);
+  }, [queryClient]);
 
   // Parallax Scroll Header
   const scrollY = useSharedValue(0);
@@ -104,7 +95,7 @@ export default function DashboardScreen({ onOpenCommandPalette }: { onOpenComman
 
       <SafeAreaView style={{ flex: 1 }}>
         {/* Sticky Blurred Header (Replaces Top Nav when scrolled) */}
-        <Animated.View style={[styles.stickyHeader, stickyHeaderStyle]} pointerEvents="none">
+        <Animated.View style={[styles.stickyHeader, stickyHeaderStyle, { pointerEvents: 'none' as any }]}>
           <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
           <Text style={styles.stickyTitle}>Dashboard</Text>
         </Animated.View>
@@ -118,18 +109,27 @@ export default function DashboardScreen({ onOpenCommandPalette }: { onOpenComman
           {/* Top Navigation */}
           <Animated.View entering={FadeInUp.delay(50).springify()} style={styles.topNav}>
             <View style={styles.topNavLeft}>
-              <Image source={{ uri: 'https://i.pravatar.cc/100?img=33' }} style={styles.topNavAvatar} />
+              {user?.avatar ? (
+                <Image source={{ uri: user.avatar }} style={styles.topNavAvatar} />
+              ) : (
+                <View style={[styles.topNavAvatar, { backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Icon name="person" size={24} color={C.onPrimary} />
+                </View>
+              )}
               <View>
-                <Text style={styles.greeting}>Alex Mercer</Text>
+                <Text style={styles.greeting}>{user?.name}</Text>
                 <Text style={styles.subGreeting}>Recovery is optimal. Ready?</Text>
               </View>
             </View>
             <View style={styles.topNavRight}>
+              <TouchableOpacity style={styles.iconBtn} onPress={toggleTheme}>
+                <Icon name={isDark ? "light-mode" : "dark-mode"} size={20} color={C.onSurface} />
+              </TouchableOpacity>
               <TouchableOpacity style={styles.iconBtn} onPress={() => { Haptics.selectionAsync(); onOpenCommandPalette?.(); }}>
-                <Icon name="search" size={24} color={C.onSurface} />
+                <Icon name="search" size={20} color={C.onSurface} />
               </TouchableOpacity>
               <TouchableOpacity style={styles.iconBtn} onPress={() => Haptics.selectionAsync()}>
-                <Icon name="notifications" size={24} color={C.onSurface} />
+                <Icon name="notifications" size={20} color={C.onSurface} />
                 <View style={styles.notificationBadge} />
               </TouchableOpacity>
             </View>
@@ -140,12 +140,42 @@ export default function DashboardScreen({ onOpenCommandPalette }: { onOpenComman
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.activeUsersContainer}>
               {activeUsers.map((u, i) => (
                 <View key={u.id} style={styles.userAvatarWrapper}>
-                  <Image source={{ uri: u.img || `https://i.pravatar.cc/100?img=${i}` }} style={[styles.userAvatar, u.isLive && { borderWidth: 2, borderColor: C.primary }]} />
+                  {u.img ? (
+                    <Image source={{ uri: u.img }} style={[styles.userAvatar, u.isLive && { borderWidth: 2, borderColor: C.primary }]} />
+                  ) : (
+                    <View style={[styles.userAvatar, { backgroundColor: C.glassInset, alignItems: 'center', justifyContent: 'center' }, u.isLive && { borderWidth: 2, borderColor: C.primary }]}>
+                      <Icon name="person" size={28} color={C.onSurfaceVariant} />
+                    </View>
+                  )}
                   <Text style={styles.userName} numberOfLines={1}>{u.name}</Text>
                   {u.isLive && <View style={styles.liveDot} />}
                 </View>
               ))}
             </ScrollView>
+          </Animated.View>
+
+          {/* Quick Action: Start Workout */}
+          <Animated.View entering={FadeInUp.delay(125).springify().damping(15)}>
+            <AnimatedPressable 
+              containerStyle={{ marginBottom: 12 }}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                onOpenCommandPalette?.(); 
+              }}
+            >
+              <View style={[styles.card, { padding: 0, overflow: 'hidden' }]}>
+                <ExpoLinearGradient colors={[C.primary, C.primaryDim]} start={{x:0, y:0}} end={{x:1, y:1}} style={{ padding: 16, flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                  <View style={{ backgroundColor: 'rgba(0,0,0,0.1)', width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name="fitness-center" size={24} color={C.onPrimary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: F.header, fontSize: 18, color: C.onPrimary }}>Build a Workout</Text>
+                    <Text style={{ fontFamily: F.bodyMed, fontSize: 13, color: 'rgba(61,47,0,0.7)' }}>Tap to open quick actions</Text>
+                  </View>
+                  <Icon name="chevron-right" size={24} color={C.onPrimary} />
+                </ExpoLinearGradient>
+              </View>
+            </AnimatedPressable>
           </Animated.View>
 
           {/* BENTO BOX GRID */}
@@ -163,9 +193,9 @@ export default function DashboardScreen({ onOpenCommandPalette }: { onOpenComman
                 <ActivityRings 
                   size={100}
                   rings={[
-                    { progress: 0.8, color: C.primary, radius: 40, strokeWidth: 10 },
-                    { progress: 0.6, color: '#38bdf8', radius: 28, strokeWidth: 10 },
-                    { progress: 0.4, color: '#a3e635', radius: 16, strokeWidth: 10 },
+                    { progress: vitals?.moveProgress ?? 0, color: C.primary, radius: 40, strokeWidth: 10 },
+                    { progress: vitals?.waterProgress ?? 0, color: '#38bdf8', radius: 28, strokeWidth: 10 },
+                    { progress: vitals?.trainProgress ?? 0, color: '#a3e635', radius: 16, strokeWidth: 10 },
                   ]}
                 />
               </View>
@@ -185,10 +215,10 @@ export default function DashboardScreen({ onOpenCommandPalette }: { onOpenComman
                         <Animated.View style={pulseStyle}>
                           <Svg width={80} height={40}>
                             <Defs>
-                              <LinearGradient id="textGrad" x1="0" y1="0" x2="1" y2="1">
+                              <SvgLinearGradient id="textGrad" x1="0" y1="0" x2="1" y2="1">
                                 <Stop offset="0" stopColor="#ff4b2b" stopOpacity="1" />
                                 <Stop offset="1" stopColor="#ff416c" stopOpacity="1" />
-                              </LinearGradient>
+                              </SvgLinearGradient>
                             </Defs>
                             <SvgText x="0" y="32" fontSize="36" fontFamily={F.header} fill="url(#textGrad)">
                               {vitals?.bpm || 68}
@@ -243,13 +273,13 @@ export default function DashboardScreen({ onOpenCommandPalette }: { onOpenComman
                         height={70}
                         color="#a3e635"
                         data={[
-                          { label: 'M', value: 0.2 },
-                          { label: 'T', value: 0.8 },
-                          { label: 'W', value: 0.5 },
-                          { label: 'T', value: 0.9 },
-                          { label: 'F', value: 0.4 },
-                          { label: 'S', value: 0.1 },
-                          { label: 'S', value: 0.6 },
+                          { label: 'M', value: vitals?.loadM ?? 0 },
+                          { label: 'T', value: vitals?.loadT ?? 0 },
+                          { label: 'W', value: vitals?.loadW ?? 0 },
+                          { label: 'T', value: vitals?.loadTh ?? 0 },
+                          { label: 'F', value: vitals?.loadF ?? 0 },
+                          { label: 'S', value: vitals?.loadSa ?? 0 },
+                          { label: 'S', value: vitals?.loadSu ?? 0 },
                         ]}
                       />
                     </View>
@@ -354,7 +384,7 @@ const getStyles = (C: ThemeColors) =>
     activeUsersContainer: { paddingHorizontal: 4, paddingBottom: 24, gap: 16 },
     userAvatarWrapper: { alignItems: 'center', width: 56 },
     userAvatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: C.glassInset },
-    userName: { fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant, marginTop: 6 },
+    userName: { fontFamily: F.bodyMed, fontSize: 11, color: C.onSurface, marginTop: 6 },
     liveRing: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 28, backgroundColor: C.primary },
     liveDot: { position: 'absolute', bottom: 18, right: 2, width: 12, height: 12, borderRadius: 6, backgroundColor: C.primary, borderWidth: 2, borderColor: C.bg },
 

@@ -26,6 +26,16 @@ export interface Vitals {
   recoveryCor: number;
   recoveryCrd: number;
   bodyBattery: number;
+  moveProgress: number;
+  waterProgress: number;
+  trainProgress: number;
+  loadM: number;
+  loadT: number;
+  loadW: number;
+  loadTh: number;
+  loadF: number;
+  loadSa: number;
+  loadSu: number;
 }
 
 export const fetchFeed = async (): Promise<FeedItem[]> => {

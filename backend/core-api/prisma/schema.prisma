@@ -1,70 +1,154 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id            String         @id @default(uuid())
-  name          String
-  avatar        String?
-  vitals        Vitals?
-  feeds         FeedItem[]
-  workouts      Workout[]
-  coachMessages CoachMessage[]
+  id             String          @id @default(uuid())
+  email          String          @unique
+  password       String
+  name           String
+  avatar         String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+  age            Int?
+  weight         Float?
+  goal           String?
+  equipment      String?
+  diet           String?
+  currentStreak  Int             @default(0)
+  
+  coachMessages  CoachMessage[]
+  feeds          FeedItem[]
+  vitals         Vitals?
+  workouts       Workout[]
+  meals          Meal[]
+  calendarEvents CalendarEvent[]
+  memoryEvents   MemoryEvent[]
+  medicalDocs    MedicalDocument[]
+}
+
+model MemoryEvent {
+  id          String    @id @default(uuid())
+  userId      String
+  title       String
+  description String
+  timestamp   DateTime  @default(now())
+  deletedAt   DateTime?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Vitals {
-  id            String @id @default(uuid())
-  userId        String @unique
-  user          User   @relation(fields: [userId], references: [id])
+  id            String    @id @default(uuid())
+  userId        String    @unique
   bpm           Int
   recoveryUpr   Float
   recoveryLwr   Float
   recoveryCor   Float
   recoveryCrd   Float
   bodyBattery   Float
+  moveProgress  Float     @default(0.8)
+  waterProgress Float     @default(0.6)
+  trainProgress Float     @default(0.4)
+  loadM         Float     @default(0.2)
+  loadT         Float     @default(0.8)
+  loadW         Float     @default(0.5)
+  loadTh        Float     @default(0.9)
+  loadF         Float     @default(0.4)
+  loadSa        Float     @default(0.1)
+  loadSu        Float     @default(0.6)
+  user          User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model FeedItem {
-  id      String  @id @default(uuid())
-  userId  String
-  user    User    @relation(fields: [userId], references: [id])
-  type    String
-  message String
-  timeStr String
-  likes   Int     @default(0)
-  bpm     Int?
+  id        String    @id @default(uuid())
+  userId    String
+  type      String
+  message   String
+  timeStr   String
+  likes     Int?      @default(0)
+  bpm       Int?
+  deletedAt DateTime?
+  user      User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model Workout {
-  id        String     @id @default(uuid())
-  userId    String
-  user      User       @relation(fields: [userId], references: [id])
-  title     String
-  duration  String
-  exercises Exercise[]
+  id              String     @id @default(uuid())
+  userId          String
+  title           String
+  duration        String
+  
+  // FR-002: Workout Version Control
+  parentVersionId String?
+  versionNumber   Int        @default(1)
+  isCurrent       Boolean    @default(true)
+  aiExplanation   String?
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
+
+  exercises       Exercise[]
+  user            User       @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model Exercise {
-  id        String  @id @default(uuid())
+  id        String    @id @default(uuid())
   workoutId String
-  workout   Workout @relation(fields: [workoutId], references: [id])
   name      String
   sets      Int
   reps      Int
   weight    String
+  deletedAt DateTime?
+  workout   Workout   @relation(fields: [workoutId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model CoachMessage {
-  id      String @id @default(uuid())
-  userId  String
-  user    User   @relation(fields: [userId], references: [id])
-  role    String
-  content String
+  id        String    @id @default(uuid())
+  userId    String
+  role      String
+  content   String
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model Meal {
+  id        String    @id @default(uuid())
+  userId    String
+  type      String 
+  name      String
+  cals      Int
+  cost      Float
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CalendarEvent {
+  id        String    @id @default(uuid())
+  userId    String
+  dayIndex  Int     
+  type      String    // workout or meal
+  title     String
+  intensity String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model MedicalDocument {
+  id        String    @id @default(uuid())
+  userId    String
+  fileName  String
+  fileType  String
+  fileUrl   String
+  uploadedAt DateTime @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

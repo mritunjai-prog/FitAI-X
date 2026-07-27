@@ -1,0 +1,10 @@
+{
+  "name": "fitaix-workspace",
+  "private": true,
+  "workspaces": [
+    "frontend/mobile",
+    "frontend/web",
+    "backend/*",
+    "packages/*"
+  ]
+}

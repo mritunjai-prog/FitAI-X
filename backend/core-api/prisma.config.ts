@@ -1,13 +1,2 @@
-import { defineConfig } from '@prisma/config'
-import * as dotenv from 'dotenv'
-
-dotenv.config()
-
-export default defineConfig({
-  datasource: {
-    url: process.env.DATABASE_URL as string,
-  },
-  migrations: {
-    seed: 'npx tsx prisma/seed.ts',
-  }
-})
+// prisma.config.ts is not needed for Prisma v5
+// All config is in schema.prisma and .env

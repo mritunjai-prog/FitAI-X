@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import DashboardPage from './pages/DashboardPage';
 import ProfilePage from './pages/ProfilePage';
+import CalendarPage from './pages/CalendarPage';
+import WorkoutBuilderPage from './pages/WorkoutBuilderPage';
+import NutritionPage from './pages/NutritionPage';
 import Sidebar from './components/layout/Sidebar';
 import TopHeader from './components/layout/TopHeader';
 import RightCoachPanel from './components/layout/RightCoachPanel';
@@ -42,6 +45,9 @@ function AppContent() {
           <Routes>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/calendar" element={<CalendarPage />} />
+            <Route path="/workout" element={<WorkoutBuilderPage />} />
+            <Route path="/meals" element={<NutritionPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

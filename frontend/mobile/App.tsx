@@ -9,37 +9,44 @@ import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } f
 import { View, Text, Platform } from 'react-native';
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Animated, { FadeIn, Easing } from 'react-native-reanimated';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      gcTime: 1000 * 60 * 60 * 24, // cache data for 24 hours (offline access)
+      staleTime: 1000 * 60 * 5, // consider data stale after 5 mins
+    },
+  },
+});
+
+const asyncStoragePersister = createAsyncStoragePersister({
+  storage: AsyncStorage,
+});
 
 import DashboardScreen from './src/screens/DashboardScreen';
 import CoachScreen from './src/screens/CoachScreen';
 import OnboardingScreen from './src/screens/OnboardingScreen';
+import CalendarScreen from './src/screens/CalendarScreen';
+import NutritionScreen from './src/screens/NutritionScreen';
 import BottomNavigation from './src/components/BottomNavigation';
 import CommandPaletteModal from './src/components/CommandPaletteModal';
+import AuthScreen from './src/screens/AuthScreen';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { socket } from './src/services/socket/socketClient';
 
-export default function App() {
-  const [fontsLoaded, setFontsLoaded] = useState(false);
-  const [currentScreen, setCurrentScreen] = useState<'Onboarding' | 'Profile' | 'WorkoutBuilder' | 'Dashboard' | 'Coach'>('Onboarding');
+function MainApp() {
+  const { isDark } = useTheme();
+  const { user, isLoading, hasOnboarded, completeOnboarding } = useAuth();
+  
+  const [currentScreen, setCurrentScreen] = useState<'Profile' | 'WorkoutBuilder' | 'Dashboard' | 'Coach' | 'Calendar' | 'Nutrition'>('Dashboard');
   const [isCommandOpen, setIsCommandOpen] = useState(false);
-
-  useEffect(() => {
-    async function loadFonts() {
-      await Font.loadAsync({
-        SpaceGrotesk_700Bold,
-        SpaceGrotesk_500Medium,
-        SpaceGrotesk_400Regular,
-        Inter_400Regular,
-        Inter_500Medium,
-        Inter_600SemiBold,
-        Inter_700Bold,
-      });
-      setFontsLoaded(true);
-    }
-    loadFonts();
-  }, []);
 
   // Keyboard shortcut for Cmd+K / Ctrl+K on Web
   useEffect(() => {
@@ -58,48 +65,113 @@ export default function App() {
     }
   }, []);
 
-  if (!fontsLoaded) {
+  // AI Function Calling Realtime Link
+  useEffect(() => {
+    if (!user) return;
+    
+    const handleNotification = (data: { message: string }) => {
+      if (Platform.OS !== 'web') {
+        const { Alert } = require('react-native');
+        Alert.alert('AI Update', data.message);
+      } else {
+        window.alert(`AI Update: ${data.message}`);
+      }
+      queryClient.invalidateQueries();
+    };
+
+    socket.on('system_notification', handleNotification);
+    
+    return () => {
+      socket.off('system_notification', handleNotification);
+    };
+  }, [user]);
+
+  if (isLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#0A0A0A', alignItems: 'center', justifyContent: 'center' }}>
-        <Text style={{ color: '#f5c400' }}>Loading FitAI X...</Text>
+      <View style={{ flex: 1, backgroundColor: isDark ? '#050505' : '#F5F5F7', alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: '#f5c400', fontFamily: 'SpaceGrotesk_500Medium' }}>Initializing Neural Link...</Text>
       </View>
     );
   }
 
-  return (
-    <QueryClientProvider client={queryClient}>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <Animated.View key={currentScreen} entering={FadeIn.duration(400).easing(Easing.out(Easing.cubic))} style={{ flex: 1 }}>
-          {currentScreen === 'Onboarding' ? (
-            <OnboardingScreen onComplete={() => setCurrentScreen('Dashboard')} />
-          ) : currentScreen === 'Profile' ? (
-            <ProfileScreen onNavigateToBuilder={() => setCurrentScreen('WorkoutBuilder')} />
-          ) : currentScreen === 'WorkoutBuilder' ? (
-            <WorkoutBuilderScreen onNavigateBack={() => setCurrentScreen('Profile')} />
-          ) : currentScreen === 'Coach' ? (
-            <CoachScreen />
-          ) : (
-            <DashboardScreen onOpenCommandPalette={() => setIsCommandOpen(true)} />
-          )}
-        </Animated.View>
-        
-        {currentScreen !== 'WorkoutBuilder' && currentScreen !== 'Onboarding' && (
-          <BottomNavigation 
-            currentScreen={currentScreen as 'Dashboard' | 'Profile' | 'Coach'} 
-            onNavigate={(screen) => setCurrentScreen(screen)} 
-            onNavigateToBuilder={() => setCurrentScreen('WorkoutBuilder')} 
-          />
-        )}
+  if (!user) {
+    return <AuthScreen />;
+  }
 
-        {/* Global Command Palette */}
+  return (
+    <Animated.View key={!hasOnboarded ? 'Onboarding' : currentScreen} entering={FadeIn.duration(400).easing(Easing.out(Easing.cubic))} style={{ flex: 1 }}>
+      {!hasOnboarded ? (
+        <OnboardingScreen onComplete={completeOnboarding} />
+      ) : currentScreen === 'Profile' ? (
+        <ProfileScreen onNavigateToBuilder={() => setCurrentScreen('WorkoutBuilder')} />
+      ) : currentScreen === 'WorkoutBuilder' ? (
+        <WorkoutBuilderScreen onNavigateBack={() => setCurrentScreen('Profile')} />
+      ) : currentScreen === 'Coach' ? (
+        <CoachScreen />
+      ) : currentScreen === 'Calendar' ? (
+        <CalendarScreen />
+      ) : currentScreen === 'Nutrition' ? (
+        <NutritionScreen />
+      ) : (
+        <DashboardScreen onOpenCommandPalette={() => setIsCommandOpen(true)} />
+      )}
+      
+      {hasOnboarded && currentScreen !== 'WorkoutBuilder' && (
+        <BottomNavigation 
+          currentScreen={currentScreen as 'Dashboard' | 'Profile' | 'Coach' | 'Calendar' | 'Nutrition'} 
+          onNavigate={(screen) => setCurrentScreen(screen)} 
+          onOpenActionMenu={() => setIsCommandOpen(true)} 
+        />
+      )}
+
+      {/* Global Command Palette */}
+      {isCommandOpen && (
         <CommandPaletteModal 
           isVisible={isCommandOpen} 
           onClose={() => setIsCommandOpen(false)} 
           onNavigate={(screen) => { setCurrentScreen(screen); setIsCommandOpen(false); }} 
         />
+      )}
+    </Animated.View>
+  );
+}
 
-        <StatusBar style="light" />
-      </GestureHandlerRootView>
-    </QueryClientProvider>
+export default function App() {
+  const [fontsLoaded, setFontsLoaded] = useState(false);
+
+  useEffect(() => {
+    async function loadFonts() {
+      await Font.loadAsync({
+        SpaceGrotesk_700Bold,
+        SpaceGrotesk_500Medium,
+        SpaceGrotesk_400Regular,
+        Inter_400Regular,
+        Inter_500Medium,
+        Inter_600SemiBold,
+        Inter_700Bold,
+      });
+      setFontsLoaded(true);
+    }
+    loadFonts();
+  }, []);
+
+  if (!fontsLoaded) return null;
+
+  return (
+    <PersistQueryClientProvider
+      client={queryClient} 
+      persistOptions={{ persister: asyncStoragePersister }}
+    >
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <MainApp />
+              <StatusBar style="auto" />
+            </GestureHandlerRootView>
+          </AuthProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </PersistQueryClientProvider>
   );
 }

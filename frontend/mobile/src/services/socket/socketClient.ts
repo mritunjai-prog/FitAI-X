@@ -1,6 +1,15 @@
 import { io } from 'socket.io-client';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
-const SOCKET_URL = process.env.EXPO_PUBLIC_SOCKET_URL || 'http://localhost:4000';
+const debuggerHost = Constants.expoConfig?.hostUri;
+const localhost = debuggerHost?.split(':')[0] || 'localhost';
+
+const SOCKET_BASE = Platform.OS === 'web' 
+  ? 'http://localhost:4000' 
+  : `http://${localhost}:4000`;
+
+const SOCKET_URL = process.env.EXPO_PUBLIC_SOCKET_URL || SOCKET_BASE;
 
 export const socket = io(SOCKET_URL, {
   autoConnect: true,

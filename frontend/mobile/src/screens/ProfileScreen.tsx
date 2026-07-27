@@ -36,6 +36,8 @@ import MeshGradientBackground from '../components/MeshGradientBackground';
 import RadarChart from '../components/charts/RadarChart';
 import { DarkColors, LightColors, ThemeColors, F } from '../theme';
 import { useQuery } from '@tanstack/react-query';
+import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { fetchProfileData } from '../services/api/profile';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -234,7 +236,7 @@ function Toggle({ on, onChange, C }: { on: boolean; onChange: () => void; C: The
   );
 }
 
-function BodyMapSVG({ C }: { C: ThemeColors }) {
+function BodyMapSVG({ C, injuryModel = [] }: { C: ThemeColors, injuryModel?: any[] }) {
   const pulse = useSharedValue(0);
   useEffect(() => {
     pulse.value = withRepeat(withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }), -1, true);
@@ -246,6 +248,23 @@ function BodyMapSVG({ C }: { C: ThemeColors }) {
 
   const wire = C.primary;
   const wireL = C.outline;
+
+  const partMap: Record<string, { x: number, y: number }> = {
+    'Right Shoulder': { x: 108, y: 58 },
+    'Left Shoulder': { x: 32, y: 58 },
+    'Shoulders': { x: 32, y: 58 },
+    'Right Knee': { x: 90, y: 162 },
+    'Left Knee': { x: 50, y: 162 },
+    'Back': { x: 70, y: 80 },
+    'Core': { x: 70, y: 100 },
+    'Chest': { x: 70, y: 58 },
+    'Triceps': { x: 25, y: 80 },
+    'Biceps': { x: 115, y: 80 },
+    'Quads': { x: 90, y: 140 },
+    'Hamstrings': { x: 50, y: 140 },
+    'Glutes': { x: 70, y: 125 },
+    'Calves': { x: 92, y: 180 },
+  };
 
   return (
     <View style={{ height: 220, alignItems: 'center', justifyContent: 'center' }}>
@@ -265,12 +284,18 @@ function BodyMapSVG({ C }: { C: ThemeColors }) {
         <Circle cx={50} cy={162} r={4} fill="none" stroke={wireL} strokeWidth={1} />
         <Circle cx={90} cy={162} r={4} fill="none" stroke={wireL} strokeWidth={1} />
         
-        <Circle cx={108} cy={58} r={8} fill={`${C.error}33`} stroke={C.error} strokeWidth={1.5} />
-        <Circle cx={108} cy={58} r={3} fill={C.error} />
-        <Circle cx={50} cy={162} r={8} fill={`${C.success}33`} stroke={C.success} strokeWidth={1.5} />
-        <Circle cx={50} cy={162} r={3} fill={C.success} />
+        {injuryModel.map(inj => {
+          const coords = partMap[inj.part];
+          if (!coords) return null;
+          const color = (inj.status === 'active' || inj.status === 'reported') ? C.error : C.success;
+          return (
+            <React.Fragment key={inj.id}>
+              <Circle cx={coords.x} cy={coords.y} r={8} fill={`${color}33`} stroke={color} strokeWidth={1.5} />
+              <Circle cx={coords.x} cy={coords.y} r={3} fill={color} />
+            </React.Fragment>
+          );
+        })}
       </Svg>
-      <Animated.View style={[{ position: 'absolute', width: 24, height: 24, borderRadius: 12, backgroundColor: C.error, top: 50, right: 18 }, glowStyle]} pointerEvents="none" />
     </View>
   );
 }
@@ -287,8 +312,8 @@ function BatteryRing({ percentage, C }: { percentage: number; C: ThemeColors }) 
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function ProfileScreen({ onNavigateToBuilder }: { onNavigateToBuilder?: () => void }) {
-  const [isDark, setIsDark] = useState(true);
-  const C = isDark ? DarkColors : LightColors;
+  const { isDark, C, toggleTheme, bgColors } = useTheme();
+  const { user, logout } = useAuth();
   const S = useMemo(() => getStyles(C), [C]);
 
   const [goals, setGoals] = useState({ hypertrophy: true, endurance: false, power: false, leanMass: true });
@@ -296,7 +321,11 @@ export default function ProfileScreen({ onNavigateToBuilder }: { onNavigateToBui
   const [deviceExpanded, setDeviceExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState(4); 
 
-  const { data: profileData } = useQuery({ queryKey: ['profile'], queryFn: fetchProfileData }); 
+  const { data: profileData } = useQuery({ 
+    queryKey: ['profile', user?.id], 
+    queryFn: () => fetchProfileData(user?.id),
+    enabled: !!user?.id
+  }); 
 
   const toggleGoal = (k: keyof typeof goals) => {
     setGoals(g => ({ ...g, [k]: !g[k] }));
@@ -333,10 +362,6 @@ export default function ProfileScreen({ onNavigateToBuilder }: { onNavigateToBui
   }, []);
   const rippleStyle = useAnimatedStyle(() => ({ transform: [{ scale: rippleScale.value }], opacity: rippleOpacity.value }));
 
-  const bgColors = (isDark 
-    ? [C.bg, '#1a1813', '#081a20', C.bg]
-    : [C.bg, '#e8e6df', '#dff0f5', C.bg]) as readonly [string, string, ...string[]];
-
   return (
     <View style={S.safe}>
       <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
@@ -352,7 +377,7 @@ export default function ProfileScreen({ onNavigateToBuilder }: { onNavigateToBui
               <GradientText text="FitAI X" style={S.appTitle} C={C} />
             </Animated.View>
             <View style={S.topBarRight}>
-              <PressableScale onPress={() => setIsDark(d => !d)} style={S.iconBtn}>
+              <PressableScale onPress={toggleTheme} style={S.iconBtn}>
                 <Icon name={isDark ? 'light-mode' : 'dark-mode'} size={24} color={C.onSurfaceVariant} />
               </PressableScale>
               <PressableScale style={S.iconBtn}>
@@ -466,7 +491,7 @@ export default function ProfileScreen({ onNavigateToBuilder }: { onNavigateToBui
                     <Icon name="auto-awesome" size={20} color={C.cyan} />
                   </View>
                   <Text style={{ flex: 1, fontFamily: F.bodyMed, fontSize: 13, color: C.onSurface, lineHeight: 18 }}>
-                    AI detected a <Text style={{ color: C.cyan, fontFamily: F.bodyBold }}>15% imbalance</Text> between Chest and Back. Modifying upcoming volume.
+                    {profileData?.imbalanceMsg || "Muscle balance looks healthy. Keep up the good work."}
                   </Text>
                 </View>
               </TiltCard>
@@ -479,10 +504,17 @@ export default function ProfileScreen({ onNavigateToBuilder }: { onNavigateToBui
               <Text style={S.sectionLabel}>INJURY-MEMORY MODEL</Text>
               <TiltCard C={C}>
                 <View style={S.pillsRow}>
-                  <View style={S.pillRed}><Text style={S.pillRedText}>Right Shoulder</Text></View>
-                  <View style={S.pillGreen}><Text style={S.pillGreenText}>Left Knee</Text></View>
+                  {profileData?.injuryModel?.length > 0 ? (
+                    Array.from(new Set(profileData.injuryModel.map((i: any) => i.part))).map((part: any, idx: number) => (
+                      <View key={idx} style={idx % 2 === 0 ? S.pillRed : S.pillGreen}>
+                        <Text style={idx % 2 === 0 ? S.pillRedText : S.pillGreenText}>{part}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <View style={S.pillGreen}><Text style={S.pillGreenText}>No active injuries</Text></View>
+                  )}
                 </View>
-                <BodyMapSVG C={C} />
+                <BodyMapSVG C={C} injuryModel={profileData?.injuryModel || []} />
                 
                 {/* Visual Timeline of Injury Memory */}
                 <View style={S.timelineContainer}>
@@ -493,29 +525,25 @@ export default function ProfileScreen({ onNavigateToBuilder }: { onNavigateToBui
                     style={S.timelineLine} 
                   />
                   
-                  <View style={S.timelineNode}>
-                    <View style={S.timelineDotRed} />
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={S.timelineDate}>Mar 12</Text>
-                      <Text style={S.timelineEvent}>Shoulder strain reported.</Text>
+                  {profileData?.injuryModel?.length > 0 ? (
+                    profileData.injuryModel.map((evt: any, idx: number) => (
+                      <View key={evt.id || idx} style={S.timelineNode}>
+                        <View style={evt.status === 'reported' ? S.timelineDotRed : evt.status === 'active' ? S.timelineDotPrimary : S.timelineDotGreen} />
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <Text style={S.timelineDate}>{evt.date}</Text>
+                          <Text style={S.timelineEvent}>{evt.desc}</Text>
+                        </View>
+                      </View>
+                    ))
+                  ) : (
+                    <View style={S.timelineNode}>
+                      <View style={S.timelineDotGreen} />
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={S.timelineDate}>Present</Text>
+                        <Text style={S.timelineEvent}>System detecting full mobility. You are ready for heavy loads.</Text>
+                      </View>
                     </View>
-                  </View>
-
-                  <View style={S.timelineNode}>
-                    <View style={S.timelineDotPrimary} />
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={S.timelineDate}>Mar 13 - Present</Text>
-                      <Text style={S.timelineEvent}>AI routing around heavy overhead pressing.</Text>
-                    </View>
-                  </View>
-                  
-                  <View style={S.timelineNode}>
-                    <View style={S.timelineDotGreen} />
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={S.timelineDate}>Apr 02 (Projected)</Text>
-                      <Text style={S.timelineEvent}>Shoulder cleared for full mobility based on recovery trend.</Text>
-                    </View>
-                  </View>
+                  )}
                 </View>
                 
               </TiltCard>
@@ -552,36 +580,34 @@ export default function ProfileScreen({ onNavigateToBuilder }: { onNavigateToBui
             <View style={S.section}>
               <Text style={S.sectionLabel}>TELEMETRY DEVICES</Text>
               <TiltCard C={C} tiltEnabled={false}>
-                <PressableScale onPress={() => setDeviceExpanded(e => !e)}>
-                  <View style={S.deviceRow}>
-                    <View style={S.deviceIconBox}><Icon name="watch" size={20} color={C.primary} /></View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={S.deviceName}>Oura Ring Gen 3</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                        <BatteryRing percentage={84} C={C} />
-                        <Text style={S.deviceConnected}>Connected</Text>
+                {Array.isArray(profileData?.telemetry) && profileData.telemetry.map((dev: any, i: number) => (
+                  <View key={i}>
+                    <PressableScale onPress={() => setDeviceExpanded(e => !e)}>
+                      <View style={[S.deviceRow, dev.status !== 'Connected' && { opacity: 0.6 }]}>
+                        <View style={S.deviceIconBox}><Icon name={dev.icon || 'watch'} size={20} color={dev.status === 'Connected' ? C.primary : C.onSurfaceVariant} /></View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={S.deviceName}>{dev.name}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                            {dev.battery ? <BatteryRing percentage={dev.battery} C={C} /> : null}
+                            <Text style={dev.status === 'Connected' ? S.deviceConnected : S.deviceDisconnected}>{dev.status}</Text>
+                          </View>
+                        </View>
+                        {dev.details && <Icon name={deviceExpanded ? 'expand-less' : 'expand-more'} size={22} color={C.outline} />}
                       </View>
-                    </View>
-                    <Icon name={deviceExpanded ? 'expand-less' : 'expand-more'} size={22} color={C.outline} />
+                      {deviceExpanded && dev.details ? (
+                        <View style={S.deviceDetails}>
+                           {Object.entries(dev.details).map(([k, v]: [string, any]) => (
+                             <View key={k} style={S.deviceDetailChip}>
+                               <Text style={S.deviceDetailKey}>{k}</Text>
+                               <Text style={[S.deviceDetailVal, k === 'Sleep' ? { color: C.primary } : {}]}>{v}</Text>
+                             </View>
+                           ))}
+                        </View>
+                      ) : null}
+                    </PressableScale>
+                    {i < profileData.telemetry.length - 1 && <View style={S.divider} />}
                   </View>
-                  {deviceExpanded ? (
-                    <View style={S.deviceDetails}>
-                      <View style={S.deviceDetailChip}><Text style={S.deviceDetailKey}>HRV</Text><Text style={S.deviceDetailVal}>45ms</Text></View>
-                      <View style={S.deviceDetailChip}><Text style={S.deviceDetailKey}>Sleep</Text><Text style={[S.deviceDetailVal, { color: C.primary }]}>88</Text></View>
-                    </View>
-                  ) : null}
-                </PressableScale>
-                <View style={S.divider} />
-                <View style={[S.deviceRow, { opacity: 0.6 }]}>
-                  <View style={S.deviceIconBox}>
-                    <Icon name="favorite-border" size={20} color={C.onSurfaceVariant} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={S.deviceName}>Polar H10</Text>
-                    <Text style={S.deviceDisconnected}>Searching...</Text>
-                  </View>
-                  <PressableScale><Icon name="add-circle-outline" size={22} color={C.outline} /></PressableScale>
-                </View>
+                ))}
               </TiltCard>
             </View>
           </AnimatedCard>

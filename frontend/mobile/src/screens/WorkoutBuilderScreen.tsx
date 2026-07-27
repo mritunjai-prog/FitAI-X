@@ -1,14 +1,6 @@
 import React, { useState, useMemo } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
-  StatusBar as RNStatusBar,
-} from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, StatusBar as RNStatusBar } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -37,8 +29,9 @@ import ExerciseCard from "../components/ExerciseCard";
 import AnimatedPressable from "../components/AnimatedPressable";
 import { LinearGradient } from "expo-linear-gradient";
 import DraggableFlatList, { RenderItemParams } from "react-native-draggable-flatlist";
-import { useQuery } from '@tanstack/react-query';
-import { fetchCurrentWorkout } from '../services/api/workout';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { fetchCurrentWorkout, saveWorkout } from '../services/api/workout';
+import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_W } = require("react-native").Dimensions.get("window");
 
@@ -180,8 +173,7 @@ function ActiveBodyMap({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function WorkoutBuilderScreen({ onNavigateBack }: { onNavigateBack?: () => void }) {
-  const isDark = true;
-  const C = isDark ? DarkColors : LightColors;
+  const { isDark, C, bgColors } = useTheme();
   const styles = useMemo(() => getStyles(C), [C]);
 
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -197,6 +189,23 @@ export default function WorkoutBuilderScreen({ onNavigateBack }: { onNavigateBac
       setExercises(currentWorkout.exercises);
     }
   }, [currentWorkout]);
+
+  const { mutate: saveWork } = useMutation({
+    mutationFn: (data: any) => saveWorkout(data),
+    onSuccess: () => {
+      onNavigateBack?.();
+    }
+  });
+
+  const handleSave = () => {
+    haptic();
+    saveWork({
+      userId: 'demo-user-id',
+      title: 'Push Day — V3',
+      duration: 60,
+      exercises: exercises
+    });
+  };
 
   // Mock profile data
   const injuredMuscles = ["Shoulders"]; // User has a reported shoulder injury
@@ -256,12 +265,6 @@ export default function WorkoutBuilderScreen({ onNavigateBack }: { onNavigateBac
     haptic();
     setExercises((e) => e.filter((x) => x.id !== id));
   };
-
-  const bgColors = (
-    isDark
-      ? [C.bg, "#1a1813", "#081a20", C.bg]
-      : [C.bg, "#e8e6df", "#dff0f5", C.bg]
-  ) as readonly [string, string, ...string[]];
 
   const renderHeader = () => (
     <>
@@ -422,7 +425,7 @@ export default function WorkoutBuilderScreen({ onNavigateBack }: { onNavigateBac
 
       {/* Floating Action Bar */}
       <BlurView intensity={80} tint={C.blurTint} style={styles.fabContainer}>
-        <AnimatedPressable style={[styles.saveButton, { overflow: 'hidden' }]} scaleTo={0.94}>
+        <AnimatedPressable style={[styles.saveButton, { overflow: 'hidden' }]} scaleTo={0.94} onPress={handleSave}>
           <AnimatedLinearGradient 
             colors={['transparent', 'rgba(255, 255, 255, 0.25)', 'transparent']}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}

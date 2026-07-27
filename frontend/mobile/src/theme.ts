@@ -24,7 +24,7 @@ export const LightColors = {
   glassInset: 'rgba(235, 235, 240, 0.8)',
   primary: '#e6b300', 
   primaryDim: '#c49a00',
-  onPrimary: '#ffffff',
+  onPrimary: '#3d2f00',
   onSurface: '#1D1D1F',
   onSurfaceVariant: '#86868B',
   outline: 'rgba(0, 0, 0, 0.15)',

@@ -69,6 +69,10 @@ export default function ProfilePage() {
   
   // Local state for UI toggles
   const [activeEquip, setActiveEquip] = useState<string[]>(['Dumbbells', 'Barbell']);
+  
+  // Dynamic Goals Simulation
+  const [activeGoalOverride, setActiveGoalOverride] = useState<string | null>(null);
+  const [isRecalculatingGoal, setIsRecalculatingGoal] = useState(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -130,6 +134,15 @@ export default function ProfilePage() {
           <p className="text-lg font-medium text-text-secondary">Configure physical baselines, hardware integrations, and neural protocol preferences.</p>
         </div>
       </header>
+
+      {/* Goal Recalculation Overlay */}
+      {isRecalculatingGoal && (
+        <div className="absolute inset-0 bg-surface/80 backdrop-blur-md z-50 flex flex-col items-center justify-center rounded-xl">
+          <Loader2 className="w-16 h-16 animate-spin text-gold mb-4" />
+          <h2 className="text-3xl font-display font-bold text-text-primary mb-2">Recalculating Ecosystem</h2>
+          <p className="text-text-secondary">Adjusting workouts, meal plans, and recovery targets to match your new goal.</p>
+        </div>
+      )}
 
       {/* 3-COLUMN POWER LAYOUT */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start relative z-10">
@@ -233,10 +246,20 @@ export default function ProfilePage() {
             </h3>
             <div className="flex flex-wrap gap-3">
               {fitnessProfile.goals.map((goal: string) => {
-                const isActive = fitnessProfile.activeGoals.includes(goal);
+                const isActive = activeGoalOverride ? activeGoalOverride === goal : fitnessProfile.activeGoals.includes(goal);
+                
+                const handleGoalClick = () => {
+                  setIsRecalculatingGoal(true);
+                  setTimeout(() => {
+                    setActiveGoalOverride(goal);
+                    setIsRecalculatingGoal(false);
+                  }, 1200);
+                };
+
                 return (
                   <button 
                     key={goal}
+                    onClick={handleGoalClick}
                     className={`px-4 py-2 rounded-xl font-mono text-sm font-bold flex items-center gap-2 transition-all duration-300 hover:-translate-y-1 ${
                       isActive 
                         ? 'bg-gold/10 border border-gold text-gold shadow-[0_0_15px_rgba(255,170,0,0.15)] hover:shadow-[0_0_20px_rgba(255,170,0,0.3)]' 

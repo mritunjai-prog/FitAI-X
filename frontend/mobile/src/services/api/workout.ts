@@ -19,3 +19,8 @@ export const fetchCurrentWorkout = async (): Promise<Workout> => {
   const { data } = await apiClient.get('/workouts/current');
   return data;
 };
+
+export const saveWorkout = async (workoutData: any) => {
+  const { data } = await apiClient.post('/workouts', workoutData);
+  return data;
+};

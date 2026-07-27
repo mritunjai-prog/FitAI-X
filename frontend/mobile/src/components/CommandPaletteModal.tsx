@@ -5,9 +5,9 @@ import { BlurView } from 'expo-blur';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { DarkColors, F } from '../theme';
+import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const C = DarkColors;
 
 type Command = {
   id: string;
@@ -25,7 +25,7 @@ interface Props {
 }
 
 // Reusable spring-scaling row for the commands
-function CommandRow({ cmd, onPress }: { cmd: Command; onPress: () => void }) {
+function CommandRow({ cmd, onPress, C, styles }: { cmd: Command; onPress: () => void, C: any, styles: any }) {
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
@@ -53,19 +53,20 @@ function CommandRow({ cmd, onPress }: { cmd: Command; onPress: () => void }) {
 }
 
 export default function CommandPaletteModal({ isVisible, onClose, onNavigate }: Props) {
+  const { C, isDark } = useTheme();
+  const styles = React.useMemo(() => getStyles(C), [C]);
   const [query, setQuery] = useState('');
-
-  useEffect(() => {
-    if (isVisible) setQuery('');
-  }, [isVisible]);
 
   const COMMANDS: Command[] = [
     { id: '1', title: 'Talk to Rachel AI', subtitle: 'Start a new coaching session', icon: 'auto-awesome', section: 'AI', action: () => { onClose(); onNavigate('Coach'); } },
     { id: '2', title: 'Log Workout', subtitle: 'Start an empty session', icon: 'fitness-center', section: 'Quick Actions', action: () => { onClose(); onNavigate('WorkoutBuilder'); } },
     { id: '3', title: 'Change Goal', subtitle: 'Currently: Hypertrophy', icon: 'track-changes', section: 'Quick Actions', action: () => { onClose(); onNavigate('Profile'); } },
-    { id: '4', title: 'View Analytics', icon: 'insights', section: 'Navigation', action: () => { onClose(); onNavigate('Profile'); } },
-    { id: '5', title: 'Dashboard', icon: 'dashboard', section: 'Navigation', action: () => { onClose(); onNavigate('Dashboard'); } },
-    { id: '6', title: 'Settings', icon: 'settings', section: 'System', action: () => { onClose(); } },
+    { id: '4', title: 'Smart Calendar', subtitle: 'View AI schedule', icon: 'calendar-month', section: 'Navigation', action: () => { onClose(); onNavigate('Calendar'); } },
+    { id: '5', title: 'Meal Planner', subtitle: 'View nutrition targets', icon: 'local-dining', section: 'Navigation', action: () => { onClose(); onNavigate('Nutrition'); } },
+    { id: '6', title: 'AI Coach (Chat)', icon: 'chat-bubble-outline', section: 'Navigation', action: () => { onClose(); onNavigate('Coach'); } },
+    { id: '7', title: 'Dashboard', icon: 'dashboard', section: 'Navigation', action: () => { onClose(); onNavigate('Dashboard'); } },
+    { id: '8', title: 'Profile & Analytics', icon: 'insights', section: 'Navigation', action: () => { onClose(); onNavigate('Profile'); } },
+    { id: '9', title: 'Settings', icon: 'settings', section: 'System', action: () => { onClose(); } },
   ];
 
   const filtered = COMMANDS.filter(c => 
@@ -79,23 +80,21 @@ export default function CommandPaletteModal({ isVisible, onClose, onNavigate }: 
     return acc;
   }, {} as Record<string, Command[]>);
 
-  if (!isVisible) return null;
-
   return (
     <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(200)} style={styles.overlay}>
       {/* Deepened background blur to mask the busy dashboard */}
-      <BlurView intensity={50} tint="dark" style={StyleSheet.absoluteFill} />
+      <BlurView intensity={50} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
       <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
       
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.centerContainer} pointerEvents="box-none">
-        <Animated.View entering={ZoomIn.duration(250).springify().damping(20)} exiting={ZoomOut.duration(200)} style={styles.modal}>
-          <BlurView intensity={80} tint="dark" style={styles.modalBlur}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.centerContainer} pointerEvents="box-none">
+        <Animated.View entering={FadeIn.duration(250)} exiting={FadeOut.duration(200)} style={styles.modal}>
+          <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={styles.modalBlur}>
             
             {/* Search Input */}
             <View style={styles.inputContainer}>
               <Icon name="search" size={24} color={C.primary} style={styles.searchIcon} />
               <TextInput
-                autoFocus
+                autoFocus={Platform.OS === 'web'}
                 style={styles.input}
                 placeholder="What do you want to do?"
                 placeholderTextColor={C.onSurfaceVariant}
@@ -125,7 +124,7 @@ export default function CommandPaletteModal({ isVisible, onClose, onNavigate }: 
                 <View key={section} style={{ marginBottom: 16 }}>
                   <Text style={styles.sectionTitle}>{section}</Text>
                   {cmds.map(cmd => (
-                    <CommandRow key={cmd.id} cmd={cmd} onPress={cmd.action} />
+                    <CommandRow key={cmd.id} cmd={cmd} onPress={cmd.action} C={C} styles={styles} />
                   ))}
                 </View>
               ))}
@@ -148,7 +147,7 @@ export default function CommandPaletteModal({ isVisible, onClose, onNavigate }: 
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (C: any) => StyleSheet.create({
   overlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 9999, justifyContent: 'center', alignItems: 'center',
@@ -160,31 +159,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   modal: {
-    width: '100%', maxWidth: 600, maxHeight: '80%',
+    width: '100%', maxWidth: 600, maxHeight: '55%',
     borderRadius: 24, overflow: 'hidden',
-    backgroundColor: C.surface, // Bound to theme glassmorphism
+    backgroundColor: C.bg, 
     borderWidth: 1, borderColor: C.outlineVariant,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.6, shadowRadius: 40,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.2, shadowRadius: 40,
   },
-  modalBlur: { flex: 1 },
+  modalBlur: { flexShrink: 1, width: '100%' },
   inputContainer: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 20, paddingVertical: 16,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)',
+    borderBottomWidth: 1, borderBottomColor: C.outlineVariant,
   },
   searchIcon: { marginRight: 12 },
   input: {
-    flex: 1, fontFamily: F.bodyMed, fontSize: 18, color: C.onSurface, height: 30,
+    flex: 1, fontFamily: F.bodyMed, fontSize: 16, color: C.onSurface, minHeight: 48,
     outlineStyle: 'none' as any, // For Web
   },
   cancelBtn: { paddingLeft: 12 },
   cancelText: { fontFamily: F.bodyMed, fontSize: 15, color: C.primary },
-  shortcutBadge: { backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginLeft: 12 },
+  shortcutBadge: { backgroundColor: C.surfaceVariant, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginLeft: 12 },
   shortcutText: { fontFamily: F.header, fontSize: 11, color: C.onSurfaceVariant },
   list: { flexShrink: 1 },
   sectionTitle: { fontFamily: F.header, fontSize: 12, color: C.onSurfaceVariant, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8, marginLeft: 8 },
   commandRow: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 16, marginBottom: 4, backgroundColor: 'transparent' },
-  iconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center' },
+  iconBox: { width: 40, height: 40, borderRadius: 12, backgroundColor: C.surfaceVariant, alignItems: 'center', justifyContent: 'center' },
   commandTitle: { fontFamily: F.bodyBold, fontSize: 15, color: C.onSurface },
   commandSubtitle: { fontFamily: F.body, fontSize: 13, color: C.onSurfaceVariant, marginTop: 2 },
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },

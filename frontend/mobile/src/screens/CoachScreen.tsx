@@ -8,8 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchCoachMessages } from '../services/api/coach';
 import { DarkColors, F } from '../theme';
 import MeshGradientBackground from '../components/MeshGradientBackground';
-
-const C = DarkColors;
+import { useTheme } from '../context/ThemeContext';
 
 type MessageType = 'user' | 'ai' | 'action';
 
@@ -21,23 +20,38 @@ interface Message {
 }
 
 function TypingIndicator() {
+  const { C, isDark } = useTheme();
+  const styles = React.useMemo(() => getStyles(C), [C]);
   const dot1 = useSharedValue(0);
   const dot2 = useSharedValue(0);
   const dot3 = useSharedValue(0);
 
   useEffect(() => {
-    const anim = () => withRepeat(withSequence(withTiming(-4, {duration: 300}), withTiming(0, {duration: 300})), -1, true);
+    const anim = () =>
+      withRepeat(
+        withSequence(
+          withTiming(-4, { duration: 300 }),
+          withTiming(0, { duration: 300 }),
+        ),
+        -1,
+        true,
+      );
     dot1.value = anim();
     dot2.value = withDelay(150, anim());
     dot3.value = withDelay(300, anim());
   }, []);
 
   return (
-    <Animated.View entering={FadeInDown.springify()} exiting={FadeOutDown.springify()} layout={Layout.springify()} style={[styles.msgWrapper, styles.msgWrapperAI]}>
+    <Animated.View
+      entering={FadeInDown.springify()}
+      exiting={FadeOutDown.springify()}
+      layout={Layout.springify()}
+      style={[styles.msgWrapper, styles.msgWrapperAI]}
+    >
       <View style={styles.avatar}>
         <Icon name="auto-awesome" size={16} color={C.onPrimary} />
       </View>
-      <BlurView intensity={60} tint="dark" style={[styles.bubble, styles.bubbleAI, { flexDirection: 'row', alignItems: 'center', gap: 5, height: 42, paddingHorizontal: 16 }]}>
+      <BlurView intensity={60} tint={isDark ? "dark" : "light"} style={[styles.bubble, styles.bubbleAI, { flexDirection: 'row', alignItems: 'center', gap: 5, height: 42, paddingHorizontal: 16 }]}>
         <Animated.View style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.primary }, useAnimatedStyle(() => ({ transform: [{translateY: dot1.value}] }))]} />
         <Animated.View style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.primary }, useAnimatedStyle(() => ({ transform: [{translateY: dot2.value}] }))]} />
         <Animated.View style={[{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.primary }, useAnimatedStyle(() => ({ transform: [{translateY: dot3.value}] }))]} />
@@ -47,13 +61,14 @@ function TypingIndicator() {
 }
 
 export default function CoachScreen() {
+  const { C, isDark } = useTheme();
+  const styles = React.useMemo(() => getStyles(C), [C]);
   const { data: initialMessages = [] } = useQuery({ queryKey: ['coachMessages'], queryFn: fetchCoachMessages });
   
   const [messages, setMessages] = useState<Message[]>([]);
   
   useEffect(() => {
     if (initialMessages.length > 0 && messages.length === 0) {
-      // Map API data to UI structure
       const mapped = initialMessages.map((m: any) => ({
         id: m.id,
         type: m.sender as MessageType,
@@ -163,7 +178,7 @@ export default function CoachScreen() {
             <Text style={[styles.msgText, styles.msgTextUser]}>{msg.text}</Text>
           </LinearGradient>
         ) : (
-          <BlurView intensity={60} tint="dark" style={[styles.bubble, styles.bubbleAI]}>
+          <BlurView intensity={60} tint={isDark ? "dark" : "light"} style={[styles.bubble, styles.bubbleAI]}>
             <Text style={[styles.msgText, styles.msgTextAI]}>{msg.text}</Text>
           </BlurView>
         )}
@@ -173,7 +188,7 @@ export default function CoachScreen() {
 
   return (
     <View style={styles.container}>
-      <MeshGradientBackground isDark={true} bgColors={['#0F172A', '#1E1B4B', '#312E81']} />
+      <MeshGradientBackground isDark={isDark} bgColors={isDark ? ["#0F172A", "#1E1B4B", "#312E81"] : ["#F8FAFC", "#F1F5F9", "#E2E8F0"]} />
       
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
@@ -227,7 +242,7 @@ export default function CoachScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (C: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   safeArea: { flex: 1 },
   header: {

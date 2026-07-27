@@ -1,0 +1,113 @@
+import 'react-native-gesture-handler';
+2: import { StatusBar } from 'expo-status-bar';
+3: import React, { useEffect, useState } from 'react';
+4: import ProfileScreen from './src/screens/ProfileScreen';
+5: import WorkoutBuilderScreen from './src/screens/WorkoutBuilderScreen';
+6: import * as Font from 'expo-font';
+7: import { SpaceGrotesk_700Bold, SpaceGrotesk_500Medium, SpaceGrotesk_400Regular } from '@expo-google-fonts/space-grotesk';
+8: import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+9: import { View, Text, Platform } from 'react-native';
+10: 
+11: import { GestureHandlerRootView } from 'react-native-gesture-handler';
+12: import Animated, { FadeIn, Easing } from 'react-native-reanimated';
+13: import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+14: 
+15: const queryClient = new QueryClient();
+16: 
+17: import DashboardScreen from './src/screens/DashboardScreen';
+18: import CoachScreen from './src/screens/CoachScreen';
+19: import OnboardingScreen from './src/screens/OnboardingScreen';
+20: import CalendarScreen from './src/screens/CalendarScreen';
+21: import NutritionScreen from './src/screens/NutritionScreen';
+22: import BottomNavigation from './src/components/BottomNavigation';
+23: import CommandPaletteModal from './src/components/CommandPaletteModal';
+24: import AuthScreen from './src/screens/AuthScreen';
+25: import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+26: import { AuthProvider, useAuth } from './src/context/AuthContext';
+27: 
+28: function MainApp() {
+29:   const { isDark } = useTheme();
+30:   const { user, isLoading, hasOnboarded, completeOnboarding } = useAuth();
+31:   
+32:   const [currentScreen, setCurrentScreen] = useState<'Profile' | 'WorkoutBuilder' | 'Dashboard' | 'Coach' | 'Calendar' | 'Nutrition'>('Dashboard');
+33:   const [isCommandOpen, setIsCommandOpen] = useState(false);
+34: 
+35:   // Keyboard shortcut for Cmd+K / Ctrl+K on Web
+36:   useEffect(() => {
+37:     if (Platform.OS === 'web') {
+38:       const handleKeyDown = (e: KeyboardEvent) => {
+39:         if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+40:           e.preventDefault();
+41:           setIsCommandOpen(prev => !prev);
+42:         }
+43:         if (e.key === 'Escape') {
+44:           setIsCommandOpen(false);
+45:         }
+46:       };
+47:       window.addEventListener('keydown', handleKeyDown);
+48:       return () => window.removeEventListener('keydown', handleKeyDown);
+49:     }
+50:   }, []);
+51: 
+52:   if (isLoading) {
+53:     return (
+54:       <View style={{ flex: 1, backgroundColor: isDark ? '#050505' : '#F5F5F7', alignItems: 'center', justifyContent: 'center' }}>
+55:         <Text style={{ color: '#f5c400', fontFamily: 'SpaceGrotesk_500Medium' }}>Initializing Neural Link...</Text>
+56:       </View>
+57:     );
+58:   }
+59: 
+60:   if (!user) {
+61:     return <AuthScreen />;
+62:   }
+63: 
+64:   return (
+65:     <Animated.View key={!hasOnboarded ? 'Onboarding' : currentScreen} entering={FadeIn.duration(400).easing(Easing.out(Easing.cubic))} style={{ flex: 1 }}>
+66:       {!hasOnboarded ? (
+67:         <OnboardingScreen onComplete={completeOnboarding} />
+68:       ) : currentScreen === 'Profile' ? (
+69:         <ProfileScreen onNavigateToBuilder={() => setCurrentScreen('WorkoutBuilder')} />
+70:       ) : currentScreen === 'WorkoutBuilder' ? (
+71:         <WorkoutBuilderScreen onNavigateBack={() => setCurrentScreen('Profile')} />
+72:       ) : currentScreen === 'Coach' ? (
+73:         <CoachScreen />
+74:       ) : currentScreen === 'Calendar' ? (
+75:         <CalendarScreen />
+76:       ) : currentScreen === 'Nutrition' ? (
+77:         <NutritionScreen />
+78:       ) : (
+79:         <DashboardScreen onOpenCommandPalette={() => setIsCommandOpen(true)} />
+80:       )}
+81:       
+82:       {hasOnboarded && currentScreen !== 'WorkoutBuilder' && (
+83:         <BottomNavigation 
+84:           currentScreen={currentScreen as 'Dashboard' | 'Profile' | 'Coach' | 'Calendar' | 'Nutrition'} 
+85:           onNavigate={(screen) => setCurrentScreen(screen)} 
+86:           onOpenActionMenu={() => setIsCommandOpen(true)} 
+87:         />
+88:       )}
+89: 
+90:       {/* Global Command Palette */}
+91:       <CommandPaletteModal 
+92:         isVisible={isCommandOpen} 
+93:         onClose={() => setIsCommandOpen(false)} 
+94:         onNavigate={(screen) => { setCurrentScreen(screen); setIsCommandOpen(false); }} 
+95:       />
+96:     </Animated.View>
+97:   );
+98: }
+99: 
+100: export default function App() {
+101:   const [fontsLoaded, setFontsLoaded] = useState(false);
+102: 
+103:   useEffect(() => {
+104:     async function loadFonts() {
+105:       await Font.loadAsync({
+106:         SpaceGrotesk_700Bold,
+107:         SpaceGrotesk_500Medium,
+108:         SpaceGrotesk_400Regular,
+109:         Inter_400Regular,
+110:         Inter_500Medium,
+111:         Inter_600SemiBold,
+112:         Inter_700Bold,
+113:       }
