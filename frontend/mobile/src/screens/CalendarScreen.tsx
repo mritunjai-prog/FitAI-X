@@ -11,6 +11,7 @@ import { useTheme } from '../context/ThemeContext';
 
 import { useQuery } from '@tanstack/react-query';
 import { fetchSchedule } from '../services/api/calendar';
+import { useAuth } from '../context/AuthContext';
 
 const { width } = Dimensions.get('window');
 
@@ -49,8 +50,13 @@ function AISpinner() {
 export default function CalendarScreen() {
   const { isDark, C, bgColors } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
+  const { user } = useAuth();
   
-  const { data: events = [] } = useQuery({ queryKey: ['calendar'], queryFn: fetchSchedule });
+  const { data: events = [] } = useQuery({ 
+    queryKey: ['calendar', user?.id], 
+    queryFn: () => fetchSchedule(user?.id),
+    enabled: !!user?.id
+  });
   
   // Transform flat events into schedule array
   const scheduleData = React.useMemo(() => {
@@ -64,6 +70,7 @@ export default function CalendarScreen() {
   }, [events]);
 
   const [schedule, setSchedule] = useState(scheduleData);
+  const [selectedDayIndex, setSelectedDayIndex] = useState(2);
   useEffect(() => {
     setSchedule(scheduleData);
   }, [scheduleData]);
@@ -112,14 +119,14 @@ export default function CalendarScreen() {
         {/* Horizontal Days Header */}
         <View style={styles.calendarHeaderRow}>
           {DAYS.map((day, i) => {
-            const isActive = i === 2; // Simulating Tuesday as "Today"
+            const isActive = i === selectedDayIndex; 
             return (
-              <View key={day} style={styles.dayCol}>
+              <TouchableOpacity key={day} style={styles.dayCol} onPress={() => setSelectedDayIndex(i)}>
                 <Text style={[styles.dayText, isActive && { color: C.onPrimary }]}>{day}</Text>
                 <View style={[styles.dateWrapper, isActive && { backgroundColor: C.primary }]}>
                   <Text style={[styles.dateText, isActive && { color: C.onPrimary }]}>{22 + i}</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           })}
         </View>
@@ -140,10 +147,10 @@ export default function CalendarScreen() {
             </Animated.View>
           )}
 
-          {schedule.map((dayPlan, index) => (
-            <View key={index} style={styles.dayRow}>
+          {schedule.filter((_, index) => index === selectedDayIndex).map((dayPlan) => (
+            <View key={selectedDayIndex} style={styles.dayRow}>
               <View style={styles.dayLabel}>
-                <Text style={styles.dayLabelText}>{DAYS[index]}</Text>
+                <Text style={styles.dayLabelText}>{DAYS[selectedDayIndex]}</Text>
               </View>
               <View style={styles.dayContent}>
                 {dayPlan.items.length === 0 ? (
@@ -151,10 +158,10 @@ export default function CalendarScreen() {
                     <Text style={styles.emptyText}>Rest / Unscheduled</Text>
                   </View>
                 ) : (
-                  dayPlan.items.map((item) => (
+                  dayPlan.items.map((item, itemIndex) => (
                     <Animated.View 
                       layout={Layout.springify().damping(16).stiffness(120)} 
-                      entering={FadeInUp.delay(index * 100).springify()} 
+                      entering={FadeInUp.delay(itemIndex * 100).springify()} 
                       key={item.id}
                       style={{ marginBottom: 8 }}
                     >

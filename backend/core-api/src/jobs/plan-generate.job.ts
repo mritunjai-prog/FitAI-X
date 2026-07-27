@@ -184,6 +184,11 @@ export const startAiWorker = () => {
         data: { userId, role: 'ai', content: aiResponse }
       });
 
+      // Clear existing data to prevent duplicates if user re-runs onboarding
+      await prisma.calendarEvent.deleteMany({ where: { userId } });
+      await prisma.workout.deleteMany({ where: { userId } });
+      await prisma.meal.deleteMany({ where: { userId } });
+
       // Generate a sample workout based on equipment
       await prisma.workout.create({
         data: {
