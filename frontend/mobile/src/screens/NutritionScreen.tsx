@@ -313,7 +313,7 @@ export default function NutritionScreen({ onNavigateToNotifications, onNavigateB
           >
             <LinearGradient colors={[C.primary, C.primaryDim]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.generateBtn}>
               {/* Shimmer Overlay driven by Gyroscope */}
-              <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: 0.4 }, shimmerStyle]} pointerEvents="none">
+              <Animated.View style={[StyleSheet.absoluteFillObject, { opacity: 0.4, pointerEvents: 'none' as any }, shimmerStyle]}>
                 <LinearGradient colors={['transparent', '#FFF', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFillObject} />
               </Animated.View>
 

@@ -90,7 +90,7 @@ export default function CommandPaletteModal({ isVisible, onClose, onNavigate }: 
       <BlurView intensity={50} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
       <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={onClose} />
       
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.centerContainer} pointerEvents="box-none">
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.centerContainer, { pointerEvents: 'box-none' as any }]}>
         <Animated.View entering={FadeIn.duration(250)} exiting={FadeOut.duration(200)} style={styles.modal}>
           <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={styles.modalBlur}>
             
@@ -167,7 +167,10 @@ const getStyles = (C: any) => StyleSheet.create({
     borderRadius: 24, overflow: 'hidden',
     backgroundColor: C.bg, 
     borderWidth: 1, borderColor: C.outlineVariant,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.2, shadowRadius: 40,
+    ...Platform.select({
+      web: { boxShadow: '0px 20px 40px rgba(0,0,0,0.2)' } as any,
+      default: { shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.2, shadowRadius: 40 },
+    }),
   },
   modalBlur: { flexShrink: 1, width: '100%' },
   inputContainer: {

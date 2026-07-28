@@ -120,7 +120,7 @@ export default function AnalyticsScreen({ navigation, onNavigateToNotifications,
       <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
 
       {/* Subtle Floating Gradient overlay */}
-      <LinearGradient colors={['transparent', `${C.primary}10`, 'transparent']} style={[StyleSheet.absoluteFillObject, { opacity: 0.5 }]} pointerEvents="none" />
+      <LinearGradient colors={['transparent', `${C.primary}10`, 'transparent']} style={[StyleSheet.absoluteFillObject, { opacity: 0.5, pointerEvents: 'none' as any }]} />
 
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
         

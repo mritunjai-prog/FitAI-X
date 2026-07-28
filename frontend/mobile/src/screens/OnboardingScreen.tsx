@@ -104,7 +104,7 @@ function AIScanner() {
 
   return (
     <View style={styles.aiScannerContainer}>
-      <Animated.View style={[styles.aiScannerRing, ringStyle]} pointerEvents="none" />
+      <Animated.View style={[styles.aiScannerRing, ringStyle, { pointerEvents: 'none' as any }]} />
       <View style={styles.aiIconWrapper}>
         <Icon name="auto-awesome" size={42} color={C.onPrimary} />
       </View>

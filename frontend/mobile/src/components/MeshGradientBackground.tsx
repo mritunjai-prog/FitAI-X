@@ -45,7 +45,7 @@ export default function MeshGradientBackground({ isDark, bgColors }: Props) {
   });
 
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <View style={[StyleSheet.absoluteFill, { pointerEvents: 'none' as any }]}>
       {/* Base gradient */}
       <LinearGradient
         colors={bgColors as unknown as [string, string, ...string[]]}
