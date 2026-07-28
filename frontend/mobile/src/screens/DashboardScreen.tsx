@@ -126,9 +126,9 @@ export default function DashboardScreen({
                   <Icon name="person" size={24} color={C.onPrimary} />
                 </View>
               )}
-              <View>
-                <Text style={styles.greeting}>Welcome, {user?.name}</Text>
-                <Text style={styles.subGreeting}>Recovery is optimal. Ready?</Text>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.greeting} numberOfLines={1}>Welcome, {user?.name}</Text>
+                <Text style={styles.subGreeting} numberOfLines={1}>Recovery is optimal. Ready?</Text>
               </View>
             </View>
             <View style={styles.topNavRight}>
@@ -409,7 +409,7 @@ const getStyles = (C: ThemeColors) =>
       marginBottom: 24,
       paddingHorizontal: 4,
     },
-    topNavLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    topNavLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
     topNavAvatar: { width: 44, height: 44, borderRadius: 22 },
     greeting: { fontFamily: F.header, fontSize: 20, color: C.onSurface, letterSpacing: -0.5 },
     subGreeting: { fontFamily: F.bodyMed, fontSize: 13, color: C.primary, marginTop: 2 },

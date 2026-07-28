@@ -44,6 +44,7 @@ import BottomNavigation from './src/components/BottomNavigation';
 import CommandPaletteModal from './src/components/CommandPaletteModal';
 import WorkoutHomeScreen from './src/screens/WorkoutHomeScreen';
 import AuthScreen from './src/screens/AuthScreen';
+import SplashScreen from './src/screens/SplashScreen';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { socket } from './src/services/socket/socketClient';
@@ -54,6 +55,7 @@ function MainApp() {
   
   const [currentScreen, setCurrentScreen] = useState<'Profile' | 'WorkoutBuilder' | 'ActiveWorkout' | 'WorkoutHistory' | 'Dashboard' | 'Coach' | 'Calendar' | 'Nutrition' | 'Analytics' | 'Recovery' | 'Settings' | 'Notifications' | 'WorkoutHome'>('Dashboard');
   const [isCommandOpen, setIsCommandOpen] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
 
   // Keyboard shortcut for Cmd+K / Ctrl+K on Web
   useEffect(() => {
@@ -93,6 +95,10 @@ function MainApp() {
     };
   }, [user]);
 
+  if (showSplash) {
+    return <SplashScreen onComplete={() => setShowSplash(false)} />;
+  }
+
   if (isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: isDark ? '#050505' : '#F5F5F7', alignItems: 'center', justifyContent: 'center' }}>
@@ -131,15 +137,15 @@ function MainApp() {
           onStartWorkout={() => setCurrentScreen('ActiveWorkout')}
         />
       ) : currentScreen === 'ActiveWorkout' ? (
-        <ActiveWorkoutScreen onFinish={() => setCurrentScreen('Dashboard')} />
+        <ActiveWorkoutScreen onFinish={() => setCurrentScreen('Dashboard')} onNavigateBack={() => setCurrentScreen('WorkoutHome')} />
       ) : currentScreen === 'Coach' ? (
-        <CoachScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} />
+        <CoachScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigateBack={() => setCurrentScreen('Dashboard')} />
       ) : currentScreen === 'Calendar' ? (
-        <CalendarScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} />
+        <CalendarScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigateBack={() => setCurrentScreen('Dashboard')} />
       ) : currentScreen === 'Nutrition' ? (
-        <NutritionScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} />
+        <NutritionScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigateBack={() => setCurrentScreen('Dashboard')} />
       ) : currentScreen === 'Analytics' ? (
-        <AnalyticsScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} />
+        <AnalyticsScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigateBack={() => setCurrentScreen('Dashboard')} />
       ) : currentScreen === 'Recovery' ? (
         <RecoveryScreen navigation={{ goBack: () => setCurrentScreen('Dashboard') }} onNavigateToNotifications={() => setCurrentScreen('Notifications')} />
       ) : currentScreen === 'Settings' ? (

@@ -5,6 +5,7 @@ import Animated, { FadeInUp, FadeInDown, FadeOutDown, Layout, useSharedValue, us
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import * as Haptics from 'expo-haptics';
 import { fetchCoachMessages, sendMessage } from '../services/api/coach';
 import { transcribeAudio } from '../services/api/transcribe';
 import { Audio } from 'expo-av';
@@ -65,7 +66,7 @@ function TypingIndicator() {
   );
 }
 
-export default function CoachScreen({ onNavigateToNotifications }: any) {
+export default function CoachScreen({ onNavigateToNotifications, onNavigateBack }: any) {
   const { C, isDark } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
   
@@ -99,37 +100,45 @@ export default function CoachScreen({ onNavigateToNotifications }: any) {
 
   useEffect(() => {
     const handleStreamStart = ({ messageId }: { messageId: string }) => {
-      setIsTyping(false);
-      setMessages(prev => [...prev, { id: messageId, type: 'ai', text: '' }]);
+      // Keep isTyping true, do not push empty bubble yet
     };
 
     const handleStreamChunk = ({ messageId, chunk }: { messageId: string; chunk: string }) => {
-      setMessages(prev => prev.map(m => 
-        m.id === messageId ? { ...m, text: (m.text || '') + chunk } : m
-      ));
+      setIsTyping(false);
+      setMessages(prev => {
+        const existing = prev.find(m => m.id === messageId);
+        if (existing) {
+          return prev.map(m => m.id === messageId ? { ...m, text: (m.text || '') + chunk } : m);
+        } else {
+          return [...prev, { id: messageId, type: 'ai', text: chunk }];
+        }
+      });
     };
     
     const handleStreamAction = ({ messageId, actionPayload }: { messageId: string; actionPayload: any }) => {
       setIsTyping(false);
-      setMessages(prev => [...prev, { id: messageId + '-action', type: 'action', actionPayload }]);
-      // Invalidate relevant queries so those screens refresh automatically
+      const uniqueActionId = `${messageId}-action-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+      setMessages(prev => [...prev, { id: uniqueActionId, type: 'action', actionPayload }]);
+      
+      // Invalidate frontend queries based on the backend action
       if (actionPayload?.type === 'CALENDAR_UPDATED') {
         queryClient.invalidateQueries({ queryKey: ['calendar'] });
       } else if (actionPayload?.type === 'WORKOUT_CREATED') {
         queryClient.invalidateQueries({ queryKey: ['currentWorkout'] });
       } else if (actionPayload?.type === 'DIET_UPDATED') {
         queryClient.invalidateQueries({ queryKey: ['userMeals'] });
-        queryClient.invalidateQueries({ queryKey: ['budgetPlan'] });
       }
-    }
-
-    const handleStreamEnd = () => {
-      // Stream ended
     };
 
-    const handleStreamError = ({ fallbackMessage }: any) => {
+    const handleStreamEnd = () => {};
+
+    const handleStreamError = ({ fallbackMessage, originalMessageId }: any) => {
       setIsTyping(false);
-      setMessages(prev => [...prev, { id: fallbackMessage.id, type: 'ai', text: fallbackMessage.content }]);
+      setMessages(prev => {
+        // Remove any abandoned empty bubbles
+        const filtered = prev.filter(m => !(m.type === 'ai' && !m.text));
+        return [...filtered, { id: fallbackMessage.id, type: 'ai', text: fallbackMessage.content }];
+      });
     };
 
     socket.on('ai_stream_start', handleStreamStart);
@@ -147,32 +156,22 @@ export default function CoachScreen({ onNavigateToNotifications }: any) {
     };
   }, []);
 
+  const scrollViewRef = useRef<ScrollView>(null);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const scrollViewRef = useRef<ScrollView>(null);
-  const [isFocused, setIsFocused] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const webRecognitionRef = useRef<any>(null);
 
   useEffect(() => {
-    return () => {
-      if (recordingRef.current) {
-         recordingRef.current.stopAndUnloadAsync().catch(console.error);
-         recordingRef.current = null;
-      }
-      if (webRecognitionRef.current) {
-         webRecognitionRef.current.stop();
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    scrollViewRef.current?.scrollToEnd({ animated: true });
+    if (messages.length > 0) {
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+    }
   }, [messages, isTyping]);
 
   const borderProgress = useSharedValue(0);
+  const [isFocused, setIsFocused] = useState(false);
   useEffect(() => {
     borderProgress.value = withTiming(isFocused ? 1 : 0, { duration: 250 });
   }, [isFocused]);
@@ -211,69 +210,59 @@ export default function CoachScreen({ onNavigateToNotifications }: any) {
   const micStyle = useAnimatedStyle(() => ({ transform: [{ scale: micScale.value }, { scale: micPulse.value }], opacity: micScale.value }));
   const sendStyle = useAnimatedStyle(() => ({ transform: [{ scale: sendScale.value }], opacity: sendScale.value, position: 'absolute' }));
 
+  const requestAudioPermission = async () => {
+    if (Platform.OS === 'web') return true;
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert("Permission Required", "Please grant microphone access to use voice commands.");
+        return false;
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
+  };
+
   const startWebRecording = () => {
     try {
       const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       if (!SpeechRecognition) {
-        if (Platform.OS === 'web') {
-           window.alert("Speech recognition not supported in this browser.");
-        } else {
-           Alert.alert("Error", "Speech recognition not supported.");
-        }
+        if (Platform.OS === 'web') window.alert("Speech recognition not supported.");
+        else Alert.alert("Error", "Speech recognition not supported.");
         return;
       }
       const recognition = new SpeechRecognition();
       recognition.continuous = false;
       recognition.interimResults = false;
       recognition.lang = 'en-US';
-      
       recognition.onstart = () => setIsRecording(true);
       recognition.onresult = (event: any) => {
         const text = event.results[0][0].transcript;
         setInputText(prev => prev ? prev + ' ' + text : text);
       };
-      recognition.onerror = (event: any) => {
-        console.error("Speech recognition error", event.error);
-        if (Platform.OS === 'web') {
-           window.alert("Microphone error: " + event.error);
-        } else {
-           Alert.alert("Error", "Microphone error: " + event.error);
-        }
-      };
       recognition.onend = () => setIsRecording(false);
-      
       recognition.start();
       webRecognitionRef.current = recognition;
-    } catch (e) {
-      console.error(e);
-      if (Platform.OS === 'web') window.alert("Microphone access denied or failed.");
-      else Alert.alert("Error", "Microphone access denied or failed.");
-    }
+    } catch (e) { console.error(e); }
   };
 
   const stopWebRecording = () => {
-    if (webRecognitionRef.current) {
-      webRecognitionRef.current.stop();
-    }
+    if (webRecognitionRef.current) webRecognitionRef.current.stop();
+    setIsRecording(false);
   };
 
   const startNativeRecording = async () => {
+    const hasPerm = await requestAudioPermission();
+    if (!hasPerm) return;
     try {
-      const permission = await Audio.requestPermissionsAsync();
-      if (permission.status !== 'granted') {
-        Alert.alert("Permission Denied", 'Microphone permission is required to use voice input.');
-        return;
-      }
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
       const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       recordingRef.current = recording;
       setIsRecording(true);
     } catch (err) {
       console.error('Failed to start recording', err);
-      Alert.alert("Error", 'Failed to start recording. Please check settings.');
+      Alert.alert("Error", 'Could not start recording.');
     }
   };
 
@@ -286,13 +275,10 @@ export default function CoachScreen({ onNavigateToNotifications }: any) {
       const uri = recordingRef.current.getURI();
       if (uri) {
         const text = await transcribeAudio(uri);
-        if (text) {
-          setInputText(prev => prev ? prev + ' ' + text : text);
-        }
+        if (text) setInputText(prev => prev ? prev + ' ' + text : text);
       }
     } catch (err: any) {
-      console.error('Failed to process voice', err);
-      Alert.alert("Error", 'Voice processing failed: ' + (err.message || 'Network error'));
+      Alert.alert("Error", 'Voice processing failed');
     } finally {
       setIsProcessingVoice(false);
       recordingRef.current = null;
@@ -300,115 +286,74 @@ export default function CoachScreen({ onNavigateToNotifications }: any) {
   };
 
   const handleMicPress = () => {
-    if (isRecording) {
-      Platform.OS === 'web' ? stopWebRecording() : stopNativeRecording();
-    } else {
-      Platform.OS === 'web' ? startWebRecording() : startNativeRecording();
-    }
+    if (isRecording) Platform.OS === 'web' ? stopWebRecording() : stopNativeRecording();
+    else Platform.OS === 'web' ? startWebRecording() : startNativeRecording();
   };
-
 
   const handleSend = async () => {
     if (!inputText.trim() || !user?.id) return;
-
     const userText = inputText;
-    const newMsg: Message = { id: Date.now().toString(), type: 'user', text: userText };
-    setMessages(prev => [...prev, newMsg]);
+    
+    setMessages(prev => [...prev, { id: Date.now().toString(), type: 'user', text: userText }]);
     setInputText('');
-    setIsTyping(true);
-
-    try {
-      await sendMessage(userText, user.id);
-      // AI message will be added via socket.io events
-    } catch (err) {
-      setIsTyping(false);
-      if (Platform.OS === 'web') {
-        window.alert('Rachel could not be reached right now.');
-      } else {
-        Alert.alert("Network Error", 'Rachel could not be reached right now.');
-      }
+    setIsTyping(true); // Triggers the visual TypingIndicator
+    
+    try { 
+      await sendMessage(userText, user.id); 
+    } catch (err) { 
+      setIsTyping(false); 
+      setMessages(prev => [...prev, { id: Date.now().toString(), type: 'ai', text: "Network error. Please try again." }]);
     }
   };
 
   const markdownStyles = {
-    body: {
-      color: C.onSurface,
-      fontSize: 15,
-      fontFamily: F.body,
-      lineHeight: 22,
-    },
+    body: { color: C.onSurface, fontSize: 15, fontFamily: F.body, lineHeight: 22 },
     heading1: { color: C.onSurface, fontFamily: F.header, marginTop: 10, marginBottom: 5 },
     heading2: { color: C.onSurface, fontFamily: F.header, marginTop: 8, marginBottom: 4 },
-    heading3: { color: C.onSurface, fontFamily: F.header, marginTop: 6, marginBottom: 3 },
-    code_block: { backgroundColor: 'rgba(0,0,0,0.1)', padding: 10, borderRadius: 8 },
-    fence: { backgroundColor: 'rgba(0,0,0,0.1)', padding: 10, borderRadius: 8 },
+    strong: { fontFamily: F.bodyBold, color: C.primary },
+    em: { fontStyle: 'italic' as const },
+    list_item: { marginBottom: 4 },
+    bullet_list: { marginBottom: 12 },
   };
 
   const renderActionCard = (msg: Message) => {
-    const payload = msg.actionPayload;
-    if (!payload) return null;
-
-    let icon: any = 'check-circle';
-    let title = 'Action Completed';
-    let lines: string[] = [];
-
-    if (payload.type === 'CALENDAR_UPDATED') {
-      icon = 'event';
-      title = `📅 Calendar Updated (${payload.count} session${payload.count > 1 ? 's' : ''})`;
-      lines = payload.summary?.split(', ') || [];
-    } else if (payload.type === 'WORKOUT_CREATED') {
-      icon = 'fitness-center';
-      title = `💪 Workout Plan Created`;
-      lines = [`"${payload.title}"`, `${payload.exerciseCount} exercises saved as your current plan`];
-    } else if (payload.type === 'DIET_UPDATED') {
-      icon = 'restaurant';
-      title = `🥗 Diet Plan Updated (${payload.count} meal${payload.count > 1 ? 's' : ''})`;
-      lines = [`Total: ${payload.totalCals} calories`, ...(payload.summary?.split(', ') || [])];
-    }
+    if (!msg.actionPayload) return null;
+    const p = msg.actionPayload;
 
     return (
-      <Animated.View key={msg.id} entering={FadeInUp.springify()} layout={Layout.springify()} style={styles.actionContainer}>
-        <View style={styles.actionHeader}>
-          <Icon name={icon} size={16} color={C.primary} />
-          <Text style={styles.actionTitle}>{title}</Text>
+      <Animated.View entering={FadeInUp.springify()} style={[styles.msgWrapper, styles.msgWrapperAI]}>
+        <View style={[styles.avatar, { backgroundColor: C.primary }]}>
+          <Icon name="auto-awesome" size={16} color={C.onPrimary} />
         </View>
-        {lines.map((l: string, i: number) => (
-          <Text key={i} style={styles.actionDesc}>{l}</Text>
-        ))}
-        <View style={styles.actionDivider} />
-        <Text style={styles.actionHint}>✓ Saved to your app</Text>
+        <View style={styles.actionCard}>
+          <View style={styles.actionHeader}>
+            <Icon name={p.type.includes('WORKOUT') ? 'fitness-center' : 'event'} size={16} color={C.primary} />
+            <Text style={styles.actionTitle}>System Updated</Text>
+          </View>
+          <Text style={styles.actionText}>{p.summary}</Text>
+        </View>
       </Animated.View>
     );
   };
 
   const renderMessage = (msg: Message) => {
-    if (msg.type === 'action') {
-      return renderActionCard(msg);
-    }
-
+    if (msg.type === 'action') return renderActionCard(msg);
     const isUser = msg.type === 'user';
-    return (
-      <Animated.View 
-        key={msg.id} 
-        entering={isUser ? FadeInDown.springify() : FadeInUp.springify()} 
-        layout={Layout.springify()}
-        style={[styles.msgWrapper, isUser ? styles.msgWrapperUser : styles.msgWrapperAI]}
-      >
-        {!isUser && (
-          <View style={styles.avatar}>
-            <Icon name="auto-awesome" size={16} color={C.onPrimary} />
-          </View>
-        )}
+    
+    // Safety check to avoid React crashes on empty strings or objects
+    const safeMarkdownText = typeof msg.text === 'string' ? msg.text : "";
+    if (!isUser && safeMarkdownText === "") return null;
 
+    return (
+      <Animated.View key={msg.id} entering={isUser ? FadeInDown.springify() : FadeInUp.springify()} layout={Layout.springify()} style={[styles.msgWrapper, isUser ? styles.msgWrapperUser : styles.msgWrapperAI]}>
+        {!isUser && <View style={styles.avatar}><Icon name="auto-awesome" size={16} color={C.onPrimary} /></View>}
         {isUser ? (
-          <LinearGradient colors={[C.primary, C.primaryDim]} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={[styles.bubble, styles.bubbleUser]}>
-            <Text style={[styles.msgText, styles.msgTextUser]}>{msg.text}</Text>
+          <LinearGradient colors={[C.primary, C.primaryDim]} style={[styles.bubble, styles.bubbleUser]}>
+            <Text style={[styles.msgText, styles.msgTextUser]}>{safeMarkdownText}</Text>
           </LinearGradient>
         ) : (
           <BlurView intensity={60} tint={isDark ? "dark" : "light"} style={[styles.bubble, styles.bubbleAI]}>
-            <Markdown style={markdownStyles}>
-              {msg.text || ''}
-            </Markdown>
+            <Markdown style={markdownStyles}>{safeMarkdownText}</Markdown>
           </BlurView>
         )}
       </Animated.View>
@@ -421,12 +366,19 @@ export default function CoachScreen({ onNavigateToNotifications }: any) {
       
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <View>
-            <View style={styles.headerTitleRow}>
-              <Icon name="auto-awesome" size={24} color={C.primary} />
-              <Text style={styles.headerTitle}>Rachel</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {onNavigateBack && (
+              <TouchableOpacity onPress={onNavigateBack} style={{ marginRight: 12 }}>
+                <Icon name="chevron-left" size={24} color={C.onSurface} />
+              </TouchableOpacity>
+            )}
+            <View>
+              <View style={styles.headerTitleRow}>
+                <Icon name="auto-awesome" size={24} color={C.primary} />
+                <Text style={styles.headerTitle}>Rachel</Text>
+              </View>
+              <Text style={styles.headerSub}>AI Fitness Coach</Text>
             </View>
-            <Text style={styles.headerSub}>AI Fitness Coach</Text>
           </View>
           <TouchableOpacity onPress={() => { Haptics.selectionAsync(); onNavigateToNotifications?.(); }} style={{ padding: 8, backgroundColor: C.glassInset, borderRadius: 20 }}>
             <Icon name="notifications" size={20} color={C.onSurface} />
@@ -440,7 +392,19 @@ export default function CoachScreen({ onNavigateToNotifications }: any) {
             contentContainerStyle={styles.chatListContent}
             showsVerticalScrollIndicator={false}
           >
-            {messages.map(renderMessage)}
+            {messages.map((msg: Message, index: number) => {
+              const safeText = typeof msg.text === 'string' 
+                ? msg.text 
+                : JSON.stringify(msg.text || '');
+
+              const safeMsg = { ...msg, text: safeText };
+
+              return (
+                <View key={msg.id || `msg-${index}`}>
+                  {renderMessage(safeMsg)}
+                </View>
+              );
+            })}
             {isTyping && <TypingIndicator />}
             <View style={{ height: 100 }} />
           </ScrollView>

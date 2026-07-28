@@ -86,7 +86,7 @@ function PressableCard({ children, style, entering }: any) {
   );
 }
 
-export default function AnalyticsScreen({ navigation, onNavigateToNotifications }: any) {
+export default function AnalyticsScreen({ navigation, onNavigateToNotifications, onNavigateBack }: any) {
   const { isDark, C, bgColors } = useTheme();
   const { user } = useAuth();
   const styles = useMemo(() => getStyles(C), [C]);
@@ -127,7 +127,7 @@ export default function AnalyticsScreen({ navigation, onNavigateToNotifications 
         {/* Header */}
         <View style={styles.header}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); navigation?.goBack?.(); }} style={styles.backBtn}>
+            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); (onNavigateBack || navigation?.goBack)?.(); }} style={styles.backBtn}>
               <Icon name="arrow-back" size={20} color={C.onSurfaceVariant} />
             </TouchableOpacity>
             <Text style={styles.title}>Progress & Analytics</Text>

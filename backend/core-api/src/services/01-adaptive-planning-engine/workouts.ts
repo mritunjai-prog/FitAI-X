@@ -193,7 +193,7 @@ router.post('/session/start', async (req, res) => {
 // POST /api/v1/workouts/session/complete
 router.post('/session/complete', async (req, res) => {
   try {
-    const { sessionId, duration, caloriesBurned, notes } = req.body;
+    const { sessionId, duration, caloriesBurned, notes, completedSetIds } = req.body;
     
     const session = await prisma.workoutSession.update({
       where: { id: sessionId },
@@ -205,6 +205,13 @@ router.post('/session/complete', async (req, res) => {
         notes
       }
     });
+
+    if (completedSetIds && Array.isArray(completedSetIds) && completedSetIds.length > 0) {
+      await prisma.workoutSessionSet.updateMany({
+        where: { id: { in: completedSetIds } },
+        data: { isCompleted: true }
+      });
+    }
 
     // Trigger Event-Driven Pipeline (Analytics, AI Recovery, etc)
     AppEvents.emit(EVENTS.WORKOUT_COMPLETED, { userId: session.userId, workoutId: session.workoutId, sessionId: session.id });

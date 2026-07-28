@@ -129,7 +129,7 @@ function GroceryItemRow({ item }: { item: any }) {
   );
 }
 
-export default function NutritionScreen({ onNavigateToNotifications }: any) {
+export default function NutritionScreen({ onNavigateToNotifications, onNavigateBack }: any) {
   const { isDark, C, bgColors } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
   const [showGrocery, setShowGrocery] = useState(false);
@@ -215,9 +215,16 @@ export default function NutritionScreen({ onNavigateToNotifications }: any) {
       <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Meal Planner</Text>
-            <Text style={styles.subtitle}>AI optimized for high-protein and $75/wk budget.</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {onNavigateBack && (
+              <TouchableOpacity onPress={onNavigateBack} style={{ marginRight: 12 }}>
+                <Feather name="chevron-left" size={24} color={C.onSurface} />
+              </TouchableOpacity>
+            )}
+            <View>
+              <Text style={styles.title}>Meal Planner</Text>
+              <Text style={styles.subtitle}>AI optimized for high-protein and $75/wk budget.</Text>
+            </View>
           </View>
           <TouchableOpacity onPress={() => { Haptics.selectionAsync(); onNavigateToNotifications?.(); }} style={{ padding: 8, backgroundColor: C.glassInset, borderRadius: 20 }}>
             <Icon name="notifications" size={20} color={C.onSurface} />

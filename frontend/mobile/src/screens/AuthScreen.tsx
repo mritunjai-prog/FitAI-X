@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -10,7 +10,8 @@ import {
   Dimensions, 
   TouchableWithoutFeedback, 
   Keyboard,
-  ScrollView
+  ScrollView,
+  Image
 } from 'react-native';
 import Animated, { 
   FadeInUp, 
@@ -31,12 +32,12 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path } from 'react-native-svg';
 
-import { DarkColors, F } from '../theme';
+import { F } from '../theme';
 import MeshGradientBackground from '../components/MeshGradientBackground';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const C = DarkColors;
 
 type AuthMode = 'login' | 'register';
 
@@ -50,16 +51,14 @@ const GoogleIcon = () => (
   </Svg>
 );
 
-const AppleIcon = () => (
-  <Svg width={20} height={20} viewBox="0 0 24 24" fill="#FFF">
+const AppleIcon = ({ color = "#FFF" }) => (
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill={color}>
     <Path d="M17.05 11.46c-.02-2.38 1.94-3.53 2.03-3.59-1.11-1.62-2.83-1.84-3.45-1.87-1.48-.15-2.88.88-3.64.88-.75 0-1.92-.85-3.16-.83-1.6.02-3.08.93-3.9 2.37-1.68 2.92-.43 7.23 1.2 9.59.8 1.16 1.74 2.45 2.99 2.41 1.21-.05 1.68-.78 3.14-.78 1.45 0 1.89.78 3.16.76 1.3-.02 2.11-1.17 2.9-2.33.91-1.33 1.29-2.62 1.3-2.69-.03-.01-2.55-.98-2.57-3.92zM14.94 3.34c.67-.81 1.12-1.93.99-3.05-1.01.04-2.18.67-2.86 1.48-.6.72-1.12 1.87-.97 2.97 1.11.09 2.17-.6 2.84-1.4z" />
   </Svg>
 );
 
-import { Image } from 'react-native';
-
 // ─── Brand Logo ─────────────────────────────────────────────────────────────
-function BrandLogo() {
+function BrandLogo({ isDark, C, styles }: any) {
   const scale = useSharedValue(1);
 
   useEffect(() => {
@@ -72,9 +71,9 @@ function BrandLogo() {
 
   return (
     <View style={[styles.heroContainer, { width: 220, height: 220, backgroundColor: 'transparent' }]}>
-      <Animated.View style={[animStyle, { width: 200, height: 200, borderRadius: 100, overflow: 'hidden', borderWidth: 2, borderColor: '#F5C400', justifyContent: 'center', alignItems: 'center' }]}>
+      <Animated.View style={[animStyle, { width: 200, height: 200, borderRadius: 100, overflow: 'hidden', borderWidth: 2, borderColor: '#F5C400', backgroundColor: isDark ? '#000' : '#FFF', justifyContent: 'center', alignItems: 'center' }]}>
         <Image 
-          source={require('../../assets/fiAIXlogo.png.png')} 
+          source={isDark ? require('../../assets/fiAIXlogo.png.png') : require('../../assets/logoforlightmode.png')} 
           style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
         />
       </Animated.View>
@@ -83,7 +82,7 @@ function BrandLogo() {
 }
 
 // ─── Animated Custom Input ──────────────────────────────────────────────────
-function AuthInput({ icon, placeholder, value, onChangeText, isPassword = false, autoCapitalize = 'none' }: any) {
+function AuthInput({ icon, placeholder, value, onChangeText, isPassword = false, autoCapitalize = 'none', C, styles }: any) {
   const [isFocused, setIsFocused] = useState(false);
   const [showPass, setShowPass] = useState(false);
   
@@ -94,12 +93,8 @@ function AuthInput({ icon, placeholder, value, onChangeText, isPassword = false,
   }, [isFocused]);
 
   const borderStyle = useAnimatedStyle(() => ({
-    borderColor: interpolateColor(focusAnim.value, [0, 1], ['rgba(255,255,255,0.1)', C.primary]) as string,
-    backgroundColor: interpolateColor(focusAnim.value, [0, 1], ['rgba(255,255,255,0.03)', 'rgba(245, 196, 0, 0.05)']) as string,
-  }));
-
-  const iconStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(focusAnim.value, [0, 1], [C.onSurfaceVariant, C.primary]) as string,
+    borderColor: interpolateColor(focusAnim.value, [0, 1], [C.outlineVariant, C.primary]) as string,
+    backgroundColor: interpolateColor(focusAnim.value, [0, 1], [C.surface, 'rgba(245, 196, 0, 0.05)']) as string,
   }));
 
   return (
@@ -114,7 +109,7 @@ function AuthInput({ icon, placeholder, value, onChangeText, isPassword = false,
         secureTextEntry={isPassword && !showPass}
         onFocus={() => { Haptics.selectionAsync(); setIsFocused(true); }}
         onBlur={() => setIsFocused(false)}
-        keyboardAppearance="dark"
+        keyboardAppearance={C.bg === '#050505' ? 'dark' : 'light'}
         autoCapitalize={autoCapitalize}
       />
       {isPassword && (
@@ -135,18 +130,19 @@ export default function AuthScreen({ onAuthSuccess }: { onAuthSuccess?: () => vo
   const [localError, setLocalError] = useState<string | null>(null);
 
   const { login, signup, isLoading } = useAuth();
+  const { C, isDark, toggleTheme } = useTheme();
+  const styles = useMemo(() => getStyles(C, isDark), [C, isDark]);
   
   // Tab Slider Animation
-  const tabWidth = (SCREEN_W - 48 - 8) / 2; // container width minus padding
   const tabPos = useSharedValue(0);
 
   useEffect(() => {
-    tabPos.value = withSpring(mode === 'login' ? 0 : tabWidth, { damping: 16, stiffness: 120 });
+    tabPos.value = withSpring(mode === 'login' ? 0 : 1, { damping: 16, stiffness: 120 });
     setLocalError(null);
   }, [mode]);
 
   const tabStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: tabPos.value }],
+    left: `${tabPos.value * 50}%` as any,
   }));
 
   const handleAuth = async () => {
@@ -169,30 +165,40 @@ export default function AuthScreen({ onAuthSuccess }: { onAuthSuccess?: () => vo
 
   const content = (
     <View style={styles.container}>
-      <MeshGradientBackground isDark={true} bgColors={['#050505', '#11100C', '#0A151A']} />
+      <MeshGradientBackground isDark={isDark} bgColors={isDark ? ['#050505', '#11100C', '#0A151A'] : ['#FAFAFA', '#F0F0F0', '#E5E5E5']} />
       
+      {/* Theme Toggle Button */}
+      <TouchableOpacity 
+        style={{ position: 'absolute', top: 50, right: 24, zIndex: 10, padding: 8, backgroundColor: C.glassInset, borderRadius: 20 }}
+        onPress={() => { Haptics.selectionAsync(); toggleTheme(); }}
+      >
+        <Icon name={isDark ? "light-mode" : "dark-mode"} size={20} color={C.onSurface} />
+      </TouchableOpacity>
+
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           
           {/* Logo and Titles */}
           <Animated.View entering={FadeInUp.delay(200)} style={styles.headerArea}>
-            <BrandLogo />
+            <BrandLogo isDark={isDark} C={C} styles={styles} />
             <Text style={styles.appTitle}>FitAI<Text style={{ color: C.primary }}> X</Text></Text>
             <Text style={styles.appSubtitle}>Train Smarter. Live Stronger.</Text>
           </Animated.View>
 
           {/* Glass Auth Card */}
-          <Animated.View entering={FadeInUp.delay(200).springify().damping(15)} style={styles.cardShadow}>
-            <BlurView intensity={40} tint="dark" style={styles.card}>
+          <Animated.View entering={FadeInUp.delay(200).springify().damping(15)} style={[styles.cardShadow, { borderRadius: 28 }]}>
+            <BlurView intensity={isDark ? 40 : 60} tint={isDark ? "dark" : "light"} style={styles.card}>
               
               {/* Segmented Control */}
               <View style={styles.tabContainer}>
-                <Animated.View style={[styles.activeTabIndicator, { width: tabWidth }, tabStyle]} />
+                <View style={[StyleSheet.absoluteFill, { padding: 4 }]}>
+                  <Animated.View style={[styles.activeTabIndicator, { position: 'relative', width: '50%', height: '100%', top: 0, left: 0 }, tabStyle]} />
+                </View>
                 <TouchableOpacity style={styles.tabBtn} onPress={() => { Haptics.selectionAsync(); setMode('login'); }}>
-                  <Text style={[styles.tabText, mode === 'login' && { color: C.onSurface, fontFamily: F.bodyBold }]}>Sign In</Text>
+                  <Text style={[styles.tabText, mode === 'login' && { color: C.onSurface, fontFamily: F.bodyBold }]}>Login</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.tabBtn} onPress={() => { Haptics.selectionAsync(); setMode('register'); }}>
-                  <Text style={[styles.tabText, mode === 'register' && { color: C.onSurface, fontFamily: F.bodyBold }]}>Create Account</Text>
+                  <Text style={[styles.tabText, mode === 'register' && { color: C.onSurface, fontFamily: F.bodyBold }]}>Register</Text>
                 </TouchableOpacity>
               </View>
 
@@ -202,22 +208,22 @@ export default function AuthScreen({ onAuthSuccess }: { onAuthSuccess?: () => vo
                 </View>
               )}
 
-              {/* Form Fields - Layout.springify allows smooth height changes */}
+              {/* Form Fields */}
               <Animated.View layout={Layout.springify().damping(16).stiffness(120)} style={styles.formArea}>
                 
                 {mode === 'register' && (
                   <Animated.View entering={FadeInUp.springify()} exiting={FadeInDown.duration(200)}>
-                    <AuthInput icon="person" placeholder="Full Name" value={name} onChangeText={setName} autoCapitalize="words" />
+                    <AuthInput icon="person" placeholder="Full Name" value={name} onChangeText={setName} autoCapitalize="words" C={C} styles={styles} />
                   </Animated.View>
                 )}
                 
-                <AuthInput icon="mail" placeholder="Email Address" value={email} onChangeText={setEmail} autoCapitalize="none" />
-                <AuthInput icon="lock" placeholder="Password" value={password} onChangeText={setPassword} isPassword />
+                <AuthInput icon="mail" placeholder="Email Address" value={email} onChangeText={setEmail} autoCapitalize="none" C={C} styles={styles} />
+                <AuthInput icon="lock" placeholder="Password" value={password} onChangeText={setPassword} isPassword C={C} styles={styles} />
 
                 {mode === 'login' && (
                   <Animated.View entering={FadeInUp} style={{ alignItems: 'flex-end', marginTop: -4 }}>
                     <TouchableOpacity>
-                      <Text style={styles.forgotText}>Recover Password</Text>
+                      <Text style={styles.forgotText}>Forgot Password?</Text>
                     </TouchableOpacity>
                   </Animated.View>
                 )}
@@ -226,7 +232,7 @@ export default function AuthScreen({ onAuthSuccess }: { onAuthSuccess?: () => vo
                 <TouchableOpacity activeOpacity={0.8} onPress={handleAuth} style={{ marginTop: 24 }}>
                   <LinearGradient colors={[C.primary, C.primaryDim]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.actionBtn}>
                     <Text style={styles.actionBtnText}>
-                      {mode === 'login' ? 'Access Neural Link' : 'Initialize Profile'}
+                      {mode === 'login' ? 'Sign In' : 'Sign Up'}
                     </Text>
                   </LinearGradient>
                 </TouchableOpacity>
@@ -241,7 +247,7 @@ export default function AuthScreen({ onAuthSuccess }: { onAuthSuccess?: () => vo
 
               <View style={styles.socialRow}>
                 <TouchableOpacity style={styles.socialBtn} onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
-                  <AppleIcon />
+                  <AppleIcon color={C.onSurface} />
                   <Text style={styles.socialText}>Apple</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.socialBtn} onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}>
@@ -269,22 +275,22 @@ export default function AuthScreen({ onAuthSuccess }: { onAuthSuccess?: () => vo
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (C: any, isDark: boolean) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
   scrollContent: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 40 },
   
   // Hero
   headerArea: { alignItems: 'center', marginBottom: 40, marginTop: 40 },
   heroContainer: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  heroGlow: { position: 'absolute', width: 96, height: 96, borderRadius: 48, opacity: 0.6 }, // Note: React Native Web handles filter via shadow/blur
+  heroGlow: { position: 'absolute', width: 96, height: 96, borderRadius: 48, opacity: 0.6 },
   heroInner: { width: 72, height: 72, borderRadius: 36, backgroundColor: `${C.surfaceHigh}99`, borderWidth: 1, borderColor: C.outlineVariant, alignItems: 'center', justifyContent: 'center', boxShadow: `0px 0px 20px ${C.primary}80` },
   appTitle: { fontFamily: F.header, fontSize: 32, color: C.onSurface, letterSpacing: -1 },
   appSubtitle: { fontFamily: F.bodyMed, fontSize: 14, color: C.primary, marginTop: 4, letterSpacing: 0.5, textTransform: 'uppercase' },
 
   // Card & Tabs
-  cardShadow: { boxShadow: '0px 20px 40px rgba(0,0,0,0.5)', elevation: 10 },
-  card: { borderRadius: 28, padding: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', backgroundColor: 'rgba(22, 22, 22, 0.4)', overflow: 'hidden' },
-  tabContainer: { flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 16, padding: 4, marginBottom: 24, position: 'relative' },
+  cardShadow: { width: '100%', maxWidth: 480, alignSelf: 'center', boxShadow: isDark ? '0px 20px 40px rgba(0,0,0,0.5)' : '0px 20px 40px rgba(0,0,0,0.1)', elevation: 10 },
+  card: { borderRadius: 28, padding: 24, borderWidth: 1, borderColor: C.outlineVariant, backgroundColor: isDark ? 'rgba(22, 22, 22, 0.4)' : '#FFFFFF', overflow: 'hidden' },
+  tabContainer: { flexDirection: 'row', backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.05)', borderRadius: 16, padding: 4, marginBottom: 24, position: 'relative' },
   activeTabIndicator: { position: 'absolute', top: 4, bottom: 4, left: 4, backgroundColor: C.glassInset, borderRadius: 12, borderWidth: 1, borderColor: C.outlineVariant },
   tabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', justifyContent: 'center', zIndex: 1 },
   tabText: { fontFamily: F.bodyMed, fontSize: 14, color: C.onSurfaceVariant },
@@ -303,9 +309,9 @@ const styles = StyleSheet.create({
 
   // Socials
   dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 24, gap: 12 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
+  dividerLine: { flex: 1, height: 1, backgroundColor: C.outlineVariant },
   dividerText: { fontFamily: F.header, fontSize: 10, color: C.onSurfaceVariant, letterSpacing: 1 },
   socialRow: { flexDirection: 'row', gap: 12 },
-  socialBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 50, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', gap: 10 },
+  socialBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 50, borderRadius: 14, backgroundColor: C.surface, borderWidth: 1, borderColor: C.outlineVariant, gap: 10 },
   socialText: { fontFamily: F.bodyBold, fontSize: 14, color: C.onSurface }
 });

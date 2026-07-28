@@ -49,7 +49,9 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const C = isDark ? DarkColors : LightColors;
   const bgColors = isDark ? DARK_BG : LIGHT_BG;
 
-  if (!isLoaded) return null; // Prevent flicker
+  if (!isLoaded) {
+    return null;
+  }
 
   return (
     <ThemeContext.Provider value={{ isDark, C, toggleTheme, bgColors }}>

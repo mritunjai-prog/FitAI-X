@@ -1,56 +1,33 @@
-import React, { useState, useMemo } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, StatusBar as RNStatusBar, TextInput, ActivityIndicator } from 'react-native';
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, TextInput, Pressable, KeyboardAvoidingView, Dimensions, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, {
-  FadeIn,
-  FadeOut,
-  FadeInUp,
-  FadeOutUp,
-  SlideInDown,
-  SlideOutDown,
-  LinearTransition,
-  useAnimatedScrollHandler,
-  useSharedValue,
-  useAnimatedStyle,
-  useAnimatedProps,
-  withRepeat,
-  withSequence,
-  withTiming,
-  interpolate,
-  Extrapolate
-} from "react-native-reanimated";
-import { BlurView } from "expo-blur";
-import Svg, { Path, Circle, Ellipse, Rect, Line } from "react-native-svg";
+import Animated, { FadeIn, FadeInUp, FadeInDown, SlideInDown, SlideOutDown, useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence, interpolate, Extrapolate, Layout, useAnimatedProps } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
-
-import { DarkColors, LightColors, ThemeColors, F } from "../theme";
-import MeshGradientBackground from "../components/MeshGradientBackground";
-import ExerciseCard from "../components/ExerciseCard";
-import AnimatedPressable from "../components/AnimatedPressable";
+import Svg, { Path, Circle, Rect, Ellipse, Line } from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
-import DraggableFlatList, { RenderItemParams } from "react-native-draggable-flatlist";
+import { BlurView } from "expo-blur";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchCurrentWorkout, saveWorkout, fetchWorkoutVersions } from '../services/api/workout';
+
 import { useTheme } from '../context/ThemeContext';
+import { F, ThemeColors } from "../theme";
+import MeshGradientBackground from "../components/MeshGradientBackground";
+import { fetchCurrentWorkout, saveWorkout, fetchWorkoutVersions, generateWorkout } from '../services/api/workout';
 
-const { width: SCREEN_W } = require("react-native").Dimensions.get("window");
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-// ─── SVG Icons ────────────────────────────────────────────────────────────────
-function Icon({
-  name,
-  size = 24,
-  color = "#fff",
-}: {
-  name: string;
-  size?: number;
-  color?: string;
-}) {
+// ─── SVGs ────────────────────────────────────────────────────────────────
+function Icon({ name, size = 24, color = "#fff" }: { name: string; size?: number; color?: string }) {
   const paths: Record<string, string> = {
     "chevron-left": "M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z",
-    add: "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z",
-    history:
-      "M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z",
-    warning: "M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z",
+    "history": "M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z",
+    "auto-awesome": "M19 4h-2V2h-2v2h-2v2h2v2h2V6h2V4zM10.83 8.35l-2.33-6.14c-.16-.41-.75-.41-.91 0L5.26 8.35 1.55 9.77c-.45.17-.45.8 0 .97l3.71 1.42 2.33 6.14c.16.41.75.41.91 0l2.33-6.14 3.71-1.42c.45-.17.45-.8 0-.97l-3.71-1.42zM7.5 13.91L6.37 10.9 3.36 9.77l3.01-1.13 1.13-3.01 1.13 3.01 3.01 1.13-3.01 1.13-1.13 3.01zM19 14h-2v-2h-2v2h-2v2h2v2h2v-2h2v-2z",
+    "edit": "M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z",
+    "close": "M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z",
+    "keyboard-arrow-down": "M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z",
+    "keyboard-arrow-up": "M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6 1.41 1.41z",
+    "more-vert": "M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s-.9 2-2 2 2 .9 2 2-.9 2-2 2zm0 6c-1.1 0-2 .9-2 2s-.9 2-2 2 2 .9 2 2-.9 2-2 2z",
+    "play-circle": "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z",
+    "event": "M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"
   };
   return paths[name] ? (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
@@ -59,175 +36,247 @@ function Icon({
   ) : null;
 }
 
-// ─── BodyMap Component for Real-time Muscle Highlighting ──────────────────────
+// ─── ANIMATED BODY MAP (Pseudo-3D) ──────────────────────────────────────────────
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedEllipse = Animated.createAnimatedComponent(Ellipse);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
-function ActiveBodyMap({
-  targetedMuscles,
-  injuredMuscles,
-  C,
-}: {
-  targetedMuscles: string[];
-  injuredMuscles: string[];
-  C: ThemeColors;
-}) {
-  const wire = C.onSurfaceVariant + "40";
-  const wireL = C.onSurfaceVariant + "20";
-
-  // Breathing animation for injured muscles
-  const breathing = useSharedValue(0.3);
-  React.useEffect(() => {
-    breathing.value = withRepeat(
+function EnhancedBodyMap({ targetedMuscles, C }: { targetedMuscles: string[], C: ThemeColors }) {
+  const rotation = useSharedValue(0);
+  
+  useEffect(() => {
+    rotation.value = withRepeat(
       withSequence(
-        withTiming(0.8, { duration: 1000 }),
-        withTiming(0.3, { duration: 1000 })
+        withTiming(15, { duration: 4000 }),
+        withTiming(-15, { duration: 4000 })
       ),
       -1,
       true
     );
   }, []);
 
-  const animatedInjuredProps = useAnimatedProps(() => ({
-    opacity: breathing.value
-  }) as any);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ perspective: 400 }, { rotateY: `${rotation.value}deg` }]
+  }));
 
-  const getProps = (muscle: string) => {
-    return injuredMuscles.includes(muscle) ? { animatedProps: animatedInjuredProps } : {};
-  };
-
-  const isTargeted = (muscle: string) => targetedMuscles.includes(muscle);
-  const isInjured = (muscle: string) => injuredMuscles.includes(muscle);
-
-  const getStyle = (muscle: string) => {
-    if (isTargeted(muscle) && isInjured(muscle))
-      return { fill: C.error + "80", stroke: C.error };
-    if (isTargeted(muscle))
-      return { fill: C.primary + "80", stroke: C.primary };
-    if (isInjured(muscle)) return { fill: C.error + "80", stroke: C.error };
-    return { fill: "none", stroke: wire };
-  };
+  const wire = C.onSurfaceVariant + "40";
+  const wireL = C.onSurfaceVariant + "20";
+  const isTargeted = (m: string) => targetedMuscles.includes(m);
+  
+  const getStyle = (m: string) => ({
+    fill: isTargeted(m) ? C.primary + "60" : "none",
+    stroke: isTargeted(m) ? C.primary : wire
+  });
 
   return (
-    <View
-      style={{
-        height: 200,
-        alignItems: "center",
-        justifyContent: "center",
-        marginBottom: 16,
-      }}
-    >
-      <Svg width={160} height={200} viewBox="0 0 140 200">
-        {/* Head */}
-        <AnimatedEllipse
-          cx={70} cy={18} rx={16} ry={18}
-          {...getStyle("Neck")} strokeWidth={1.5}
-          {...getProps("Neck")}
-        />
-        <Rect x={63} y={35} width={14} height={10} fill="none" stroke={wireL} strokeWidth={1} />
-
-        {/* Shoulders */}
-        <AnimatedPath
-          d="M30,58 Q50,48 70,48 Q90,48 110,58"
-          fill={isTargeted("Shoulders") ? C.primary + "40" : "none"}
-          stroke={isTargeted("Shoulders") ? C.primary : wire}
-          strokeWidth={1.5}
-          {...getProps("Shoulders")}
-        />
-
-        {/* Arms */}
-        <AnimatedPath
-          d="M38,58 L34,115 Q70,125 106,115 L102,58"
-          {...getStyle("Chest")} strokeWidth={1.5}
-          {...getProps("Chest")}
-        />
-        <Line x1={70} y1={48} x2={70} y2={115} stroke={wireL} strokeWidth={1} strokeDasharray="4,3" />
-        <Line x1={40} y1={75} x2={100} y2={75} stroke={wireL} strokeWidth={1} />
-        <Line x1={38} y1={95} x2={102} y2={95} stroke={wireL} strokeWidth={1} />
-
-        {/* Core */}
-        <AnimatedEllipse
-          cx={70} cy={117} rx={22} ry={8}
-          {...getStyle("Core")} strokeWidth={1.2}
-          {...getProps("Core")}
-        />
-
-        {/* Left Leg */}
-        <AnimatedPath d="M38,58 L18,95 L15,130" {...getStyle("Arms")} strokeWidth={1.5} strokeLinecap="round" {...getProps("Arms")} />
-        {/* Right Leg */}
-        <AnimatedPath d="M102,58 L122,95 L125,130" {...getStyle("Arms")} strokeWidth={1.5} strokeLinecap="round" {...getProps("Arms")} />
-
-        {/* Left Quad */}
-        <AnimatedPath d="M55,122 L50,162 L48,192" {...getStyle("Quads")} strokeWidth={1.5} strokeLinecap="round" {...getProps("Quads")} />
-        {/* Right Quad */}
-        <AnimatedPath d="M85,122 L90,162 L92,192" {...getStyle("Quads")} strokeWidth={1.5} strokeLinecap="round" {...getProps("Quads")} />
-
-        {/* Knees */}
-        <AnimatedCircle cx={50} cy={162} r={4} {...getStyle("Knees")} strokeWidth={1.5} {...getProps("Knees")} />
-        <AnimatedCircle cx={90} cy={162} r={4} {...getStyle("Knees")} strokeWidth={1.5} {...getProps("Knees")} />
-      </Svg>
+    <View style={{ height: 220, alignItems: "center", justifyContent: "center" }}>
+      <Animated.View style={animatedStyle}>
+        <Svg width={160} height={200} viewBox="0 0 140 200">
+          <AnimatedEllipse cx={70} cy={18} rx={16} ry={18} {...getStyle("Neck")} strokeWidth={1.5} />
+          <Rect x={63} y={35} width={14} height={10} fill="none" stroke={wireL} strokeWidth={1} />
+          <AnimatedPath d="M30,58 Q50,48 70,48 Q90,48 110,58" {...getStyle("Shoulders")} strokeWidth={1.5} />
+          <AnimatedPath d="M38,58 L34,115 Q70,125 106,115 L102,58" {...getStyle("Chest")} strokeWidth={1.5} />
+          <AnimatedEllipse cx={70} cy={117} rx={22} ry={8} {...getStyle("Core")} strokeWidth={1.2} />
+          <AnimatedPath d="M38,58 L18,95 L15,130" {...getStyle("Arms")} strokeWidth={1.5} strokeLinecap="round" />
+          <AnimatedPath d="M102,58 L122,95 L125,130" {...getStyle("Arms")} strokeWidth={1.5} strokeLinecap="round" />
+          <AnimatedPath d="M55,122 L50,162 L48,192" {...getStyle("Quads")} strokeWidth={1.5} strokeLinecap="round" />
+          <AnimatedPath d="M85,122 L90,162 L92,192" {...getStyle("Quads")} strokeWidth={1.5} strokeLinecap="round" />
+          <AnimatedCircle cx={50} cy={162} r={4} {...getStyle("Knees")} strokeWidth={1.5} />
+          <AnimatedCircle cx={90} cy={162} r={4} {...getStyle("Knees")} strokeWidth={1.5} />
+        </Svg>
+      </Animated.View>
     </View>
   );
 }
 
+// ─── AI EXPLANATION CARD ──────────────────────────────────────────────────────────
+function AiExplanationCard({ C, isDark }: { C: ThemeColors, isDark: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <Animated.View layout={Layout.springify()} style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(234, 179, 8, 0.3)', marginBottom: 24 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Icon name="auto-awesome" size={20} color="#eab308" />
+          <Text style={{ fontFamily: F.header, fontSize: 16, color: C.onSurface }}>AI Insight</Text>
+        </View>
+        <TouchableOpacity onPress={() => setExpanded(!expanded)} style={{ padding: 4 }}>
+          <Icon name={expanded ? "keyboard-arrow-up" : "keyboard-arrow-down"} size={20} color={C.onSurfaceVariant} />
+        </TouchableOpacity>
+      </View>
+      <Text style={{ fontFamily: F.body, fontSize: 14, color: C.onSurfaceVariant, marginTop: 12, lineHeight: 20 }}>
+        Generated based on your Hypertrophy goal. Prioritizes chest & shoulders.
+      </Text>
+      
+      {expanded && (
+        <Animated.View entering={FadeInUp} style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' }}>
+          <Text style={{ fontFamily: F.bodyBold, fontSize: 13, color: C.onSurface, marginBottom: 4 }}>Recovery Adjustment</Text>
+          <Text style={{ fontFamily: F.body, fontSize: 13, color: C.onSurfaceVariant, marginBottom: 12 }}>Reduced volume by 10% due to low HRV this morning.</Text>
+          
+          <Text style={{ fontFamily: F.bodyBold, fontSize: 13, color: C.onSurface, marginBottom: 4 }}>Progressive Overload</Text>
+          <Text style={{ fontFamily: F.body, fontSize: 13, color: C.onSurfaceVariant }}>Increased Bench Press weight by 5 lbs from last session.</Text>
+        </Animated.View>
+      )}
+    </Animated.View>
+  );
+}
+
+// ─── EXERCISE CARD ──────────────────────────────────────────────────────────
+function EnhancedExerciseCard({ ex, C, isDark, onSelect }: any) {
+  return (
+    <Animated.View layout={Layout.springify()} entering={FadeInUp.springify()} style={{ backgroundColor: isDark ? 'rgba(20,20,20,0.8)' : 'rgba(255,255,255,0.9)', borderRadius: 20, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: C.outlineVariant }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+          <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: isDark ? '#333' : '#e2e8f0', marginRight: 12, alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="play-circle" size={24} color={C.onSurfaceVariant} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontFamily: F.header, fontSize: 17, color: C.onSurface }}>{ex.name}</Text>
+            <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: '#eab308', marginTop: 2 }}>{ex.muscle || 'Full Body'} • {ex.sets} Sets</Text>
+          </View>
+        </View>
+        <TouchableOpacity onPress={() => onSelect(ex)} style={{ padding: 8, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', borderRadius: 12 }}>
+          <Icon name="more-vert" size={20} color={C.onSurface} />
+        </TouchableOpacity>
+      </View>
+      
+      <View style={{ flexDirection: 'row', gap: 12 }}>
+        <View style={{ flex: 1, backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.03)', padding: 10, borderRadius: 12, alignItems: 'center' }}>
+          <Text style={{ fontFamily: F.bodyBold, fontSize: 11, color: C.onSurfaceVariant }}>TARGET</Text>
+          <Text style={{ fontFamily: F.num, fontSize: 15, color: C.onSurface, marginTop: 4 }}>{ex.reps} Reps</Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.03)', padding: 10, borderRadius: 12, alignItems: 'center' }}>
+          <Text style={{ fontFamily: F.bodyBold, fontSize: 11, color: C.onSurfaceVariant }}>WEIGHT</Text>
+          <Text style={{ fontFamily: F.num, fontSize: 15, color: C.onSurface, marginTop: 4 }}>{ex.weight} lbs</Text>
+        </View>
+        <View style={{ flex: 1, backgroundColor: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.03)', padding: 10, borderRadius: 12, alignItems: 'center' }}>
+          <Text style={{ fontFamily: F.bodyBold, fontSize: 11, color: C.onSurfaceVariant }}>REST</Text>
+          <Text style={{ fontFamily: F.num, fontSize: 15, color: C.onSurface, marginTop: 4 }}>60s</Text>
+        </View>
+      </View>
+    </Animated.View>
+  );
+}
+
+// ─── BOTTOM SHEET ──────────────────────────────────────────────────────────
+const EXERCISE_VIDEOS: Record<string, string> = {
+  'bench press': 'rxD321l2svE',
+  'squat': 'gcNh17Ckjgg',
+  'deadlift': 'op9kVnSso6Q',
+  'pull up': 'eGo4IYPNBGc',
+  'push up': 'IODxDxX7oi4',
+  'overhead press': 'QAQ64B6xJDk',
+  'row': 'G8l_8chR5BE',
+  'curl': 'ykJmrZ5v0Oo',
+  'tricep': 'nRiJVZDpdL0',
+  'leg press': 'IZxyjW7OSvc',
+  'lunge': 'QOVaHwm-Q6U',
+  'plank': 'pSHjTRCQxIw'
+};
+
+function getDirectVideoUrl(exerciseName: string) {
+  const name = exerciseName.toLowerCase();
+  for (const [key, videoId] of Object.entries(EXERCISE_VIDEOS)) {
+    if (name.includes(key)) {
+      return `https://www.youtube.com/watch?v=${videoId}`;
+    }
+  }
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(exerciseName + " exercise form tutorial")}`;
+}
+
+function ExerciseDetailsSheet({ exercise, onClose, C, isDark }: any) {
+  if (!exercise) return null;
+
+  return (
+    <Animated.View entering={SlideInDown.springify().damping(15)} exiting={SlideOutDown.duration(200)} style={[StyleSheet.absoluteFill, { zIndex: 100, justifyContent: 'flex-end' }]}>
+      <Pressable onPress={onClose} style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.5)' }]} />
+      <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 40, maxHeight: SCREEN_H * 0.8 }}>
+        <View style={{ width: 40, height: 4, backgroundColor: C.outlineVariant, borderRadius: 2, alignSelf: 'center', marginBottom: 20 }} />
+        
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <Text style={{ fontFamily: F.header, fontSize: 24, color: C.onSurface, marginBottom: 16 }}>{exercise.name}</Text>
+          
+          <TouchableOpacity 
+            activeOpacity={0.8}
+            onPress={() => Linking.openURL(getDirectVideoUrl(exercise.name))} 
+            style={{ height: 200, backgroundColor: isDark ? '#222' : '#e2e8f0', borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 24, borderWidth: 1, borderColor: C.outlineVariant }}>
+            <Icon name="play-circle" size={56} color="#ef4444" />
+            <Text style={{ fontFamily: F.header, fontSize: 16, color: C.onSurface, marginTop: 16 }}>Watch tutorial</Text>
+            <Text style={{ fontFamily: F.body, fontSize: 13, color: C.onSurfaceVariant, marginTop: 4 }}>on YouTube</Text>
+          </TouchableOpacity>
+
+          <Text style={{ fontFamily: F.header, fontSize: 18, color: C.onSurface, marginBottom: 12 }}>Technique</Text>
+          <View style={{ backgroundColor: 'rgba(234, 179, 8, 0.1)', padding: 16, borderRadius: 16, marginBottom: 24, borderWidth: 1, borderColor: 'rgba(234, 179, 8, 0.2)' }}>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+              <Icon name="auto-awesome" size={16} color="#eab308" />
+              <Text style={{ fontFamily: F.bodyBold, color: '#eab308' }}>AI Voice Coach</Text>
+            </View>
+            <Text style={{ fontFamily: F.body, fontSize: 14, color: C.onSurface, lineHeight: 22 }}>
+              Keep your core tight. Don't let your elbows flare out. Breathe in on the way down, out on the way up.
+            </Text>
+          </View>
+
+          <Text style={{ fontFamily: F.header, fontSize: 18, color: C.onSurface, marginBottom: 12 }}>Alternatives</Text>
+          <View style={{ gap: 12 }}>
+            <TouchableOpacity style={{ padding: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', borderRadius: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View>
+                <Text style={{ fontFamily: F.bodyBold, fontSize: 15, color: C.onSurface }}>Dumbbell Press</Text>
+                <Text style={{ fontFamily: F.body, fontSize: 13, color: C.onSurfaceVariant, marginTop: 4 }}>Similar Muscle Group</Text>
+              </View>
+              <Text style={{ fontFamily: F.bodyBold, fontSize: 13, color: C.primary }}>Replace</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ padding: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', borderRadius: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View>
+                <Text style={{ fontFamily: F.bodyBold, fontSize: 15, color: C.onSurface }}>Machine Chest Press</Text>
+                <Text style={{ fontFamily: F.body, fontSize: 13, color: C.onSurfaceVariant, marginTop: 4 }}>Safer Alternative</Text>
+              </View>
+              <Text style={{ fontFamily: F.bodyBold, fontSize: 13, color: C.primary }}>Replace</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    </Animated.View>
+  );
+}
+
+// ─── MAIN SCREEN ──────────────────────────────────────────────────────────
 export default function WorkoutBuilderScreen({ onNavigateBack, onStartWorkout }: { onNavigateBack?: () => void; onStartWorkout?: () => void }) {
-  const { C } = useTheme();
-  const styles = useMemo(() => getStyles(C), [C]);
-
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const { data: currentWorkout } = useQuery({ queryKey: ['currentWorkout'], queryFn: () => fetchCurrentWorkout() });
+  const { C, isDark, bgColors } = useTheme();
   
-  const { data: versionsData } = useQuery({
-    queryKey: ['workoutVersions', currentWorkout?.id],
-    queryFn: () => fetchWorkoutVersions(currentWorkout?.id!),
-    enabled: !!currentWorkout?.id
-  });
-
-  const [activeSimulation, setActiveSimulation] = useState("Latest");
-  const simulations = ["Latest", "20 min Quick", "Home (No Equip)"];
+  const { data: currentWorkout } = useQuery({ queryKey: ['currentWorkout'], queryFn: () => fetchCurrentWorkout() });
   const queryClient = useQueryClient();
 
   const [exercises, setExercises] = useState<any[]>([]);
+  const [selectedEx, setSelectedEx] = useState<any>(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (currentWorkout?.exercises) {
       setExercises(currentWorkout.exercises);
     }
   }, [currentWorkout]);
+
+  const [aiPrompt, setAiPrompt] = useState("");
+  const { mutate: aiGenerateWork, isPending: isAiGenerating } = useMutation({
+    mutationFn: (promptText: string) => generateWorkout(promptText, currentWorkout?.id),
+    onSuccess: (data) => {
+      if (data.exercises) setExercises(data.exercises);
+      setAiPrompt("");
+      if (Platform.OS !== "web") Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  });
 
   const { mutate: saveWork } = useMutation({
     mutationFn: (data: any) => saveWorkout(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currentWorkout'] });
       queryClient.invalidateQueries({ queryKey: ['workoutVersions'] });
-      onNavigateBack?.();
+      if (onStartWorkout) onStartWorkout();
+      else onNavigateBack?.();
     }
   });
 
-  const [aiPrompt, setAiPrompt] = useState("");
-  const { mutate: aiGenerateWork, isPending: isAiGenerating } = useMutation({
-    mutationFn: (promptText: string) => {
-      const { generateWorkout } = require('../services/api/workout');
-      return generateWorkout(promptText, currentWorkout?.id);
-    },
-    onSuccess: (data) => {
-      if (data.exercises) {
-        setExercises(data.exercises);
-      }
-      setAiPrompt("");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
-  });
-
-  const handleAiGenerate = () => {
-    if (!aiPrompt.trim()) return;
-    haptic();
-    aiGenerateWork(aiPrompt);
-  };
-
-  const handleSave = () => {
-    haptic();
+  const handleStart = () => {
+    if (Platform.OS !== "web") Haptics.selectionAsync();
     saveWork({
       userId: 'demo-user-id',
       title: currentWorkout?.title || 'Push Day',
@@ -237,535 +286,131 @@ export default function WorkoutBuilderScreen({ onNavigateBack, onStartWorkout }:
     });
   };
 
-  // Mock profile data
-  const injuredMuscles = ["Shoulders"]; // User has a reported shoulder injury
-  const targetedMuscles = Array.from(new Set(exercises.map((e) => e.muscle || 'Full Body')));
-
-  // Real-time conflict detection (FR-008)
-  const conflicts = targetedMuscles.filter((m) => injuredMuscles.includes(m));
-
-  const haptic = () => {
-    if (Platform.OS !== "web") Haptics.selectionAsync();
-  };
-
-  const scrollY = useSharedValue(0);
-  const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (e) => { scrollY.value = e.contentOffset.y; },
-  });
-
-  const headerBlurStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(scrollY.value, [0, 50], [0, 1], Extrapolate.CLAMP),
-  }));
-
-  const headerTextStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: interpolate(scrollY.value, [0, 50], [1, 0.9], Extrapolate.CLAMP) },
-      { translateY: interpolate(scrollY.value, [0, 50], [0, -4], Extrapolate.CLAMP) }
-    ]
-  }));
-
-  const shimmerX = useSharedValue(-250);
-  React.useEffect(() => {
-    shimmerX.value = withRepeat(withTiming(350, { duration: 3000 }), -1, false);
-  }, []);
-  const shimmerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: shimmerX.value }]
-  }));
-
-  const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
-  const AnimatedLinearGradient = Animated.createAnimatedComponent(LinearGradient);
-
-  const moveUp = (index: number) => {
-    if (index === 0) return;
-    haptic();
-    const newEx = [...exercises];
-    [newEx[index - 1], newEx[index]] = [newEx[index], newEx[index - 1]];
-    setExercises(newEx);
-  };
-
-  const moveDown = (index: number) => {
-    if (index === exercises.length - 1) return;
-    haptic();
-    const newEx = [...exercises];
-    [newEx[index + 1], newEx[index]] = [newEx[index], newEx[index + 1]];
-    setExercises(newEx);
-  };
-
-  const remove = (id: string) => {
-    haptic();
-    setExercises((e) => e.filter((x) => x.id !== id));
-  };
-
-  const renderHeader = () => (
-    <>
-      <View style={styles.explanationBanner}>
-        <Text style={styles.explanationText}>
-          <Text style={{ fontFamily: F.bodyBold, color: C.primary }}>
-            AI Note:{" "}
-          </Text>
-          Reduced overall shoulder pressing volume by 20% due to your
-          reported soreness yesterday.
-        </Text>
-      </View>
-      <ActiveBodyMap
-        targetedMuscles={targetedMuscles}
-        injuredMuscles={injuredMuscles}
-        C={C}
-      />
-      {conflicts.length > 0 && (
-        <Animated.View
-          entering={FadeInUp}
-          exiting={FadeOutUp}
-          style={[styles.conflictBanner, { overflow: 'hidden' }]}
-        >
-          <AnimatedLinearGradient 
-            colors={['transparent', 'rgba(239, 68, 68, 0.15)', 'transparent']}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-            style={[StyleSheet.absoluteFill, shimmerStyle, { width: '150%' }]} 
-          />
-          <Icon name="warning" size={20} color={C.error} />
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={styles.conflictTitle}>
-              Injury Conflict Detected
-            </Text>
-            <Text style={styles.conflictText}>
-              You have a reported injury in your {conflicts.join(", ")}. The
-              AI strongly recommends replacing exercises targeting these
-              areas.
-            </Text>
-          </View>
-        </Animated.View>
-      )}
-
-      {/* Simulator Toggles (FR-012) */}
-      <View style={{ marginTop: 24 }}>
-        <Text style={styles.sectionTitle}>SIMULATE SCENARIO</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -16 }} contentContainerStyle={{ paddingHorizontal: 16 }}>
-          {simulations.map((sim, i) => (
-            <AnimatedPressable
-              key={i}
-              scaleTo={0.95}
-              onPress={() => {
-                haptic();
-                setActiveSimulation(sim);
-              }}
-              style={[
-                styles.simChip,
-                activeSimulation === sim && styles.simChipActive
-              ]}
-            >
-              <Text style={[
-                styles.simChipText,
-                activeSimulation === sim && styles.simChipTextActive
-              ]}>{sim}</Text>
-            </AnimatedPressable>
-          ))}
-        </ScrollView>
-      </View>
-
-      <View style={{ marginTop: 24 }}>
-        <Text style={styles.sectionTitle}>WORKOUT FLOW</Text>
-      </View>
-      
-      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.glassInset, borderRadius: 16, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: C.outlineVariant }}>
-        <TextInput
-          placeholder="Ask AI (e.g. 'Add a tricep exercise')"
-          placeholderTextColor={C.onSurfaceVariant}
-          style={{ flex: 1, color: C.onSurface, fontFamily: F.body, fontSize: 14 }}
-          value={aiPrompt}
-          onChangeText={setAiPrompt}
-          onSubmitEditing={handleAiGenerate}
-          returnKeyType="send"
-        />
-        <TouchableOpacity onPress={handleAiGenerate} style={{ backgroundColor: C.primary, padding: 8, borderRadius: 12 }}>
-          {isAiGenerating ? (
-            <ActivityIndicator size="small" color={C.onPrimary} />
-          ) : (
-            <Icon name="add" size={16} color={C.onPrimary} />
-          )}
-        </TouchableOpacity>
-      </View>
-    </>
-  );
-
-  const renderFooter = () => (
-    <>
-      <AnimatedPressable style={styles.addButton} scaleTo={0.96}>
-        <Icon name="add" color={C.onSurfaceVariant} size={20} />
-        <Text style={styles.addButtonText}>Add Exercise</Text>
-      </AnimatedPressable>
-      <View style={{ height: 100 }} />
-    </>
-  );
+  const btnScale = useSharedValue(1);
+  const animatedBtnStyle = useAnimatedStyle(() => ({ transform: [{ scale: btnScale.value }] }));
 
   return (
-    <View style={styles.safe}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: C.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
-
-      <SafeAreaView style={{ flex: 1 }}>
+      
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         {/* Header */}
-        <View style={styles.header}>
-          <AnimatedBlurView intensity={80} tint={C.blurTint} style={[StyleSheet.absoluteFill, headerBlurStyle]} />
-          <TouchableOpacity style={styles.headerIcon} onPress={onNavigateBack}>
-            <Icon name="chevron-left" color={C.onSurfaceVariant} />
-          </TouchableOpacity>
-          <Animated.View style={[styles.headerTextContainer, headerTextStyle]}>
-            <Text style={styles.headerTitle}>Push Day — V3</Text>
-            <Text style={styles.headerSubtitle}>AI Adjusted for Recovery</Text>
-          </Animated.View>
-          <TouchableOpacity style={styles.headerIcon} onPress={() => setIsHistoryOpen(true)}>
-            <Icon name="history" color={C.primary} />
-          </TouchableOpacity>
+        <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+            <TouchableOpacity onPress={onNavigateBack} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', alignItems: 'center', justifyContent: 'center', marginRight: 12 }}>
+              <Icon name="chevron-left" size={24} color={C.onSurface} />
+            </TouchableOpacity>
+            <View>
+              <Text style={{ fontFamily: F.header, fontSize: 22, color: C.onSurface, letterSpacing: -0.5 }}>{currentWorkout?.title || 'Workout'}</Text>
+              <Text style={{ fontFamily: F.bodyMed, fontSize: 13, color: '#eab308', marginTop: 2 }}>V2 • AI Recovery Adjusted</Text>
+            </View>
+          </View>
+          
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <TouchableOpacity style={{ padding: 8 }}>
+              <Icon name="event" size={24} color={C.onSurface} />
+            </TouchableOpacity>
+            <TouchableOpacity style={{ padding: 8 }}>
+              <Icon name="history" size={24} color={C.onSurface} />
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {Platform.OS === 'web' ? (
-          <Animated.ScrollView
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-            onScroll={scrollHandler}
-            scrollEventThrottle={16}
-          >
-            {renderHeader()}
-            {exercises.map((item, index) => (
-              <ExerciseCard
-                key={item.id}
-                exercise={item}
-                isDark={isDark}
-                isFirst={index === 0}
-                isLast={index === exercises.length - 1}
-                onMoveUp={() => moveUp(index)}
-                onMoveDown={() => moveDown(index)}
-                onRemove={() => remove(item.id)}
-                onDuplicate={() => {
-                  const duplicated = { ...item, id: Math.random().toString(36).substring(7) };
-                  const newExercises = [...exercises];
-                  newExercises.splice(index + 1, 0, duplicated);
-                  setExercises(newExercises);
-                  if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                }}
-                onEdit={() => {
-                  if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  // Open an edit modal (we can just alert for now or implement a quick edit state)
-                }}
-              />
-            ))}
-            {renderFooter()}
-          </Animated.ScrollView>
-        ) : (
-          <DraggableFlatList
-            style={{ flex: 1 }}
-            data={exercises}
-            onDragEnd={({ data }) => setExercises(data)}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-            onScroll={scrollHandler}
-            scrollEventThrottle={16}
-            ListHeaderComponent={renderHeader}
-            renderItem={({ item, drag, isActive, getIndex }) => {
-              const index = getIndex() || 0;
-              return (
-                <ExerciseCard
-                  exercise={item}
-                  isDark={isDark}
-                  isFirst={index === 0}
-                  isLast={index === exercises.length - 1}
-                  onMoveUp={() => moveUp(index)}
-                  onMoveDown={() => moveDown(index)}
-                  onRemove={() => remove(item.id)}
-                  onDuplicate={() => {
-                    const duplicated = { ...item, id: Math.random().toString(36).substring(7) };
-                    const newExercises = [...exercises];
-                    newExercises.splice(index + 1, 0, duplicated);
-                    setExercises(newExercises);
-                    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }}
-                  onEdit={() => {
-                    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  }}
-                  drag={drag}
-                  isActive={isActive}
-                />
-              );
-            }}
-            ListFooterComponent={renderFooter}
-          />
-        )}
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
+          
+          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 24 }}>
+            <View style={{ flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', padding: 12, borderRadius: 12, alignItems: 'center' }}>
+              <Text style={{ fontFamily: F.bodyBold, fontSize: 12, color: C.onSurfaceVariant }}>TIME</Text>
+              <Text style={{ fontFamily: F.num, fontSize: 18, color: C.onSurface, marginTop: 4 }}>45m</Text>
+            </View>
+            <View style={{ flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', padding: 12, borderRadius: 12, alignItems: 'center' }}>
+              <Text style={{ fontFamily: F.bodyBold, fontSize: 12, color: C.onSurfaceVariant }}>CALORIES</Text>
+              <Text style={{ fontFamily: F.num, fontSize: 18, color: C.onSurface, marginTop: 4 }}>320</Text>
+            </View>
+            <View style={{ flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', padding: 12, borderRadius: 12, alignItems: 'center' }}>
+              <Text style={{ fontFamily: F.bodyBold, fontSize: 12, color: C.onSurfaceVariant }}>LEVEL</Text>
+              <Text style={{ fontFamily: F.num, fontSize: 18, color: C.onSurface, marginTop: 4 }}>INT</Text>
+            </View>
+          </View>
+
+          <AiExplanationCard C={C} isDark={isDark} />
+          
+          <Text style={{ fontFamily: F.header, fontSize: 18, color: C.onSurface, marginBottom: 16 }}>Muscle Activation</Text>
+          <EnhancedBodyMap targetedMuscles={Array.from(new Set(exercises.map((e) => e.muscle || 'Full Body')))} C={C} />
+
+          {/* Quick Scenario Simulators */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 16, gap: 12, marginBottom: 12 }}>
+             {['Home', '20 Min', 'Injury Friendly', 'Resistance Band'].map(chip => (
+               <TouchableOpacity key={chip} style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, backgroundColor: isDark ? '#222' : '#e2e8f0' }}>
+                 <Text style={{ fontFamily: F.bodyMed, color: C.onSurface, fontSize: 14 }}>{chip}</Text>
+               </TouchableOpacity>
+             ))}
+          </ScrollView>
+
+          {/* AI Editor Input */}
+          <View style={{ flexDirection: 'row', backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)', borderRadius: 24, paddingHorizontal: 16, paddingVertical: 4, alignItems: 'center', marginBottom: 24, borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }}>
+            <Icon name="auto-awesome" size={20} color="#eab308" />
+            <TextInput 
+              placeholder="Ask Rachel to replace an exercise..."
+              placeholderTextColor={C.onSurfaceVariant}
+              style={{ flex: 1, padding: 12, fontFamily: F.body, fontSize: 15, color: C.onSurface, height: 48 }}
+              value={aiPrompt}
+              onChangeText={setAiPrompt}
+              onSubmitEditing={() => aiGenerateWork(aiPrompt)}
+            />
+            {isAiGenerating && <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#eab308' }} />}
+          </View>
+
+          {/* Timeline Mock */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+            <Text style={{ fontFamily: F.bodyBold, color: C.onSurfaceVariant }}>WARM UP</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: C.outlineVariant }} />
+          </View>
+
+          {exercises.map((ex, i) => (
+            <EnhancedExerciseCard key={i} ex={ex} C={C} isDark={isDark} onSelect={(exercise: any) => setSelectedEx(exercise)} />
+          ))}
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 24 }}>
+            <Text style={{ fontFamily: F.bodyBold, color: C.onSurfaceVariant }}>COOLDOWN</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: C.outlineVariant }} />
+          </View>
+
+        </ScrollView>
       </SafeAreaView>
 
-      {/* Floating Action Bar */}
-      <BlurView intensity={80} tint={C.blurTint} style={styles.fabContainer}>
-        <AnimatedPressable style={[styles.saveButton, { overflow: 'hidden' }]} scaleTo={0.94} onPress={handleSave}>
-          <AnimatedLinearGradient 
-            colors={['transparent', 'rgba(255, 255, 255, 0.25)', 'transparent']}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-            style={[StyleSheet.absoluteFill, shimmerStyle, { width: '150%' }]} 
-          />
-          <Text style={styles.saveButtonText}>Lock & Start Workout</Text>
-        </AnimatedPressable>
-      </BlurView>
-
-      {/* Version History Drawer (FR-002) */}
-      {isHistoryOpen && (
-        <Animated.View 
-          entering={FadeIn} exiting={FadeOut}
-          style={[StyleSheet.absoluteFill, { zIndex: 1000 }]}
+      {/* Sticky Bottom Finish Button */}
+      <Animated.View entering={SlideInDown.springify().damping(16)} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingTop: 24, paddingHorizontal: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' }}>
+        <BlurView intensity={isDark ? 80 : 100} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFillObject} />
+        <Pressable 
+          onPressIn={() => btnScale.value = withSpring(0.95)}
+          onPressOut={() => btnScale.value = withSpring(1)}
+          onPress={handleStart}
         >
-          {/* Backdrop */}
-          <TouchableOpacity 
-            style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.6)' }]} 
-            onPress={() => setIsHistoryOpen(false)} 
-            activeOpacity={1}
-          />
-          
-          {/* Drawer */}
-          <Animated.View 
-            entering={SlideInDown.springify().damping(16).stiffness(140)}
-            exiting={SlideOutDown}
-            style={styles.historyDrawer}
-          >
-            <View style={styles.drawerHandle} />
-            <Text style={styles.drawerTitle}>Version History</Text>
-            
-            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
-              {versionsData?.map((v: any, i: number) => (
-                <View key={v.id || i} style={[styles.historyItem, v.isCurrent && { borderColor: C.primary }]}>
-                  <View style={styles.historyItemHeader}>
-                    <Text style={styles.historyItemTitle}>Version {v.versionNumber} {v.isCurrent && '(Current)'}</Text>
-                    <Text style={styles.historyItemTime}>{new Date(v.createdAt).toLocaleDateString()}</Text>
-                  </View>
-                  <Text style={styles.historyItemDesc}>{v.aiExplanation || 'Manual edit.'}</Text>
-                  
-                  {!v.isCurrent && (
-                    <TouchableOpacity style={styles.rollbackButton} onPress={() => {
-                      haptic();
-                      setExercises(v.exercises);
-                      setIsHistoryOpen(false);
-                    }}>
-                      <Text style={styles.rollbackButtonText}>Restore this version</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ))}
-              {!versionsData?.length && (
-                <Text style={{ color: C.onSurfaceVariant, fontFamily: F.body }}>No version history found.</Text>
-              )}
-            </ScrollView>
+          <Animated.View style={[{ 
+            borderRadius: 100, 
+            overflow: 'hidden', 
+            shadowColor: '#eab308', 
+            shadowOffset: { width: 0, height: 8 }, 
+            shadowOpacity: 0.35, 
+            shadowRadius: 16, 
+            elevation: 10 
+          }, animatedBtnStyle]}>
+            <LinearGradient 
+              colors={['#fde047', '#eab308', '#ca8a04']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ paddingVertical: 18, alignItems: "center" }}
+            >
+              <Text style={{ fontFamily: F.header, fontSize: 18, color: '#422006', letterSpacing: 0.5 }}>Lock & Start Workout</Text>
+            </LinearGradient>
           </Animated.View>
-        </Animated.View>
-      )}
-    </View>
+        </Pressable>
+      </Animated.View>
+
+      {/* Bottom Sheet */}
+      {selectedEx && <ExerciseDetailsSheet exercise={selectedEx} onClose={() => setSelectedEx(null)} C={C} isDark={isDark} />}
+
+    </KeyboardAvoidingView>
   );
 }
-
-const getStyles = (C: ThemeColors) =>
-  StyleSheet.create({
-    safe: { flex: 1, backgroundColor: C.bg },
-    header: {
-      paddingHorizontal: 16,
-      paddingTop:
-        Platform.OS === "android" ? (RNStatusBar.currentHeight ?? 0) + 12 : 12,
-      paddingBottom: 16,
-      flexDirection: "row",
-      alignItems: "center",
-      borderBottomWidth: 1,
-      borderBottomColor: C.outlineVariant,
-    },
-    headerIcon: { padding: 8, backgroundColor: C.glassInset, borderRadius: 12 },
-    headerTextContainer: { flex: 1, alignItems: "center" },
-    headerTitle: { fontFamily: F.header, fontSize: 18, color: C.onSurface },
-    headerSubtitle: {
-      fontFamily: F.bodyMed,
-      fontSize: 13,
-      color: C.primary,
-      marginTop: 2,
-    },
-
-    scrollContent: { padding: 16 },
-
-    explanationBanner: {
-      padding: 16,
-      backgroundColor: C.primary + "1A", // 10% opacity
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: C.primary + "33",
-      marginBottom: 24,
-    },
-    explanationText: {
-      fontFamily: F.body,
-      fontSize: 14,
-      color: C.onSurface,
-      lineHeight: 22,
-    },
-
-    conflictBanner: {
-      flexDirection: "row",
-      padding: 16,
-      backgroundColor: C.error + "1A",
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: C.error + "4D",
-      marginBottom: 24,
-    },
-    conflictTitle: {
-      fontFamily: F.bodyBold,
-      fontSize: 14,
-      color: C.error,
-      marginBottom: 4,
-    },
-    conflictText: {
-      fontFamily: F.body,
-      fontSize: 13,
-      color: C.onSurface,
-      lineHeight: 20,
-    },
-
-    sectionTitle: {
-      fontFamily: F.header,
-      fontSize: 12,
-      letterSpacing: 1.5,
-      color: C.onSurfaceVariant,
-      marginBottom: 12,
-      marginLeft: 4,
-    },
-
-    addButton: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
-      paddingVertical: 14,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: C.outlineVariant,
-      borderStyle: "dashed",
-      backgroundColor: C.glassInset,
-      marginTop: 8,
-    },
-    addButtonText: {
-      fontFamily: F.bodyMed,
-      fontSize: 14,
-      color: C.onSurfaceVariant,
-      marginLeft: 8,
-    },
-
-    fabContainer: {
-      position: "absolute",
-      bottom: 0,
-      left: 0,
-      right: 0,
-      padding: 16,
-      paddingBottom: Platform.OS === "ios" ? 32 : 16,
-      borderTopWidth: 1,
-      borderTopColor: C.outlineVariant,
-    },
-    saveButton: {
-      backgroundColor: C.primary,
-      paddingVertical: 16,
-      borderRadius: 100,
-      alignItems: "center",
-      shadowColor: C.primary,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 12,
-    },
-    saveButtonText: { fontFamily: F.header, fontSize: 16, color: C.onPrimary },
-
-    simChip: {
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      borderRadius: 100,
-      backgroundColor: C.glassInset,
-      borderWidth: 1,
-      borderColor: C.outlineVariant,
-      marginRight: 8,
-    },
-    simChipActive: {
-      backgroundColor: C.primary + "22",
-      borderColor: C.primary,
-    },
-    simChipText: {
-      fontFamily: F.bodyMed,
-      fontSize: 13,
-      color: C.onSurfaceVariant,
-    },
-    simChipTextActive: {
-      color: C.primary,
-    },
-    historyDrawer: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      backgroundColor: C.bg,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      padding: 24,
-      paddingBottom: Platform.OS === 'ios' ? 48 : 24,
-      borderTopWidth: 1,
-      borderTopColor: C.outlineVariant,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: -10 },
-      shadowOpacity: 0.2,
-      shadowRadius: 20,
-      elevation: 20,
-    },
-    drawerHandle: {
-      width: 40,
-      height: 4,
-      borderRadius: 2,
-      backgroundColor: C.outline,
-      alignSelf: 'center',
-      marginBottom: 20,
-    },
-    drawerTitle: {
-      fontFamily: F.header,
-      fontSize: 20,
-      color: C.onSurface,
-      marginBottom: 16,
-    },
-    historyItem: {
-      padding: 16,
-      borderRadius: 16,
-      backgroundColor: C.glassInset,
-      borderWidth: 1,
-      borderColor: C.outlineVariant,
-      marginBottom: 12,
-    },
-    historyItemHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 8,
-    },
-    historyItemTitle: {
-      fontFamily: F.bodyBold,
-      fontSize: 15,
-      color: C.onSurface,
-    },
-    historyItemTime: {
-      fontFamily: F.body,
-      fontSize: 12,
-      color: C.outline,
-    },
-    historyItemDesc: {
-      fontFamily: F.body,
-      fontSize: 13,
-      color: C.onSurfaceVariant,
-      lineHeight: 20,
-    },
-    rollbackButton: {
-      marginTop: 12,
-      paddingVertical: 8,
-      paddingHorizontal: 16,
-      borderRadius: 100,
-      backgroundColor: C.surface,
-      alignSelf: 'flex-start',
-      borderWidth: 1,
-      borderColor: C.outlineVariant,
-    },
-    rollbackButtonText: {
-      fontFamily: F.bodyMed,
-      fontSize: 13,
-      color: C.onSurface,
-    },
-  });

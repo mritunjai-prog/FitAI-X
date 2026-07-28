@@ -47,7 +47,7 @@ function AISpinner() {
   );
 }
 
-export default function CalendarScreen({ onNavigateToNotifications }: any) {
+export default function CalendarScreen({ onNavigateToNotifications, onNavigateBack }: any) {
   const { isDark, C, bgColors } = useTheme();
   const styles = React.useMemo(() => getStyles(C), [C]);
   const { user } = useAuth();
@@ -103,11 +103,17 @@ export default function CalendarScreen({ onNavigateToNotifications }: any) {
       <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
       <SafeAreaView style={{ flex: 1 }}>
         <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Smart Calendar</Text>
-            <Text style={styles.subtitle}>Hold & drag to reschedule. AI adapts instantly.</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {onNavigateBack && (
+              <TouchableOpacity onPress={onNavigateBack} style={{ marginRight: 12 }}>
+                <Feather name="chevron-left" size={24} color={C.onSurface} />
+              </TouchableOpacity>
+            )}
+            <View>
+              <Text style={styles.title}>Smart Calendar</Text>
+              <Text style={styles.subtitle}>Hold & drag to reschedule. AI adapts instantly.</Text>
+            </View>
           </View>
-
         </View>
 
       {warningMsg && (
