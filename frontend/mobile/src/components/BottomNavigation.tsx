@@ -75,7 +75,7 @@ export default function BottomNavigation({ currentScreen, onNavigate, onOpenActi
 
       <View style={styles.fabContainer}>
         <TouchableOpacity activeOpacity={0.85} style={styles.fab} onPress={onOpenActionMenu}>
-          <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: 28, backgroundColor: C.primary }, rippleStyle]} pointerEvents="none" />
+          <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: 28, backgroundColor: C.primary, pointerEvents: 'none' }, rippleStyle]} />
           <Icon name="add" size={32} color={C.onPrimary} />
         </TouchableOpacity>
       </View>

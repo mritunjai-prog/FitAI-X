@@ -51,6 +51,7 @@ export default function SplashScreen({ onComplete }: { onComplete: () => void })
         <Image 
           source={isDark ? require('../../assets/fiAIXlogo.png.png') : require('../../assets/logoforlightmode.png')} 
           style={styles.image}
+          resizeMode="cover"
         />
       </Animated.View>
     </View>
@@ -73,15 +74,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#F5C400',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
+    boxShadow: '0px 0px 20px rgba(245, 196, 0, 0.5)',
     elevation: 10
   },
   image: {
     width: '100%',
     height: '100%',
-    resizeMode: 'cover',
   }
 });
