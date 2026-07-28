@@ -99,7 +99,8 @@ export async function callAI({ system, prompt, schema, tools, maxSteps = 1, mess
         model: getModel(),
         system,
         ...input,
-        schema
+        schema,
+        mode: 'json',
       });
       return { ok: true, data: result.object };
     } else {
