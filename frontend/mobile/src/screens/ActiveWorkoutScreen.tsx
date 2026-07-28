@@ -6,12 +6,12 @@ import * as Haptics from "expo-haptics";
 import Svg, { Path, Circle, Rect } from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '../context/ThemeContext';
 import { F } from "../theme";
 import MeshGradientBackground from "../components/MeshGradientBackground";
-import { fetchCurrentWorkout, startSession, completeSession } from '../services/api/workout';
+import { fetchCurrentWorkout, startSession, completeSession, updateExerciseStatus } from '../services/api/workout';
 
 const { width } = Dimensions.get('window');
 
@@ -167,6 +167,7 @@ function AnimatedSetRow({ ex, sIdx, isChecked, onToggle, weight, reps, onUpdate,
             </View>
           </View>
         </Animated.View>
+        {showRestTimer && <RestTimer C={C} />}
       </Animated.View>
     </Pressable>
   );
@@ -312,12 +313,24 @@ export default function ActiveWorkoutScreen({ onFinish, onNavigateBack }: { onFi
 
   const [completedSets, setCompletedSets] = useState<Record<string, boolean>>({});
 
-  const toggleSet = (exIndex: number, setIndex: number) => {
+  const toggleSet = (exIndex: number, setIndex: number, exId: string) => {
     if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setCompletedSets(prev => ({
-      ...prev,
-      [`${exIndex}-${setIndex}`]: !prev[`${exIndex}-${setIndex}`]
-    }));
+    setCompletedSets(prev => {
+      const next = { ...prev, [`${exIndex}-${setIndex}`]: !prev[`${exIndex}-${setIndex}`] };
+      
+      // Check if all sets for this exercise are now done
+      const ex = exercises[exIndex];
+      let allSetsDone = true;
+      for (let s = 0; s < ex.sets; s++) {
+        if (!next[`${exIndex}-${s}`]) allSetsDone = false;
+      }
+      
+      if (allSetsDone && activeTemplate) {
+        updateExerciseStatus(activeTemplate.id, exId, 'done').catch(err => console.error(err));
+      }
+
+      return next;
+    });
   };
 
   const updateSet = (exIndex: number, setIndex: number, field: 'weight' | 'reps', value: number) => {
@@ -484,7 +497,6 @@ export default function ActiveWorkoutScreen({ onFinish, onNavigateBack }: { onFi
 
                 {ex.setsData.map((setData: any, sIdx: number) => {
                   const isChecked = completedSets[`${i}-${sIdx}`];
-                  // Show rest timer only on active exercise, if it's checked, and it's the most recently checked one (simplification: show for the last checked set)
                   const showRestTimer = isChecked && sIdx < ex.setsData.length - 1 && !completedSets[`${i}-${sIdx + 1}`];
                   
                   return (
@@ -495,7 +507,7 @@ export default function ActiveWorkoutScreen({ onFinish, onNavigateBack }: { onFi
                       weight={setData.weight}
                       reps={setData.reps}
                       isChecked={isChecked} 
-                      onToggle={() => toggleSet(i, sIdx)} 
+                      onToggle={() => toggleSet(i, sIdx, ex.id)} 
                       onUpdate={(setIndex: number, field: any, val: number) => updateSet(i, setIndex, field, val)}
                       isDark={isDark} 
                       C={C} 

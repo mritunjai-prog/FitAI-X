@@ -6,6 +6,7 @@ import { createGroq } from '@ai-sdk/groq';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { z } from 'zod';
 import { getIo } from '../realtime/socket';
+import { evaluateStreak } from '../services/ai/streakEvaluator';
 
 const connection = new IORedis({
   host: '127.0.0.1',
@@ -21,6 +22,12 @@ export const startAiWorker = () => {
   const worker = new Worker('AI_Queue', async (job: Job) => {
     console.log(`[BullMQ] Processing AI Job ${job.id} of type ${job.name}`);
     
+    if (job.name === 'evaluate_streak') {
+      const { userId, durationMinutes, scheduledDay } = job.data;
+      await evaluateStreak(userId, durationMinutes, scheduledDay);
+      return { success: true };
+    }
+
     if (job.name === 'generate_coach_response') {
       const { userId } = job.data;
       

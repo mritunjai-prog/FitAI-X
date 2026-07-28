@@ -385,7 +385,7 @@ export default function CoachScreen({ onNavigateToNotifications, onNavigateBack 
           </TouchableOpacity>
         </View>
 
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}>
           <ScrollView 
             ref={scrollViewRef}
             style={styles.chatList} 
@@ -459,8 +459,9 @@ const getStyles = (C: any) => StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 0) + 10 : 10,
     paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerTitle: { fontSize: 24, fontFamily: F.header, color: C.onSurface, letterSpacing: -0.5 },
@@ -477,7 +478,7 @@ const getStyles = (C: any) => StyleSheet.create({
   
   bubble: { maxWidth: '80%', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20, overflow: 'hidden' },
   bubbleUser: { borderBottomRightRadius: 4 },
-  bubbleAI: { borderBottomLeftRadius: 4, borderWidth: 1, borderColor: C.outlineVariant },
+  bubbleAI: { borderBottomLeftRadius: 4 },
   
   msgText: { fontSize: 15, fontFamily: F.body, lineHeight: 22 },
   msgTextUser: { color: C.onPrimary },
@@ -504,10 +505,7 @@ const getStyles = (C: any) => StyleSheet.create({
   inputArea: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 100 : 80, 
-    backgroundColor: C.bg,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.05)',
+    paddingBottom: Platform.OS === 'ios' ? 40 : 30,
   },
   inputWrapper: {
     flexDirection: 'row',

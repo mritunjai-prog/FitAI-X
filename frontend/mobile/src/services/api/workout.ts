@@ -59,3 +59,8 @@ export const fetchWorkoutHistory = async (userId: string = 'demo-user-id') => {
   const { data } = await apiClient.get(`/workouts/history?userId=${userId}`);
   return data;
 };
+
+export const updateExerciseStatus = async (workoutId: string, exId: string, status: string) => {
+  const { data } = await apiClient.patch(`/workouts/${workoutId}/exercises/${exId}/status`, { status });
+  return data;
+};
