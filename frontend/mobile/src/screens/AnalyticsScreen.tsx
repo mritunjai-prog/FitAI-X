@@ -24,7 +24,7 @@ import {
   fetchCalories, 
   fetchWeight, 
   fetchStrength,
-  fetchAiInsights
+  fetchSummary
 } from '../services/api/analytics';
 import { fetchWorkoutHistory } from '../services/api/workout';
 
@@ -99,7 +99,7 @@ export default function AnalyticsScreen({ navigation, onNavigateToNotifications,
   const { data: strengthData, isLoading: isStrengthLoading } = useQuery({ queryKey: ['strength'], queryFn: fetchStrength });
   const { data: caloriesData, isLoading: isCaloriesLoading } = useQuery({ queryKey: ['calories', selectedFilter], queryFn: () => fetchCalories(selectedFilter) });
   const { data: workoutsData, isLoading: isWorkoutsLoading } = useQuery({ queryKey: ['workouts', selectedFilter], queryFn: () => fetchWorkouts(selectedFilter) });
-  const { data: insights, isLoading: isInsightsLoading } = useQuery({ queryKey: ['aiInsights'], queryFn: fetchAiInsights });
+  const { data: insights, isLoading: isInsightsLoading } = useQuery({ queryKey: ['aiSummary'], queryFn: fetchSummary });
   
   const { data: foodHistory } = useQuery({ queryKey: ['foodHistory', user?.id], queryFn: async () => {
     const res = await (require('../services/api/client').apiClient).get(`/nutrition/history?userId=${user?.id}`);
@@ -399,9 +399,29 @@ export default function AnalyticsScreen({ navigation, onNavigateToNotifications,
                 <Skeleton width="90%" height={16} />
               </View>
             ) : (
-              <Text style={{ fontFamily: F.body, fontSize: 13, color: C.onSurfaceVariant, lineHeight: 20, marginBottom: 12 }}>
-                {insights?.recommendation || "Consistency improved. Keep up the good work!"}
-              </Text>
+              <View style={{ gap: 12, marginBottom: 12 }}>
+                <Text style={{ fontFamily: F.body, fontSize: 13, color: C.onSurfaceVariant, lineHeight: 20 }}>
+                  {insights?.progressText || "You are consistently hitting your marks. Keep up the good work!"}
+                </Text>
+                
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  <View style={{ backgroundColor: `${C.success}15`, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                    <Text style={{ color: C.success, fontFamily: F.bodyMed, fontSize: 12 }}>✨ {insights?.weekHighlight || 'Consistent Activity'}</Text>
+                  </View>
+                  <View style={{ backgroundColor: `${C.primary}15`, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                    <Text style={{ color: C.primary, fontFamily: F.bodyMed, fontSize: 12 }}>🥗 {insights?.dietAdherence || 'Diet On Track'}</Text>
+                  </View>
+                </View>
+
+                {insights?.undertrained?.length > 0 && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                    <Icon name="warning" size={14} color="#F59E0B" />
+                    <Text style={{ fontFamily: F.body, fontSize: 12, color: C.onSurfaceVariant }}>
+                      Undertrained: <Text style={{ fontFamily: F.bodyBold }}>{insights.undertrained.join(', ')}</Text>
+                    </Text>
+                  </View>
+                )}
+              </View>
             )}
 
             <TouchableOpacity style={styles.detailsBtn}>

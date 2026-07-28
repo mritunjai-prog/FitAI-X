@@ -17,12 +17,14 @@ const getModel = () => {
 export async function buildUserContext(userId: string) {
   const [
     user,
+    nutritionPref,
     currentWorkout,
     sessions,
     nutritionToday,
     recoveryFlags
   ] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId } }),
+    prisma.nutritionPreference.findUnique({ where: { userId } }),
     prisma.workout.findFirst({
       where: { userId, isCurrent: true, deletedAt: null },
       include: { exercises: { orderBy: { order: 'asc' } } }
@@ -58,7 +60,9 @@ export async function buildUserContext(userId: string) {
       name: user.name,
       goal: user.goal,
       experience: user.experience,
-      diet: user.diet,
+      diet: nutritionPref?.dietType || user.diet,
+      allergies: nutritionPref?.allergies,
+      dislikedFoods: nutritionPref?.dislikedFoods,
       weight: user.weight,
       height: user.height,
       age: user.age,
@@ -105,7 +109,6 @@ export async function callAI({ system, prompt, schema, tools, maxSteps = 1, mess
         system,
         ...input,
         tools,
-        maxSteps,
       });
       return { ok: true, text: result.text, toolResults: result.toolResults };
     }

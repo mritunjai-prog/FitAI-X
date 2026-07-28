@@ -10,8 +10,9 @@ import * as Haptics from 'expo-haptics';
 import { DarkColors, LightColors, F } from '../theme';
 import MeshGradientBackground from '../components/MeshGradientBackground';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { fetchMeals, fetchBudgetPlan } from '../services/api/nutrition';
+import { fetchMeals, fetchBudgetPlan, generateAiPlan } from '../services/api/nutrition';
 import { apiClient } from '../services/api/client';
+import { ActivityIndicator } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -167,6 +168,16 @@ export default function NutritionScreen({ onNavigateToNotifications, onNavigateB
     }
   });
 
+  const generatePlanMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) throw new Error("No user id");
+      return generateAiPlan(user.id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['userMeals'] });
+    }
+  });
+
   const handleRegenerate = (mealId: string) => {
     regenMutation.mutate(mealId);
   };
@@ -289,12 +300,16 @@ export default function NutritionScreen({ onNavigateToNotifications, onNavigateB
           </Animated.View>
         )}
 
-        {/* Generate Button with Gyroscope Shimmer */}
-        <Animated.View entering={FadeInUp.delay(200).springify()}>
+        {/* Generate Meal Plan Actions */}
+        <Animated.View entering={FadeInUp.delay(200).springify()} style={{ marginBottom: 32, gap: 12 }}>
           <TouchableOpacity 
             activeOpacity={0.8} 
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); setShowGrocery(true); }}
-            style={{ marginBottom: 32, borderRadius: 16, overflow: 'hidden' }}
+            onPress={() => {
+              if (generatePlanMutation.isPending) return;
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              generatePlanMutation.mutate();
+            }}
+            style={{ borderRadius: 16, overflow: 'hidden' }}
           >
             <LinearGradient colors={[C.primary, C.primaryDim]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.generateBtn}>
               {/* Shimmer Overlay driven by Gyroscope */}
@@ -302,10 +317,36 @@ export default function NutritionScreen({ onNavigateToNotifications, onNavigateB
                 <LinearGradient colors={['transparent', '#FFF', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFillObject} />
               </Animated.View>
 
-              <Feather name="shopping-cart" size={18} color={C.onPrimary} />
-              <Text style={styles.generateBtnText}>Generate Grocery List</Text>
+              {generatePlanMutation.isPending ? (
+                <ActivityIndicator color={C.onPrimary} size="small" />
+              ) : (
+                <>
+                  <Icon name="auto-awesome" size={18} color={C.onPrimary} />
+                  <Text style={styles.generateBtnText}>Generate Meal Plan with AI</Text>
+                </>
+              )}
             </LinearGradient>
           </TouchableOpacity>
+          
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <TouchableOpacity 
+              activeOpacity={0.8} 
+              onPress={() => { Haptics.selectionAsync(); setShowGrocery(true); }}
+              style={[styles.generateBtn, { flex: 1, backgroundColor: `${C.primary}15`, padding: 14 }]}
+            >
+              <Feather name="shopping-cart" size={16} color={C.primary} />
+              <Text style={[styles.generateBtnText, { color: C.primary, fontSize: 14 }]}>Grocery List</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              activeOpacity={0.8} 
+              onPress={() => Haptics.selectionAsync()}
+              style={[styles.generateBtn, { flex: 1, backgroundColor: C.surfaceVariant, padding: 14 }]}
+            >
+              <Feather name="plus" size={16} color={C.onSurfaceVariant} />
+              <Text style={[styles.generateBtnText, { color: C.onSurfaceVariant, fontSize: 14 }]}>Add Manually</Text>
+            </TouchableOpacity>
+          </View>
         </Animated.View>
 
         <Text style={styles.sectionTitle}>Today's Plan</Text>

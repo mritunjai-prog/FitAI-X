@@ -1,6 +1,8 @@
 import { Router } from 'express'
 import prisma from '../../db'
 import { generateBudgetPlan } from '../13-scenario-planner/planner';
+import { callAI, buildUserContext } from '../ai/aiService';
+import { z } from 'zod';
 
 const router = Router()
 
@@ -77,15 +79,116 @@ router.get('/budget-plan', async (req, res) => {
   }
 });
 
+// POST /api/v1/nutrition/generate-plan
+router.post('/generate-plan', async (req, res) => {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+
+    const userContext = await buildUserContext(userId);
+    const pref = await prisma.nutritionPreference.findUnique({ where: { userId } });
+    const calsGoal = 2500; // In a real app, calculate from TDEE
+
+    const schema = z.object({
+      meals: z.array(z.object({
+        name: z.string(),
+        type: z.enum(['Breakfast', 'Lunch', 'Dinner', 'Snack']),
+        cals: z.number(),
+        cost: z.number(),
+        protein: z.number(),
+        carbs: z.number(),
+        fats: z.number(),
+        aiExplanation: z.string()
+      }))
+    });
+
+    const promptStr = `You are an expert AI nutritionist. The user needs a daily meal plan.
+Goal Calories: ~${calsGoal} kcal.
+IMPORTANT DIETARY RESTRICTIONS:
+Diet Type: ${pref?.dietType || userContext.profile.diet || 'None'}
+Allergies: ${pref?.allergies || userContext.profile.allergies || 'None'}
+Disliked Foods: ${pref?.dislikedFoods || userContext.profile.dislikedFoods || 'None'}
+Budget: $${pref?.budget || 75} per week.
+
+Create 3 to 5 meals that STRICTLY adhere to the dietary restrictions (e.g. if Vegetarian, NO MEAT. If Eggetarian, NO MEAT but eggs are allowed).`;
+
+    const aiResult = await callAI({
+      system: 'You are an AI nutrition expert producing JSON meal plans.',
+      prompt: promptStr,
+      schema
+    });
+
+    if (!aiResult.ok || !aiResult.data) {
+      throw new Error('AI generation failed: ' + aiResult.error);
+    }
+
+    // Save meals
+    const savedMeals = [];
+    for (const m of aiResult.data.meals) {
+      const meal = await prisma.meal.create({
+        data: {
+          userId,
+          name: m.name,
+          type: m.type,
+          cals: m.cals,
+          cost: m.cost,
+          versions: {
+            create: {
+              versionNumber: 1,
+              name: m.name,
+              cals: m.cals,
+              cost: m.cost,
+              protein: m.protein,
+              carbs: m.carbs,
+              fats: m.fats,
+              aiExplanation: m.aiExplanation,
+              isCurrent: true
+            }
+          }
+        },
+        include: { versions: true }
+      });
+      savedMeals.push(meal);
+    }
+
+    res.json({ success: true, meals: savedMeals });
+  } catch (error: any) {
+    console.error(error);
+    res.status(500).json({ error: error.message || 'Failed to generate plan' });
+  }
+});
+
 // POST /api/v1/nutrition/regenerate
 router.post('/regenerate', async (req, res) => {
   try {
     const { mealId } = req.body;
     if (!mealId) return res.status(400).json({ error: 'Missing mealId' });
 
-    // Mock AI regeneration
     const meal = await prisma.meal.findUnique({ where: { id: mealId }, include: { versions: true } });
     if (!meal) return res.status(404).json({ error: 'Meal not found' });
+    
+    const userContext = await buildUserContext(meal.userId);
+
+    const schema = z.object({
+      name: z.string(),
+      cals: z.number(),
+      cost: z.number(),
+      protein: z.number(),
+      carbs: z.number(),
+      fats: z.number(),
+      aiExplanation: z.string()
+    });
+
+    const aiResult = await callAI({
+      system: 'You are an AI nutrition expert returning a single modified meal option in JSON.',
+      prompt: `The user wants to regenerate this meal: "${meal.name}" (${meal.cals} kcal). 
+Provide a NEW alternative meal of the same type (${meal.type}) that STRICTLY adheres to their diet: ${userContext.profile.diet}, Allergies: ${userContext.profile.allergies}.`,
+      schema
+    });
+
+    if (!aiResult.ok || !aiResult.data) {
+      throw new Error('AI generation failed');
+    }
 
     // Mark previous versions as not current
     await prisma.mealVersion.updateMany({
@@ -98,12 +201,21 @@ router.post('/regenerate', async (req, res) => {
       data: {
         mealId,
         versionNumber: newVersionNum,
-        name: `${meal.name} (v${newVersionNum})`,
-        cals: meal.cals + Math.floor(Math.random() * 100 - 50),
-        cost: meal.cost,
-        aiExplanation: 'Regenerated based on recent high-intensity workout and available budget.',
+        name: aiResult.data.name,
+        cals: aiResult.data.cals,
+        cost: aiResult.data.cost,
+        protein: aiResult.data.protein,
+        carbs: aiResult.data.carbs,
+        fats: aiResult.data.fats,
+        aiExplanation: aiResult.data.aiExplanation,
         isCurrent: true
       }
+    });
+    
+    // Update the base meal to reflect new name/cals
+    await prisma.meal.update({
+      where: { id: mealId },
+      data: { name: aiResult.data.name, cals: aiResult.data.cals, cost: aiResult.data.cost }
     });
 
     res.json({ success: true, version: newVersion });
@@ -210,7 +322,7 @@ router.get('/grocery', async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
     
-    // Auto-generate a list if user has none
+    // Auto-generate a generic list if user has none, to avoid hardcoded meat
     if (lists.length === 0) {
       const newList = await prisma.groceryList.create({
         data: {
@@ -218,12 +330,12 @@ router.get('/grocery', async (req, res) => {
           name: "Weekly Groceries",
           items: {
             create: [
-              { name: "Chicken Breast", quantity: "2 lbs", cost: 12.00 },
+              { name: "Oats", quantity: "1 container", cost: 4.50 },
               { name: "Brown Rice", quantity: "1 bag", cost: 3.50 },
               { name: "Broccoli", quantity: "2 heads", cost: 4.00 },
-              { name: "Eggs", quantity: "1 dozen", cost: 5.00 },
+              { name: "Spinach", quantity: "1 bag", cost: 3.00 },
               { name: "Almond Milk", quantity: "1 carton", cost: 3.99 },
-              { name: "Oats", quantity: "1 container", cost: 4.50 },
+              { name: "Mixed Berries", quantity: "1 bag", cost: 5.00 },
             ]
           }
         },

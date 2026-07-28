@@ -37,7 +37,7 @@ export const fetchStreak = async () => {
   return data;
 };
 
-export const fetchAiInsights = async () => {
-  const { data } = await apiClient.get('/analytics/ai-insights', { headers });
+export const fetchSummary = async () => {
+  const { data } = await apiClient.get('/analytics/summary', { headers });
   return data;
 };

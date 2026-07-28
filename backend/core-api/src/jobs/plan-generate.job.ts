@@ -77,7 +77,6 @@ Instructions:
       const { text: aiResponse, toolCalls, toolResults } = await generateText({
         model: groq('llama-3.3-70b-versatile'),
         temperature: 0.3,
-        maxSteps: 5,
         system: systemPrompt,
         messages,
         tools: {
@@ -87,7 +86,8 @@ Instructions:
               title: z.string().describe('Short title of the event, e.g. "Shoulder Injury"'),
               description: z.string().describe('Detailed description'),
             }),
-            execute: async ({ title, description }) => {
+            execute: async (args: any) => {
+              const { title, description } = args;
               await prisma.memoryEvent.create({
                 data: { userId, title, description }
               });
@@ -101,7 +101,8 @@ Instructions:
               dayIndex: z.number().describe('Day of the week (0=Sunday, 6=Saturday)'),
               title: z.string().describe('The title of the new calendar event, e.g. "Rest Day" or "Upper Body"'),
             }),
-            execute: async ({ dayIndex, title }) => {
+            execute: async (args: any) => {
+              const { dayIndex, title } = args;
               await prisma.calendarEvent.deleteMany({
                 where: { userId, dayIndex }
               });
@@ -125,7 +126,8 @@ Instructions:
                 weight: z.string()
               })).optional()
             }),
-            execute: async ({ title, duration, exercises }) => {
+            execute: async (args: any) => {
+              const { title, duration, exercises } = args;
               const safeTitle = title || 'Full Body Routine';
               const safeDuration = duration || '45 min';
               const safeExercises = (exercises && exercises.length > 0) ? exercises : [
@@ -159,7 +161,8 @@ Instructions:
               cals: z.number().optional().describe('Total calories'),
               cost: z.number().optional().describe('Estimated cost in dollars')
             }),
-            execute: async ({ name, type, cals, cost }) => {
+            execute: async (args: any) => {
+              const { name, type, cals, cost } = args;
               const safeName = name || 'Healthy AI Meal';
               const safeType = type || 'Lunch';
               const safeCals = cals || 500;
@@ -179,7 +182,8 @@ Instructions:
               recoveryCor: z.number().describe('Core recovery score (0 to 100)'),
               bpm: z.number().describe('Resting heart rate')
             }),
-            execute: async ({ recoveryCor, bpm }) => {
+            execute: async (args: any) => {
+              const { recoveryCor, bpm } = args;
               const vitals = await prisma.vitals.update({
                 where: { userId },
                 data: { recoveryCor, bpm }
@@ -195,7 +199,8 @@ Instructions:
               weight: z.number().optional().describe('New weight of the user in their preferred unit'),
               goal: z.string().optional().describe('New fitness goal (e.g. Weight Loss, Muscle Gain)')
             }),
-            execute: async ({ weight, goal }) => {
+            execute: async (args: any) => {
+              const { weight, goal } = args;
               const dataToUpdate: any = {};
               if (weight !== undefined) dataToUpdate.weight = weight.toString();
               if (goal) dataToUpdate.goal = goal;
@@ -215,7 +220,8 @@ Instructions:
               foodName: z.string().describe('Name of the food or "Quick Calories"'),
               calories: z.number().describe('Amount of calories consumed')
             }),
-            execute: async ({ foodName, calories }) => {
+            execute: async (args: any) => {
+              const { foodName, calories } = args;
               const meal = await prisma.meal.create({
                 data: { userId, name: foodName, type: 'Snack', cals: calories, cost: 0 }
               });
@@ -229,7 +235,8 @@ Instructions:
             parameters: z.object({
               message: z.string().describe('Encouraging message or milestone text')
             }),
-            execute: async ({ message }) => {
+            execute: async (args: any) => {
+              const { message } = args;
               const feed = await prisma.feedItem.create({
                 data: { userId, message, type: 'milestone', timeStr: 'Just now' }
               });
@@ -247,9 +254,9 @@ Instructions:
       // Calculate dynamic fallback if aiResponse is empty
       let finalMessage = aiResponse;
       if (!finalMessage && toolCalls && toolCalls.length > 0) {
-        const validTools = toolCalls.filter(tc => tc.args !== null && tc.input !== null);
+        const validTools = toolCalls.filter((tc: any) => tc.args !== null);
         if (validTools.length > 0) {
-          const toolNames = validTools.map(tc => tc.toolName);
+          const toolNames = validTools.map((tc: any) => tc.toolName);
           if (toolNames.includes('generateWorkoutPlan')) {
             finalMessage = "I've generated a new workout plan for you and saved it to your profile!";
           } else if (toolNames.includes('generateMealPlan')) {

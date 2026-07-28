@@ -33,7 +33,8 @@ const aiTools = {
       date: z.string().describe("YYYY-MM-DD"),
       description: z.string(),
     }),
-    execute: async ({ title, date, description }, { toolCallId }) => {
+    execute: async (args: any) => {
+      const { title, date, description } = args;
       // Note: we can't emit easily from inside the execute block if we don't have io or userId, but we can return the action string and emit it after.
       // Wait, we can't emit from inside unless we bind it. So we just return the payload and process it later?
       // Actually, we can just do the DB operation here, and return a JSON string containing the action payload to be emitted later by iterating through toolResults.
@@ -50,7 +51,8 @@ const aiTools = {
       food_items: z.array(z.string()),
       total_calories: z.union([z.number(), z.string()]).transform(v => Number(v)),
     }),
-    execute: async ({ meal_type, food_items, total_calories }) => {
+    execute: async (args: any) => {
+      const { meal_type, food_items, total_calories } = args;
       return JSON.stringify({ type: 'DIET_UPDATED', count: 1, totalCals: total_calories, summary: food_items.join(', ') });
     }
   }),
@@ -61,7 +63,8 @@ const aiTools = {
       action: z.string(),
       reason: z.string(),
     }),
-    execute: async ({ reason }) => {
+    execute: async (args: any) => {
+      const { reason } = args;
       return JSON.stringify({ type: 'WORKOUT_CREATED', count: 1, summary: reason });
     }
   })
@@ -148,7 +151,6 @@ Current Workout: ${currentWorkout ? `"${(currentWorkout as any).title}"` : 'None
         system: SYSTEM_PROMPT + '\n' + userContext,
         messages: conversationMessages,
         tools: aiTools,
-        maxSteps: 5,
         temperature: 0.6,
       });
 
