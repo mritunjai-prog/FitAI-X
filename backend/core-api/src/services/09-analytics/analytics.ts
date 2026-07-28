@@ -390,25 +390,13 @@ router.get('/summary', async (req, res) => {
     const userId = req.headers['x-user-id'] as string;
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const userContext = await buildUserContext(userId);
-
-    const schema = z.object({
-      progressText: z.string(),
-      progressScore: z.number(),
-      weekHighlight: z.string(),
-      dietAdherence: z.string(),
-      undertrained: z.array(z.string())
+    // Fetch the latest AI Recommendation instead of generating it on the fly
+    const recommendation = await prisma.aiRecommendation.findFirst({
+      where: { userId },
+      orderBy: { createdAt: 'desc' }
     });
 
-    const aiResult = await callAI({
-      system: `You are Rachel AI fitness coach. Analyze the user's weekly history, nutrition, and recovery.
-Return a JSON summary including progress text (1-2 sentences), a progress score (0-100), week highlight, diet adherence comment, and an array of undertrained muscle groups.`,
-      prompt: `Context: ${JSON.stringify(userContext)}`,
-      schema
-    });
-
-    if (!aiResult.ok || !aiResult.data) {
-      console.error('[Analytics AI] Failed to generate summary, using fallback:', aiResult.error);
+    if (!recommendation) {
       return res.json({
         progressText: "You are consistently hitting your marks. Keep up the good work!",
         progressScore: 85,
@@ -418,12 +406,85 @@ Return a JSON summary including progress text (1-2 sentences), a progress score 
       });
     }
 
-    res.json(aiResult.data);
+    res.json({
+      progressText: "Here is your weekly AI recommendation summary.",
+      progressScore: 100, // could be calculated
+      weekHighlight: "AI processed your weekly performance.",
+      dietAdherence: "On track.",
+      undertrained: recommendation.undertrainedMuscles ? JSON.parse(recommendation.undertrainedMuscles) : [],
+      overtrained: recommendation.overtrainedMuscles ? JSON.parse(recommendation.overtrainedMuscles) : [],
+      suggestions: recommendation.suggestions ? JSON.parse(recommendation.suggestions) : []
+    });
   } catch (e: any) {
     console.error('[Analytics AI] Error:', e.message);
     res.status(500).json({ error: e.message });
   }
 });
+
+// ─── GET /api/v1/analytics/workout-summary ───────────────────────────────────────
+router.get('/workout-summary', async (req, res) => {
+  try {
+    const userId = req.headers['x-user-id'] as string;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    // 1. Weekly Goal Progress
+    const targetWorkoutsPerWeek = 4; // Or fetch from user goal
+    const sessions = await prisma.workoutSession.findMany({
+      where: { userId, status: 'COMPLETED', createdAt: { gte: sevenDaysAgo } },
+      include: { exercises: true },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    const completedWorkouts = sessions.length;
+    const weeklyProgress = {
+      completed: completedWorkouts,
+      target: targetWorkoutsPerWeek,
+      progressPct: Math.min(Math.round((completedWorkouts / targetWorkoutsPerWeek) * 100), 100)
+    };
+
+    // 2. Per-day exercise count (bar chart)
+    const dailyExerciseCounts: Record<string, number> = {};
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(sevenDaysAgo);
+      d.setDate(d.getDate() + i);
+      dailyExerciseCounts[d.toDateString()] = 0;
+    }
+
+    sessions.forEach(s => {
+      const day = new Date(s.createdAt).toDateString();
+      if (dailyExerciseCounts[day] !== undefined) {
+        dailyExerciseCounts[day] += s.exercises.length;
+      }
+    });
+
+    const chartData = Object.entries(dailyExerciseCounts).map(([date, count]) => ({
+      date,
+      exercisesCompleted: count
+    }));
+
+    // 3. Current streak
+    const currentStreak = user.currentStreak;
+    const longestStreak = user.longestStreak;
+
+    res.json({
+      weeklyProgress,
+      chartData,
+      currentStreak,
+      longestStreak
+    });
+  } catch (e: any) {
+    console.error('[Analytics Workout Summary] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 
 // ─── GET /api/v1/analytics/history ───────────────────────────────────────
 router.get('/history', async (req, res) => {

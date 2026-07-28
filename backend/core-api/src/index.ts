@@ -27,6 +27,9 @@ import path from 'path'
 // Event Driven Architecture & Jobs
 import { registerListeners } from './core/listeners'
 import { startAiWorker } from './jobs/plan-generate.job'
+import cron from 'node-cron'
+import { checkDailyStreaks } from './jobs/streak-cron'
+import { generateWeeklyRecommendations } from './jobs/ai-recommendations'
 
 const app = express()
 const PORT = process.env.PORT || 4000
@@ -75,6 +78,18 @@ setupSocket(io)
 try {
   registerListeners();
   startAiWorker();
+
+  // Initialize Cron Jobs
+  // Daily at midnight (00:00)
+  cron.schedule('0 0 * * *', () => {
+    checkDailyStreaks().catch(err => console.error('[Cron] Daily Streak Error:', err));
+  });
+
+  // Monday morning at 00:01
+  cron.schedule('1 0 * * 1', () => {
+    generateWeeklyRecommendations().catch(err => console.error('[Cron] AI Rec Error:', err));
+  });
+  console.log('[Core] Registered Cron Jobs');
 } catch (error: any) {
   console.warn('Failed to start worker (Redis may not be running):', error.message);
 }

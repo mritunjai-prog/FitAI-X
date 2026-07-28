@@ -333,4 +333,30 @@ router.patch('/:id/exercises/:exId/status', async (req, res) => {
   }
 });
 
+// PATCH /api/v1/workouts/:id/exercises/:exId
+router.patch('/:id/exercises/:exId', async (req, res) => {
+  try {
+    const { id, exId } = req.params;
+    const { name, sets, reps, weight, restTime, notes, muscleGroup } = req.body;
+
+    const updatedExercise = await prisma.exercise.update({
+      where: { id: exId, workoutId: id },
+      data: {
+        ...(name !== undefined && { name }),
+        ...(sets !== undefined && { sets }),
+        ...(reps !== undefined && { reps }),
+        ...(weight !== undefined && { weight }),
+        ...(restTime !== undefined && { restTime }),
+        ...(notes !== undefined && { notes }),
+        ...(muscleGroup !== undefined && { muscleGroup }),
+      }
+    });
+
+    res.json(updatedExercise);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to update exercise' });
+  }
+});
+
 export default router

@@ -31,9 +31,12 @@ model User {
   physicalLimitations String?
   medications         String?
   currentStreak       Int       @default(0)
+  longestStreak       Int       @default(0)
   xpTotal             Int       @default(0)
   xpLastEarned        Int       @default(0)
   lastStreakReason    String?
+
+  AiRecommendation AiRecommendation[]
 
   coachMessages  CoachMessage[]
   feeds          FeedItem[]
@@ -117,6 +120,7 @@ model Workout {
   equipment     String?
   targetMuscles String? // JSON array or comma separated
   isFavorite    Boolean @default(false)
+  isStreakSaver Boolean @default(false)
 
   // FR-002: Workout Version Control
   parentVersionId String?
@@ -290,6 +294,7 @@ model WorkoutSession {
   caloriesBurned Int?
   notes          String?
   status         String    @default("COMPLETED") // COMPLETED, IN_PROGRESS
+  isStreakSaver  Boolean   @default(false)
   createdAt      DateTime  @default(now())
 
   workout   Workout?                 @relation(fields: [workoutId], references: [id], onDelete: SetNull)
@@ -326,4 +331,16 @@ model WorkoutPR {
   weight       Float
   reps         Int
   dateAchieved DateTime @default(now())
+}
+
+model AiRecommendation {
+  id                  String   @id @default(uuid())
+  userId              String
+  weekStart           DateTime
+  weekEnd             DateTime
+  undertrainedMuscles String?
+  overtrainedMuscles  String?
+  suggestions         String?
+  createdAt           DateTime @default(now())
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
