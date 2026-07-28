@@ -112,7 +112,7 @@ function MainApp() {
   }
 
   return (
-    <Animated.View key={!hasOnboarded ? 'Onboarding' : currentScreen} entering={FadeIn.duration(400).easing(Easing.out(Easing.cubic))} style={{ flex: 1 }}>
+    <Animated.View key={!hasOnboarded ? 'Onboarding' : currentScreen} entering={FadeIn.duration(400)} style={{ flex: 1 }}>
       {!hasOnboarded ? (
         <OnboardingScreen onComplete={completeOnboarding} />
       ) : currentScreen === 'Profile' ? (

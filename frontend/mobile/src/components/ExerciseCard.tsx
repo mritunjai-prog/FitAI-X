@@ -64,10 +64,15 @@ export default function ExerciseCard({ exercise, isDark, onMoveUp, onMoveDown, o
     return {
       transform: [{ scale: activeScale.value }],
       zIndex: isActive ? 100 : 1,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: isActive ? 15 : 0 },
-      shadowOpacity: isActive ? 0.4 : 0,
-      shadowRadius: isActive ? 20 : 0,
+      ...Platform.select({
+        web: { boxShadow: isActive ? '0px 15px 20px rgba(0,0,0,0.4)' : 'none' } as any,
+        default: {
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: isActive ? 15 : 0 },
+          shadowOpacity: isActive ? 0.4 : 0,
+          shadowRadius: isActive ? 20 : 0,
+        }
+      }),
       elevation: isActive ? 15 : 0,
     };
   });

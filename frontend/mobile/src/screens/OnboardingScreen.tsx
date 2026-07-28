@@ -561,14 +561,22 @@ const getStyles = (C: any) => StyleSheet.create({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: C.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    ...Platform.select({
+      web: { boxShadow: `0px 4px 12px ${C.primary}50` } as any,
+      default: {
+        shadowColor: C.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+      }
+    })
   },
   nextBtnDisabled: {
     backgroundColor: 'rgba(150,150,150,0.15)',
-    shadowOpacity: 0,
+    ...Platform.select({
+      web: { boxShadow: 'none' } as any,
+      default: { shadowOpacity: 0 }
+    })
   },
   nextBtnText: { color: C.onPrimary, fontFamily: F.header, fontSize: 16 },
 
@@ -577,7 +585,11 @@ const getStyles = (C: any) => StyleSheet.create({
   aiIconWrapper: {
     width: 80, height: 80, borderRadius: 40, backgroundColor: C.primary,
     alignItems: 'center', justifyContent: 'center',
-    shadowColor: C.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 20, zIndex: 2
+    ...Platform.select({
+      web: { boxShadow: `0px 0px 20px ${C.primary}99` } as any,
+      default: { shadowColor: C.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 20 }
+    }),
+    zIndex: 2
   },
   aiScannerRing: {
     position: 'absolute', width: 80, height: 80, borderRadius: 40,

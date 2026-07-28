@@ -70,11 +70,11 @@ export default function WorkoutHistoryScreen({ onNavigateBack }: { onNavigateBac
               
               {/* Timeline Dot */}
               <View style={{ width: 32, alignItems: 'center', marginRight: 16, marginTop: 24 }}>
-                <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: C.primary, borderWidth: 3, borderColor: C.bg, shadowColor: C.primary, shadowOpacity: 0.6, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, zIndex: 2 }} />
+                <View style={[{ width: 14, height: 14, borderRadius: 7, backgroundColor: C.primary, borderWidth: 3, borderColor: C.bg, zIndex: 2 }, Platform.select({ web: { boxShadow: `0px 0px 8px ${C.primary}99` } as any, default: { shadowColor: C.primary, shadowOpacity: 0.6, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } } })]} />
               </View>
 
               {/* History Card */}
-              <View style={{ flex: 1, backgroundColor: C.surface, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: C.outlineVariant, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 16 }}>
+              <View style={[{ flex: 1, backgroundColor: C.surface, borderRadius: 24, padding: 20, borderWidth: 1, borderColor: C.outlineVariant }, Platform.select({ web: { boxShadow: '0px 8px 16px rgba(0,0,0,0.2)' } as any, default: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 16 } })]}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontFamily: F.header, fontSize: 19, color: C.onSurface, marginBottom: 4, letterSpacing: -0.3 }}>{session.title}</Text>
@@ -112,7 +112,7 @@ export default function WorkoutHistoryScreen({ onNavigateBack }: { onNavigateBac
             <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
             <Pressable style={StyleSheet.absoluteFill} onPress={() => setIsFilterOpen(false)} />
             
-            <Animated.View entering={ZoomIn.duration(250).springify().damping(20)} exiting={ZoomOut.duration(200)} style={{ position: 'absolute', top: Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 0) + 70 : 70, right: 20, width: 220, borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.5, shadowRadius: 30 }}>
+            <Animated.View entering={ZoomIn.duration(250).springify().damping(20)} exiting={ZoomOut.duration(200)} style={[{ position: 'absolute', top: Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 0) + 70 : 70, right: 20, width: 220, borderRadius: 24, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }, Platform.select({ web: { boxShadow: '0px 20px 30px rgba(0,0,0,0.5)' } as any, default: { shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.5, shadowRadius: 30 } })]}>
               <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={{ padding: 20 }}>
                 <Text style={{ fontFamily: F.header, fontSize: 12, color: C.onSurfaceVariant, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 }}>Timeframe</Text>
                 {['All Time', 'Past Week', 'Past Month'].map(t => (

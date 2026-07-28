@@ -292,7 +292,7 @@ const getStyles = (C: ThemeColors, isDark: boolean) => StyleSheet.create({
   largeTitle: { fontFamily: F.header, fontSize: 34, color: C.onSurface, letterSpacing: -1, marginBottom: 20 },
 
   // Hero Card
-  hero: { borderRadius: 32, backgroundColor: C.glassInset, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', padding: 20, marginBottom: 24, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 15 }, shadowOpacity: 0.2, shadowRadius: 30 },
+  hero: { borderRadius: 32, backgroundColor: C.glassInset, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', padding: 20, marginBottom: 24, overflow: 'hidden', ...Platform.select({ web: { boxShadow: '0px 15px 30px rgba(0,0,0,0.2)' } as any, default: { shadowColor: '#000', shadowOffset: { width: 0, height: 15 }, shadowOpacity: 0.2, shadowRadius: 30 } }) },
   heroPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, alignSelf: 'flex-start', marginBottom: 12 },
   heroPillText: { fontFamily: F.header, fontSize: 11, letterSpacing: 1.5 },
   heroTitle: { color: C.onSurface, fontFamily: F.header, fontSize: 26, lineHeight: 30, letterSpacing: -0.5, marginBottom: 4 },
@@ -337,6 +337,6 @@ const getStyles = (C: ThemeColors, isDark: boolean) => StyleSheet.create({
 
   // Floating CTA
   bottomCtaWrapper: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingTop: 60, paddingBottom: Platform.OS === 'ios' ? 10 : 24, pointerEvents: 'box-none' },
-  floatingCta: { borderRadius: 100, paddingVertical: 20, alignItems: 'center', shadowColor: C.primary, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+  floatingCta: { borderRadius: 100, paddingVertical: 20, alignItems: 'center', elevation: 10, ...Platform.select({ web: { boxShadow: `0px 10px 20px ${C.primary}50` } as any, default: { shadowColor: C.primary, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20 } }) },
   ctaText: { fontFamily: F.header, fontSize: 17, letterSpacing: 0.5 }
 });

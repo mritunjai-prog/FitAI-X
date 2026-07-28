@@ -466,7 +466,7 @@ const getStyles = (C: any) => StyleSheet.create({
   mealCals: { color: C.onSurfaceVariant, fontSize: 13, fontFamily: F.bodyMed },
   
   modalOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 100, justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: C.bg, borderTopLeftRadius: 32, borderTopRightRadius: 32, height: '85%', borderWidth: 1, borderColor: C.outlineVariant, shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.5, shadowRadius: 20 },
+  modalContent: { backgroundColor: C.bg, borderTopLeftRadius: 32, borderTopRightRadius: 32, height: '85%', borderWidth: 1, borderColor: C.outlineVariant, ...Platform.select({ web: { boxShadow: '0px -10px 20px rgba(0,0,0,0.5)' } as any, default: { shadowColor: '#000', shadowOffset: { width: 0, height: -10 }, shadowOpacity: 0.5, shadowRadius: 20 } }) },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: C.outlineVariant },
   modalTitle: { color: C.onSurface, fontSize: 24, fontFamily: F.header, letterSpacing: -0.5 },
   closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: C.glassInset, alignItems: 'center', justifyContent: 'center' },

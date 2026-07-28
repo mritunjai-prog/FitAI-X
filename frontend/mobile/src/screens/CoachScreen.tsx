@@ -8,7 +8,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { fetchCoachMessages, sendMessage } from '../services/api/coach';
 import { transcribeAudio } from '../services/api/transcribe';
-import { Audio } from 'expo-av';
+import { useAudioRecorder, RecordingPresets, requestRecordingPermissionsAsync, setAudioModeAsync } from 'expo-audio';
 import { DarkColors, F } from '../theme';
 import MeshGradientBackground from '../components/MeshGradientBackground';
 import { useTheme } from '../context/ThemeContext';
@@ -161,7 +161,7 @@ export default function CoachScreen({ onNavigateToNotifications, onNavigateBack 
   const [isTyping, setIsTyping] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const webRecognitionRef = useRef<any>(null);
 
   useEffect(() => {
@@ -213,7 +213,7 @@ export default function CoachScreen({ onNavigateToNotifications, onNavigateBack 
   const requestAudioPermission = async () => {
     if (Platform.OS === 'web') return true;
     try {
-      const { status } = await Audio.requestPermissionsAsync();
+      const { status } = await requestRecordingPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert("Permission Required", "Please grant microphone access to use voice commands.");
         return false;
@@ -256,9 +256,9 @@ export default function CoachScreen({ onNavigateToNotifications, onNavigateBack 
     const hasPerm = await requestAudioPermission();
     if (!hasPerm) return;
     try {
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      recordingRef.current = recording;
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
       setIsRecording(true);
     } catch (err) {
       console.error('Failed to start recording', err);
@@ -267,12 +267,12 @@ export default function CoachScreen({ onNavigateToNotifications, onNavigateBack 
   };
 
   const stopNativeRecording = async () => {
-    if (!recordingRef.current) return;
+    if (!isRecording) return;
     setIsRecording(false);
     setIsProcessingVoice(true);
     try {
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
+      await recorder.stop();
+      const uri = recorder.uri;
       if (uri) {
         const text = await transcribeAudio(uri);
         if (text) setInputText(prev => prev ? prev + ' ' + text : text);
@@ -281,7 +281,6 @@ export default function CoachScreen({ onNavigateToNotifications, onNavigateBack 
       Alert.alert("Error", 'Voice processing failed');
     } finally {
       setIsProcessingVoice(false);
-      recordingRef.current = null;
     }
   };
 

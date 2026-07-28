@@ -452,14 +452,19 @@ export default function ActiveWorkoutScreen({ onFinish, onNavigateBack }: { onFi
                 borderWidth: 1, 
                 borderColor: isActive ? 'rgba(234, 179, 8, 0.3)' : C.outlineVariant,
                 overflow: 'hidden',
-                shadowColor: isActive ? '#eab308' : '#000',
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: isActive ? 0.1 : 0.05,
-                shadowRadius: 12,
+                ...Platform.select({
+                  web: { boxShadow: `0px 4px 12px ${isActive ? 'rgba(234,179,8,0.1)' : 'rgba(0,0,0,0.05)'}` } as any,
+                  default: {
+                    shadowColor: isActive ? '#eab308' : '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: isActive ? 0.1 : 0.05,
+                    shadowRadius: 12,
+                  }
+                }),
                 elevation: isActive ? 8 : 2
               }}>
                 {isActive && (
-                  <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: '#eab308', shadowColor: '#eab308', shadowOpacity: 0.8, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } }} />
+                  <View style={[{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: '#eab308' }, Platform.select({ web: { boxShadow: '0px 0px 8px #eab308' } as any, default: { shadowColor: '#eab308', shadowOpacity: 0.8, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } } })]} />
                 )}
                 
                 <View style={{ flexDirection: 'row', marginBottom: 16, alignItems: 'center' }}>
@@ -534,10 +539,10 @@ export default function ActiveWorkoutScreen({ onFinish, onNavigateBack }: { onFi
           <Animated.View style={[{ 
             borderRadius: 100, 
             overflow: 'hidden', 
-            shadowColor: '#eab308', 
-            shadowOffset: { width: 0, height: 8 }, 
-            shadowOpacity: 0.35, 
-            shadowRadius: 16, 
+            ...Platform.select({
+              web: { boxShadow: `0px 8px 16px rgba(234, 179, 8, 0.35)` } as any,
+              default: { shadowColor: '#eab308', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.35, shadowRadius: 16 }
+            }),
             elevation: 10 
           }, animatedBtnStyle]}>
             <LinearGradient 

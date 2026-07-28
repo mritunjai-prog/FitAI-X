@@ -388,12 +388,12 @@ export default function WorkoutBuilderScreen({ onNavigateBack, onStartWorkout }:
           onPress={handleStart}
         >
           <Animated.View style={[{ 
+            ...Platform.select({
+              web: { boxShadow: `0px 0px 8px #eab308` } as any,
+              default: { shadowColor: '#eab308', shadowOpacity: 0.8, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } }
+            }), 
             borderRadius: 100, 
             overflow: 'hidden', 
-            shadowColor: '#eab308', 
-            shadowOffset: { width: 0, height: 8 }, 
-            shadowOpacity: 0.35, 
-            shadowRadius: 16, 
             elevation: 10 
           }, animatedBtnStyle]}>
             <LinearGradient 

@@ -31,7 +31,7 @@ router.get('/current', async (req, res) => {
       include: { exercises: { orderBy: { order: 'asc' } } }
     })
     
-    if (!workout) return res.status(404).json({ error: 'Current workout not found' })
+    if (!workout) return res.json(null)
     res.json(workout)
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch current workout' })
