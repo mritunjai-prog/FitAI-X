@@ -1,19 +1,41 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, Dimensions } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, Platform, Dimensions, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeIn, FadeInUp, useSharedValue, useAnimatedStyle, withRepeat, withTiming, withSequence, interpolate, Extrapolation, useAnimatedScrollHandler } from 'react-native-reanimated';
+import Animated, { FadeInUp, FadeIn, FadeOut, useSharedValue, useAnimatedStyle, withSpring, interpolate, Extrapolation, useAnimatedScrollHandler, withTiming, Layout } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Path, Circle, Rect, Ellipse, Defs, LinearGradient as SvgLinearGradient, Stop, RadialGradient } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useQuery } from '@tanstack/react-query';
+
 import { fetchCurrentWorkout } from '../services/api/workout';
 import { fetchVitals } from '../services/api/dashboard';
 import { useTheme } from '../context/ThemeContext';
-import { F } from '../theme';
+import { ThemeColors, F } from '../theme';
+import MeshGradientBackground from '../components/MeshGradientBackground';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
+// ─── REUSABLE KINETIC PRESSABLE ──────────────────────────────────────────────
+function SquishButton({ children, onPress, style }: { children: React.ReactNode, onPress?: () => void, style?: any }) {
+  const scale = useSharedValue(1);
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  return (
+    <Pressable
+      onPressIn={() => { scale.value = withSpring(0.94, { damping: 15, stiffness: 300 }); }}
+      onPressOut={() => { scale.value = withSpring(1, { damping: 15, stiffness: 300 }); }}
+      onPress={() => {
+        if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        if (onPress) onPress();
+      }}
+      style={style}
+    >
+      <Animated.View style={animStyle}>{children}</Animated.View>
+    </Pressable>
+  );
+}
+
+// ─── ICON COMPONENT ──────────────────────────────────────────────────────────
 function Icon({ name, size = 24, color = "#fff" }: { name: string; size?: number; color?: string }) {
   const paths: Record<string, string> = {
     "arrow-back": "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z",
@@ -33,324 +55,288 @@ function Icon({ name, size = 24, color = "#fff" }: { name: string; size?: number
   ) : null;
 }
 
-export default function WorkoutHomeScreen({ onNavigateBack, onNavigateToBuilder, onNavigateToActive, onNavigateToHistory }: { onNavigateBack: () => void; onNavigateToBuilder: () => void; onNavigateToActive: () => void; onNavigateToHistory: () => void; }) {
-  const { C, isDark } = useTheme();
-  
-  // Custom Premium Theme specific to Workout
-  const WP = {
-    bg: C.bg,
-    card: C.surface,
-    card2: C.glassInset,
-    purple: '#F5C400',
-    violet: '#FFD60A',
-    pink: '#FFB300',
-    blue: '#CA8A04',
-    cyan: '#FDE68A',
-    green: '#A3E635',
-    text: C.onSurface,
-    text2: C.onSurfaceVariant,
-    border: C.outlineVariant
-  };
+// ─── MAIN SCREEN ─────────────────────────────────────────────────────────────
+export default function WorkoutHomeScreen({ onNavigateBack, onNavigateToBuilder, onNavigateToActive, onNavigateToHistory }: any) {
+  const { C, isDark, bgColors } = useTheme();
+  const styles = useMemo(() => getStyles(C, isDark), [C, isDark]);
 
   const { data: currentWorkout } = useQuery({ queryKey: ['currentWorkout'], queryFn: () => fetchCurrentWorkout() });
   const { data: vitals } = useQuery({ queryKey: ['vitals'], queryFn: fetchVitals });
 
   const [aiWhyOpen, setAiWhyOpen] = useState(false);
 
-  // Animations
-  const botY = useSharedValue(0);
-  useEffect(() => {
-    botY.value = withRepeat(withSequence(withTiming(-8, { duration: 1700 }), withTiming(0, { duration: 1700 })), -1, true);
-  }, []);
-
-  const botStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: botY.value }]
-  }));
-
+  // Scroll Parallax Engine
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (e) => { scrollY.value = e.contentOffset.y; }
   });
 
-  const haptic = () => { if (Platform.OS !== 'web') Haptics.selectionAsync(); };
+  const headerBlurStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, 40], [0, 1], Extrapolation.CLAMP)
+  }));
+
+  const inlineTitleStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [40, 60], [0, 1], Extrapolation.CLAMP),
+    transform: [{ translateY: interpolate(scrollY.value, [40, 60], [10, 0], Extrapolation.CLAMP) }]
+  }));
+
+  const largeTitleStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, 40], [1, 0], Extrapolation.CLAMP),
+    transform: [{ scale: interpolate(scrollY.value, [-50, 0, 40], [1.1, 1, 0.9], Extrapolation.CLAMP) }]
+  }));
+
+  // Fallback Data
+  const exercises = currentWorkout?.exercises?.length ? currentWorkout.exercises : [
+    { id: 'm1', name: 'Barbell Bench Press', sets: 4, reps: 8, weight: 80 },
+    { id: 'm2', name: 'Incline Dumbbell Press', sets: 3, reps: 10, weight: 30 },
+    { id: 'm3', name: 'Overhead Press', sets: 3, reps: 10, weight: 45 },
+    { id: 'm4', name: 'Lateral Raises', sets: 4, reps: 15, weight: 12 },
+    { id: 'm5', name: 'Tricep Pushdown', sets: 3, reps: 12, weight: 25 },
+  ];
 
   return (
-    <View style={{ flex: 1, backgroundColor: WP.bg }}>
-      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+    <View style={styles.safe}>
+      <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
+      
+      {/* ─── Apple-Style Sticky Header ─── */}
+      <View style={styles.stickyHeaderContainer}>
+        <Animated.View style={[StyleSheet.absoluteFill, headerBlurStyle]}>
+          <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
+          <View style={styles.headerBorder} />
+        </Animated.View>
         
-        {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 20 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-            <TouchableOpacity onPress={() => { haptic(); onNavigateBack(); }} style={{ padding: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12 }}>
-              <Icon name="arrow-back" size={24} color={WP.text} />
-            </TouchableOpacity>
-            <Text style={{ fontSize: 20, color: WP.text, fontFamily: F.header }}>Workout Hub</Text>
-          </View>
-          <TouchableOpacity onPress={() => { haptic(); onNavigateToHistory(); }} style={{ padding: 8, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12 }}>
-            <Icon name="history" size={24} color={WP.text} />
-          </TouchableOpacity>
-        </View>
-
-        <Animated.ScrollView 
-          onScroll={scrollHandler} 
-          scrollEventThrottle={16} 
-          contentContainerStyle={{ paddingBottom: 120 }}
-          showsVerticalScrollIndicator={false}
-        >
-
-
-          <View style={{ paddingHorizontal: 16 }}>
-            {/* Hero Section */}
-          <Animated.View entering={FadeInUp.delay(100)} style={[styles.hero, { backgroundColor: WP.card }]}>
-            <LinearGradient colors={['rgba(245,196,0,0.15)', 'transparent']} style={StyleSheet.absoluteFillObject} start={{x:0.75, y:0}} end={{x:1, y:1}} />
+        <SafeAreaView edges={['top']}>
+          <View style={styles.headerContent}>
+            <SquishButton onPress={onNavigateBack} style={styles.headerIconBtn}>
+              <Icon name="arrow-back" size={22} color={C.onSurface} />
+            </SquishButton>
             
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <View style={{ flex: 1 }}>
-                <View style={[styles.heroPill, { backgroundColor: isDark ? 'rgba(253,230,138,0.1)' : 'rgba(202,138,4,0.15)' }]}>
-                  <Icon name="auto-awesome" size={12} color={isDark ? WP.cyan : WP.blue} />
-                  <Text style={[styles.heroPillText, { color: isDark ? '#FDE9A8' : WP.blue }]}>TODAY'S BEST WORKOUT</Text>
-                </View>
-                <Text style={[styles.heroTitle, { color: WP.text }]}>{currentWorkout?.title || 'Push Strength'}</Text>
-                <Text style={[styles.heroSub, { color: WP.text2 }]}>Focus: {currentWorkout?.targetMuscles || 'Chest • Shoulders • Triceps'}</Text>
-              </View>
+            {/* Inline Title (Visible on scroll) */}
+            <Animated.Text style={[styles.inlineTitle, inlineTitleStyle]}>
+              Workout Hub
+            </Animated.Text>
 
-              {/* Bot SVG */}
-              <Animated.View style={[{ width: 96, height: 96, marginTop: -6 }, botStyle]}>
-                <Svg viewBox="0 0 150 150" fill="none">
-                  <Defs>
-                    <SvgLinearGradient id="botBody" x1="0" y1="0" x2="1" y2="1"><Stop offset="0%" stopColor="#FFF8E8"/><Stop offset="100%" stopColor="#E8D9A0"/></SvgLinearGradient>
-                    <RadialGradient id="eyeglow" cx="50%" cy="50%" r="50%"><Stop offset="0%" stopColor="#FFE9A8"/><Stop offset="100%" stopColor="#F5C400"/></RadialGradient>
-                  </Defs>
-                  <Ellipse cx="75" cy="128" rx="30" ry="6" fill="#000" opacity="0.25"/>
-                  <Rect x="45" y="60" width="60" height="58" rx="22" fill="url(#botBody)"/>
-                  <Circle cx="75" cy="34" r="26" fill="url(#botBody)"/>
-                  <Rect x="66" y="6" width="18" height="10" rx="5" fill="#FFD60A"/>
-                  <Circle cx="75" cy="4" r="4" fill="#FFD60A"/>
-                  <Ellipse cx="65" cy="34" rx="6" ry="7" fill="url(#eyeglow)"/>
-                  <Ellipse cx="85" cy="34" rx="6" ry="7" fill="url(#eyeglow)"/>
-                  <Path d="M64 46q11 7 22 0" stroke="#B0A488" strokeWidth="2.4" strokeLinecap="round" />
-                  <Rect x="58" y="72" width="34" height="6" rx="3" fill="#F5C400" opacity="0.55"/>
-                  <Rect x="20" y="66" width="16" height="30" rx="8" fill="url(#botBody)"/>
-                  <Rect x="10" y="58" width="14" height="16" rx="7" fill="url(#botBody)" transform="rotate(-25 17 66)"/>
-                  <Rect x="114" y="66" width="16" height="30" rx="8" fill="url(#botBody)"/>
-                  <Rect x="50" y="118" width="16" height="24" rx="7" fill="url(#botBody)"/>
-                  <Rect x="84" y="118" width="16" height="24" rx="7" fill="url(#botBody)"/>
-                </Svg>
-              </Animated.View>
+            <SquishButton onPress={onNavigateToHistory} style={styles.headerIconBtn}>
+              <Icon name="history" size={22} color={C.onSurface} />
+            </SquishButton>
+          </View>
+        </SafeAreaView>
+      </View>
+
+      <Animated.ScrollView 
+        onScroll={scrollHandler} 
+        scrollEventThrottle={16} 
+        contentContainerStyle={{ paddingTop: 110, paddingBottom: 160 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={{ paddingHorizontal: 20 }}>
+          
+          {/* Large Title (Fades out on scroll) */}
+          <Animated.Text style={[styles.largeTitle, largeTitleStyle]}>
+            Workout Hub
+          </Animated.Text>
+
+          {/* ─── Hero Section ─── */}
+          <Animated.View entering={FadeInUp.delay(100).springify().damping(15)} style={styles.hero}>
+            <LinearGradient 
+              colors={isDark ? ['rgba(255,255,255,0.1)', 'rgba(255,255,255,0.02)'] : ['rgba(0,0,0,0.08)', 'rgba(0,0,0,0.01)']} 
+              style={StyleSheet.absoluteFillObject} 
+              start={{x: 0, y: 0}} end={{x: 0, y: 1}} 
+            />
+            
+            <View style={styles.heroPill}>
+              <Icon name="auto-awesome" size={12} color={C.primary} />
+              <Text style={[styles.heroPillText, { color: C.primary }]}>TODAY'S OPTIMIZED PLAN</Text>
+            </View>
+            
+            <Text style={styles.heroTitle}>{currentWorkout?.title || 'Push Strength'}</Text>
+            <Text style={styles.heroSub}>Focus: {currentWorkout?.targetMuscles || 'Chest • Shoulders • Triceps'}</Text>
+
+            {/* Technical Stats using JetBrains Mono */}
+            <View style={styles.statsRow}>
+              <View style={styles.statGroup}>
+                <Icon name="timer" size={18} color={C.primary} />
+                <Text style={styles.statTextTech}>{currentWorkout?.duration || '45'}m</Text>
+              </View>
+              <View style={styles.statGroup}>
+                <Icon name="fitness-center" size={18} color={C.primary} />
+                <Text style={styles.statTextTech}>{currentWorkout?.exercises?.length || 6} Ex</Text>
+              </View>
+              <View style={styles.statGroup}>
+                <Icon name="trending-up" size={18} color={C.primary} />
+                <Text style={styles.statTextTech}>420 kcal</Text>
+              </View>
             </View>
 
-            {/* Stats */}
-            <View style={{ flexDirection: 'row', gap: 18, marginVertical: 16 }}>
-              <View style={{ gap: 4 }}>
-                <Icon name="timer" size={17} color={isDark ? WP.cyan : WP.blue} />
-                <Text style={{ color: WP.text, fontFamily: F.header, fontSize: 13.5 }}>{currentWorkout?.duration || '45'} Mins</Text>
-              </View>
-              <View style={{ gap: 4 }}>
-                <Icon name="fitness-center" size={17} color={isDark ? WP.cyan : WP.blue} />
-                <Text style={{ color: WP.text, fontFamily: F.header, fontSize: 13.5 }}>{currentWorkout?.exercises?.length || 6} Exercises</Text>
-              </View>
-              <View style={{ gap: 4 }}>
-                <Icon name="trending-up" size={17} color={isDark ? WP.cyan : WP.blue} />
-                <Text style={{ color: WP.text, fontFamily: F.header, fontSize: 13.5 }}>~420 kcal</Text>
-              </View>
-            </View>
-
-            <View style={[styles.heroChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.08)' }]}>
-              <Icon name="fitness-center" size={13} color={WP.text} />
-              <Text style={{ color: WP.text, fontFamily: F.header, fontSize: 11.5 }}>{currentWorkout?.difficulty || 'Intermediate'}</Text>
-            </View>
-
-            {/* Buttons */}
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <TouchableOpacity style={[styles.hbtn, { flex: 1, backgroundColor: WP.purple }]} onPress={() => { haptic(); onNavigateToActive(); }}>
-                <Icon name="play-arrow" size={16} color={WP.bg} />
-                <Text style={{ color: WP.bg, fontFamily: F.header, fontSize: 14 }}>Start Workout</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.hbtn, { flex: 1, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', borderWidth: 1, borderColor: isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.1)' }]} onPress={() => { haptic(); onNavigateToBuilder(); }}>
-                <Text style={{ color: WP.text, fontFamily: F.header, fontSize: 14 }}>Customize</Text>
-              </TouchableOpacity>
+            {/* CTA Buttons */}
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 24 }}>
+              <SquishButton style={[styles.hbtn, { flex: 1.5, backgroundColor: C.primary }]} onPress={onNavigateToActive}>
+                <Icon name="play-arrow" size={18} color={C.onPrimary} />
+                <Text style={[styles.btnText, { color: C.onPrimary }]}>Start</Text>
+              </SquishButton>
+              
+              <SquishButton style={[styles.hbtn, styles.hbtnSecondary]} onPress={onNavigateToBuilder}>
+                <Text style={[styles.btnText, { color: C.onSurface }]}>Customize</Text>
+              </SquishButton>
             </View>
           </Animated.View>
 
-          {/* AI Recommendation Card */}
-          <Animated.View entering={FadeInUp.delay(200)} style={[styles.glassCard, { backgroundColor: WP.card, borderColor: WP.border }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          {/* ─── AI Recommendation Card ─── */}
+          <Animated.View entering={FadeInUp.delay(200).springify().damping(15)} style={styles.glassCard}>
+            {/* Ambient Backlight */}
+            <View style={[styles.ambientGlow, { backgroundColor: C.primary }]} />
+
+            <View style={styles.cardHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Icon name="auto-awesome" size={17} color={WP.cyan} />
-                <Text style={{ color: WP.text, fontFamily: F.header, fontSize: 15 }}>AI Recommendation</Text>
+                <Icon name="auto-awesome" size={18} color={C.primary} />
+                <Text style={styles.cardTitle}>AI Recommendation</Text>
               </View>
-              <TouchableOpacity onPress={() => { haptic(); setAiWhyOpen(!aiWhyOpen); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Text style={{ color: WP.text2, fontFamily: F.bodyBold, fontSize: 11.5 }}>Why this workout?</Text>
+              <SquishButton onPress={() => setAiWhyOpen(!aiWhyOpen)} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={styles.whyText}>Details</Text>
                 <Animated.View style={useAnimatedStyle(() => ({ transform: [{ rotate: withTiming(aiWhyOpen ? '180deg' : '0deg') }] }))}>
-                  <Icon name="chevron-down" size={16} color={WP.text2} />
+                  <Icon name="chevron-down" size={18} color={C.onSurfaceVariant} />
                 </Animated.View>
-              </TouchableOpacity>
+              </SquishButton>
             </View>
 
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 }}>
-              <View style={{ alignItems: 'center', gap: 6 }}>
-                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(163,230,53,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon name="favorite" size={17} color={WP.green} />
-                </View>
-                <Text style={{ color: WP.text, fontFamily: F.header, fontSize: 13 }}>{vitals ? Math.round((vitals.recoveryCor + vitals.recoveryUpr) / 2 * 100) : 92}%</Text>
-                <Text style={{ color: WP.text2, fontFamily: F.body, fontSize: 10 }}>Recovery</Text>
+            <View style={styles.metricsRow}>
+              <View style={styles.metricItem}>
+                <View style={[styles.metricIconBg, { backgroundColor: 'rgba(74,222,128,0.15)' }]}><Icon name="favorite" size={18} color="#4ade80" /></View>
+                <Text style={styles.metricValTech}>{vitals ? Math.round((vitals.recoveryCor + vitals.recoveryUpr) / 2 * 100) : 92}%</Text>
+                <Text style={styles.metricLabel}>Recovery</Text>
               </View>
-
-              <View style={{ alignItems: 'center', gap: 6 }}>
-                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(245,196,0,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon name="timer" size={17} color={WP.purple} />
-                </View>
-                <Text style={{ color: WP.text, fontFamily: F.header, fontSize: 13 }}>7h 45m</Text>
-                <Text style={{ color: WP.text2, fontFamily: F.body, fontSize: 10 }}>Sleep</Text>
+              <View style={styles.metricItem}>
+                <View style={[styles.metricIconBg, { backgroundColor: 'rgba(56,189,248,0.15)' }]}><Icon name="timer" size={18} color="#38bdf8" /></View>
+                <Text style={styles.metricValTech}>7h 45m</Text>
+                <Text style={styles.metricLabel}>Sleep</Text>
               </View>
-
-              <View style={{ alignItems: 'center', gap: 6 }}>
-                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: 'rgba(253,230,138,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon name="auto-awesome" size={17} color={WP.cyan} />
-                </View>
-                <Text style={{ color: WP.text, fontFamily: F.header, fontSize: 13 }}>High</Text>
-                <Text style={{ color: WP.text2, fontFamily: F.body, fontSize: 10 }}>Muscle Readiness</Text>
+              <View style={styles.metricItem}>
+                <View style={[styles.metricIconBg, { backgroundColor: 'rgba(251,191,36,0.15)' }]}><Icon name="auto-awesome" size={18} color="#fbbf24" /></View>
+                <Text style={styles.metricValTech}>High</Text>
+                <Text style={styles.metricLabel}>Readiness</Text>
               </View>
             </View>
 
-            <Text style={{ color: WP.text2, fontFamily: F.body, fontSize: 12.5, lineHeight: 18 }}>
+            <Text style={styles.insightText}>
               {currentWorkout?.aiExplanation || "Chest fully recovered. Increase pushing volume by 8% for better results based on your logged history."}
             </Text>
 
+            {/* Fluid Accordion Expansion */}
             {aiWhyOpen && (
-              <Animated.View entering={FadeInUp.duration(300)} style={{ marginTop: 8 }}>
-                <Text style={{ color: WP.text2, fontFamily: F.body, fontSize: 12.5, lineHeight: 18 }}>
-                  Rest periods trimmed slightly given strong HRV this morning. Ready for high intensity.
-                </Text>
+              <Animated.View entering={FadeInUp.springify().damping(15)} exiting={FadeOut.duration(200)} layout={Layout.springify().damping(15)}>
+                <View style={styles.accordionContent}>
+                  <Text style={styles.insightText}>
+                    Rest periods trimmed slightly given strong HRV this morning. Ready for high intensity.
+                  </Text>
+                </View>
               </Animated.View>
             )}
           </Animated.View>
 
-          {/* Today's Exercises */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 20 }}>
-            <Text style={{ color: WP.text, fontFamily: F.header, fontSize: 16 }}>Today's Exercises</Text>
-            <TouchableOpacity onPress={() => onNavigateToBuilder()}>
-              <Text style={{ color: WP.purple, fontFamily: F.header, fontSize: 12.5 }}>View All</Text>
-            </TouchableOpacity>
+          {/* ─── Inset Grouped Exercises List ─── */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, marginTop: 12, paddingHorizontal: 4 }}>
+            <Text style={styles.listSectionTitle}>TODAY'S EXERCISES</Text>
+            <SquishButton onPress={onNavigateToBuilder}>
+              <Text style={styles.seeAllText}>Edit</Text>
+            </SquishButton>
           </View>
 
-          {(currentWorkout?.exercises?.length ? currentWorkout.exercises : [
-            { id: 'm1', name: 'Barbell Bench Press', sets: 4, reps: 8, weight: 80 },
-            { id: 'm2', name: 'Incline Dumbbell Press', sets: 3, reps: 10, weight: 30 },
-            { id: 'm3', name: 'Overhead Press', sets: 3, reps: 10, weight: 45 },
-            { id: 'm4', name: 'Lateral Raises', sets: 4, reps: 15, weight: 12 },
-            { id: 'm5', name: 'Tricep Pushdown', sets: 3, reps: 12, weight: 25 },
-          ]).map((ex: any, i: number) => (
-            <Animated.View key={ex.id || i} entering={FadeInUp.delay(300 + (i * 100))} style={[styles.exerciseCard, { backgroundColor: WP.card, borderColor: WP.border }]}>
-              <View style={[styles.exNum, { backgroundColor: WP.card2 }]}><Text style={{ color: WP.text2, fontFamily: F.header, fontSize: 11 }}>{i + 1}</Text></View>
-              <View style={{ flex: 1, marginHorizontal: 12 }}>
-                <Text style={{ color: WP.text, fontFamily: F.header, fontSize: 13.5, marginBottom: 4 }}>{ex.name}</Text>
-                <Text style={{ color: WP.text2, fontFamily: F.body, fontSize: 10.5 }}>{ex.sets} Sets • {ex.reps} Reps • {ex.weight}kg</Text>
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <Text style={{ color: WP.text, fontFamily: F.header, fontSize: 13 }}>~{Math.round(ex.sets * ex.reps * 0.8)}</Text>
-                <Text style={{ color: WP.text2, fontFamily: F.body, fontSize: 9.5 }}>kcal</Text>
-              </View>
-            </Animated.View>
-          ))}
-          </View>
-        </Animated.ScrollView>
+          <Animated.View entering={FadeInUp.delay(300).springify().damping(15)} style={styles.insetGroup}>
+            {exercises.map((ex: any, i: number) => {
+              const isLast = i === exercises.length - 1;
+              return (
+                <View key={ex.id || i} style={[styles.exerciseRow, !isLast && styles.exerciseRowBorder]}>
+                  <View style={styles.exNum}>
+                    <Text style={styles.exNumText}>{i + 1}</Text>
+                  </View>
+                  <View style={{ flex: 1, marginHorizontal: 14 }}>
+                    <Text style={styles.exName}>{ex.name}</Text>
+                    <Text style={styles.exDetailsTech}>{ex.sets}x{ex.reps} • {ex.weight}kg</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={styles.exCalsTech}>~{Math.round(ex.sets * ex.reps * 0.8)}</Text>
+                    <Text style={styles.exCalsLabel}>kcal</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </Animated.View>
 
-        {/* Sticky CTA */}
-        <Animated.View entering={FadeInUp.delay(500).springify()} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 34 : 20, paddingTop: 20, backgroundColor: isDark ? 'rgba(10,10,10,0.85)' : 'rgba(255,255,255,0.85)', borderTopWidth: 1, borderTopColor: WP.border }}>
-          <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFillObject} />
-          <TouchableOpacity onPress={() => { haptic(); onNavigateToActive(); }} style={{ backgroundColor: WP.violet, paddingVertical: 18, borderRadius: 100, alignItems: 'center', shadowColor: WP.purple, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 15 }}>
-            <Text style={{ color: '#000', fontFamily: F.header, fontSize: 16 }}>Lock & Start Workout</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </SafeAreaView>
+        </View>
+      </Animated.ScrollView>
+
+      {/* ─── Dissolving Bottom CTA ─── */}
+      <View style={styles.bottomCtaWrapper}>
+        <LinearGradient colors={['transparent', C.bg]} style={StyleSheet.absoluteFillObject} />
+        <SafeAreaView edges={['bottom']}>
+          <SquishButton style={[styles.floatingCta, { backgroundColor: C.primary }]} onPress={onNavigateToActive}>
+            <Text style={[styles.ctaText, { color: C.onPrimary }]}>Lock & Start Workout</Text>
+          </SquishButton>
+        </SafeAreaView>
+      </View>
+
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  hero: {
-    borderRadius: 28,
-    backgroundColor: '#161616',
-    borderWidth: 1,
-    borderColor: 'rgba(255,214,10,0.15)',
-    padding: 20,
-    marginBottom: 16,
-    overflow: 'hidden'
-  },
-  heroPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-    marginBottom: 10
-  },
-  heroPillText: {
-    color: '#FDE9A8',
-    fontFamily: 'Inter_700Bold',
-    fontSize: 10.5,
-    letterSpacing: 0.4
-  },
-  heroTitle: {
-    color: '#FFFFFF',
-    fontFamily: 'Inter_700Bold',
-    fontSize: 26,
-    lineHeight: 30,
-    marginBottom: 4
-  },
-  heroSub: {
-    color: '#E8DFC0',
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    marginBottom: 0
-  },
-  heroChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-    marginBottom: 16
-  },
-  hbtn: {
-    padding: 14,
-    borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6
-  },
-  glassCard: {
-    backgroundColor: '#161616',
-    borderWidth: 1,
-    borderColor: 'rgba(255,214,10,0.09)',
-    borderRadius: 22,
-    padding: 18,
-    marginBottom: 16
-  },
-  exerciseCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#161616',
-    borderWidth: 1,
-    borderColor: 'rgba(255,214,10,0.09)',
-    borderRadius: 18,
-    padding: 12,
-    marginBottom: 10
-  },
-  exNum: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    backgroundColor: '#101010',
-    alignItems: 'center',
-    justifyContent: 'center'
-  }
+// ─── DYNAMIC STYLES ──────────────────────────────────────────────────────────
+const getStyles = (C: ThemeColors, isDark: boolean) => StyleSheet.create({
+  safe: { flex: 1, backgroundColor: C.bg },
+  
+  // Header
+  stickyHeaderContainer: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50 },
+  headerBorder: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, backgroundColor: C.outlineVariant },
+  headerContent: { paddingHorizontal: 20, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  headerIconBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: C.glassInset, alignItems: 'center', justifyContent: 'center' },
+  inlineTitle: { fontFamily: F.header, fontSize: 18, color: C.onSurface, position: 'absolute', left: 0, right: 0, textAlign: 'center', zIndex: -1 },
+  largeTitle: { fontFamily: F.header, fontSize: 34, color: C.onSurface, letterSpacing: -1, marginBottom: 20 },
+
+  // Hero Card
+  hero: { borderRadius: 32, backgroundColor: C.glassInset, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', padding: 20, marginBottom: 24, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 15 }, shadowOpacity: 0.2, shadowRadius: 30 },
+  heroPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, alignSelf: 'flex-start', marginBottom: 12 },
+  heroPillText: { fontFamily: F.header, fontSize: 11, letterSpacing: 1.5 },
+  heroTitle: { color: C.onSurface, fontFamily: F.header, fontSize: 26, lineHeight: 30, letterSpacing: -0.5, marginBottom: 4 },
+  heroSub: { color: C.onSurfaceVariant, fontFamily: F.bodyMed, fontSize: 14 },
+  
+  // Technical Stats
+  statsRow: { flexDirection: 'row', gap: 24, marginTop: 16 },
+  statGroup: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  statTextTech: { color: C.onSurface, fontFamily: 'JetBrainsMono-Regular', fontSize: 14 },
+  
+  // Buttons
+  hbtn: { padding: 14, borderRadius: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  hbtnSecondary: { flex: 1, backgroundColor: C.glassInset, borderWidth: 1, borderColor: C.outlineVariant },
+  btnText: { fontFamily: F.header, fontSize: 15 },
+
+  // AI Card & Glow
+  glassCard: { backgroundColor: C.glassInset, borderWidth: 1, borderColor: C.outlineVariant, borderRadius: 28, padding: 20, marginBottom: 24, overflow: 'hidden' },
+  ambientGlow: { position: 'absolute', top: -50, right: -50, width: 150, height: 150, borderRadius: 75, filter: 'blur(40px)', opacity: 0.15 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  cardTitle: { color: C.onSurface, fontFamily: F.header, fontSize: 17, letterSpacing: -0.3 },
+  whyText: { color: C.onSurfaceVariant, fontFamily: F.bodyBold, fontSize: 13 },
+  metricsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16, backgroundColor: isDark ? 'rgba(0,0,0,0.2)' : 'rgba(255,255,255,0.5)', borderRadius: 20, padding: 12 },
+  metricItem: { alignItems: 'center', gap: 6 },
+  metricIconBg: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  metricValTech: { color: C.onSurface, fontFamily: 'JetBrainsMono-Regular', fontSize: 15 },
+  metricLabel: { color: C.onSurfaceVariant, fontFamily: F.bodyMed, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
+  insightText: { color: C.onSurface, fontFamily: F.body, fontSize: 14, lineHeight: 22 },
+  accordionContent: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: C.outlineVariant },
+
+  // Inset Grouped List
+  listSectionTitle: { color: C.onSurfaceVariant, fontFamily: F.header, fontSize: 12, letterSpacing: 1.5 },
+  seeAllText: { color: C.primary, fontFamily: F.header, fontSize: 14 },
+  insetGroup: { backgroundColor: C.glassInset, borderRadius: 24, borderWidth: 1, borderColor: C.outlineVariant, overflow: 'hidden' },
+  exerciseRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, backgroundColor: 'transparent' },
+  exerciseRowBorder: { borderBottomWidth: 1, borderBottomColor: C.outlineVariant },
+  exNum: { width: 32, height: 32, borderRadius: 16, backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', alignItems: 'center', justifyContent: 'center' },
+  exNumText: { color: C.onSurfaceVariant, fontFamily: 'JetBrainsMono-Regular', fontSize: 13 },
+  exName: { color: C.onSurface, fontFamily: F.header, fontSize: 16, marginBottom: 4, letterSpacing: -0.3 },
+  exDetailsTech: { color: C.primary, fontFamily: 'JetBrainsMono-Regular', fontSize: 12 },
+  exCalsTech: { color: C.onSurface, fontFamily: 'JetBrainsMono-Regular', fontSize: 15 },
+  exCalsLabel: { color: C.onSurfaceVariant, fontFamily: F.bodyMed, fontSize: 10, marginTop: 2 },
+
+  // Floating CTA
+  bottomCtaWrapper: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingTop: 60, paddingBottom: Platform.OS === 'ios' ? 10 : 24, pointerEvents: 'box-none' },
+  floatingCta: { borderRadius: 100, paddingVertical: 20, alignItems: 'center', shadowColor: C.primary, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 10 },
+  ctaText: { fontFamily: F.header, fontSize: 17, letterSpacing: 0.5 }
 });

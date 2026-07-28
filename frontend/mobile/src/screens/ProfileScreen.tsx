@@ -13,7 +13,7 @@ import {
 import Svg, { Ellipse, Rect, Line, Circle, Path } from "react-native-svg";
 import { BlurView } from "expo-blur";
 import * as Haptics from "expo-haptics";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import Animated, {
   useSharedValue,

@@ -1,12 +1,14 @@
 import { Router } from 'express';
 import prisma from '../../db';
 import { getIo } from '../../realtime/socket';
-import Groq from 'groq-sdk';
+import { createGroq } from '@ai-sdk/groq';
+import { generateText, tool } from 'ai';
+import { z } from 'zod';
 
 const router = Router();
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
+const groq = createGroq({
+  apiKey: process.env.GROQ_API_KEY || '',
 });
 
 const SYSTEM_PROMPT = `You are Rachel AI, an advanced, highly precise, and proactive personal fitness assistant. Your primary goal is to provide exact, accurate, and dynamically generated responses based strictly on the user's input, profile, and fitness context. You are integrated into a modern UI (FitAI X / Antigravity).
@@ -21,124 +23,48 @@ CORE RULES & BEHAVIOR:
 
 Always be warm, encouraging, but highly efficient.`;
 
-// ─── Tool definitions (Groq format) ──────────────────────────────────────────
-const tools: Groq.Chat.ChatCompletionTool[] = [
-  {
-    type: "function",
-    function: {
-      name: "add_to_calendar",
-      description: "Adds a dynamically generated event, workout, or meal to the user's smart calendar.",
-      parameters: {
-        type: "object",
-        properties: {
-          title: { type: "string", description: "The title of the event" },
-          date: { type: "string", description: "The target date in YYYY-MM-DD format" },
-          description: { type: "string", description: "Specific dynamic details (exercises, reps, sets, ingredients)." }
-        },
-        required: ["title", "date", "description"]
-      }
+// Vercel AI SDK Tools
+const aiTools = {
+  add_to_calendar: tool({
+    description: "Adds a dynamically generated event, workout, or meal to the user's smart calendar.",
+    parameters: z.object({
+      title: z.string(),
+      date: z.string().describe("YYYY-MM-DD"),
+      description: z.string(),
+    }),
+    execute: async ({ title, date, description }, { toolCallId }) => {
+      // Note: we can't emit easily from inside the execute block if we don't have io or userId, but we can return the action string and emit it after.
+      // Wait, we can't emit from inside unless we bind it. So we just return the payload and process it later?
+      // Actually, we can just do the DB operation here, and return a JSON string containing the action payload to be emitted later by iterating through toolResults.
+      const d = new Date(date);
+      const dayIndex = isNaN(d.getDay()) ? 1 : d.getDay();
+      return JSON.stringify({ type: 'CALENDAR_UPDATED', count: 1, summary: title, dbData: { dayIndex, title } });
     }
-  },
-  {
-    type: "function",
-    function: {
-      name: "save_to_meal_planner",
-      description: "Saves a mathematically calculated meal plan into the user's database.",
-      parameters: {
-        type: "object",
-        properties: {
-          day: { type: "string" },
-          meal_type: { type: "string", enum: ["Breakfast", "Lunch", "Dinner", "Snack"] },
-          food_items: { type: "array", items: { type: "string" } },
-          total_calories: { type: "number" }
-        },
-        required: ["day", "meal_type", "food_items", "total_calories"]
-      }
+  }),
+  save_to_meal_planner: tool({
+    description: "Saves a mathematically calculated meal plan into the user's database.",
+    parameters: z.object({
+      day: z.string(),
+      meal_type: z.string(),
+      food_items: z.array(z.string()),
+      total_calories: z.union([z.number(), z.string()]).transform(v => Number(v)),
+    }),
+    execute: async ({ meal_type, food_items, total_calories }) => {
+      return JSON.stringify({ type: 'DIET_UPDATED', count: 1, totalCals: total_calories, summary: food_items.join(', ') });
     }
-  },
-  {
-    type: "function",
-    function: {
-      name: "adjust_workout",
-      description: "Modifies the user's current workout plan based on dynamically changing goals or fatigue predictions.",
-      parameters: {
-        type: "object",
-        properties: {
-          workout_id: { type: "string" },
-          action: { type: "string", enum: ["replace_exercise", "adjust_intensity", "generate_new"] },
-          reason: { type: "string", description: "The human-readable explanation for this adjustment." }
-        },
-        required: ["action", "reason"]
-      }
+  }),
+  adjust_workout: tool({
+    description: "Modifies the user's current workout plan based on dynamically changing goals or fatigue predictions.",
+    parameters: z.object({
+      workout_id: z.string().optional(),
+      action: z.string(),
+      reason: z.string(),
+    }),
+    execute: async ({ reason }) => {
+      return JSON.stringify({ type: 'WORKOUT_CREATED', count: 1, summary: reason });
     }
-  }
-];
-
-// ─── Tool execution logic ─────────────────────────────────────────────────────
-async function executeTool(
-  toolName: string,
-  args: any,
-  userId: string,
-  io: any,
-  tempMessageId: string
-): Promise<{ result: string; actionPayload: any }> {
-  
-  if (toolName === 'add_to_calendar') {
-    const { title, date, description } = args;
-    const d = new Date(date);
-    const dayIndex = isNaN(d.getDay()) ? 1 : d.getDay();
-    
-    await prisma.calendarEvent.create({
-      data: { userId, dayIndex, title, intensity: 'Medium', type: 'workout' },
-    });
-
-    io?.to(userId).emit('ai_stream_action', {
-      messageId: tempMessageId,
-      actionPayload: { type: 'CALENDAR_UPDATED', count: 1, summary: title },
-    });
-
-    return { 
-      result: `SUCCESS: The event "${args.title}" was successfully added to the user's calendar. DO NOT call this tool again. Please reply to the user confirming it is done.`, 
-      actionPayload: { type: 'CALENDAR_UPDATED', count: 1, summary: args.title } 
-    };
-  }
-
-  if (toolName === 'save_to_meal_planner') {
-    const { day, meal_type, food_items, total_calories } = args;
-    const created = await prisma.meal.create({
-      data: { userId, type: meal_type.toLowerCase(), name: food_items.join(', '), cals: total_calories, cost: 0 },
-    });
-
-    io?.to(userId).emit('ai_stream_action', {
-      messageId: tempMessageId,
-      actionPayload: { type: 'DIET_UPDATED', count: 1, totalCals: total_calories, summary: created.name },
-    });
-
-    return { 
-      result: `SUCCESS: The meal plan was saved to the database. DO NOT call this tool again. Please reply to the user confirming it is done.`, 
-      actionPayload: { type: 'DIET_UPDATED', count: 1, totalCals: args.total_calories, summary: args.food_items.join(', ') } 
-    };
-  }
-
-  if (toolName === 'adjust_workout') {
-    const { action, reason } = args;
-    
-    // Example Prisma Update for FR-021 Workout Adjustment
-    // await prisma.workout.update(...) 
-    
-    io?.to(userId).emit('ai_stream_action', {
-      messageId: tempMessageId,
-      actionPayload: { type: 'WORKOUT_CREATED', count: 1, summary: reason },
-    });
-
-    return { 
-      result: `SUCCESS: The workout was adjusted. DO NOT call this tool again. Please reply to the user summarizing the change.`, 
-      actionPayload: { type: 'WORKOUT_CREATED', count: 1, summary: args.reason } 
-    };
-  }
-
-  return { result: 'ERROR: Unknown tool. Stop attempting to use tools.', actionPayload: null };
-}
+  })
+};
 
 // GET /api/v1/coach/messages
 router.get('/messages', async (req, res) => {
@@ -204,79 +130,46 @@ Current Workout: ${currentWorkout ? `"${(currentWorkout as any).title}"` : 'None
         take: 6,
       });
 
-      const historyMessages: Groq.Chat.ChatCompletionMessageParam[] = chatHistory.reverse().map(msg => ({
+      const historyMessages = chatHistory.reverse().map(msg => ({
         role: msg.role === 'ai' ? 'assistant' : 'user',
         content: msg.content,
       }));
 
-      const conversationMessages: Groq.Chat.ChatCompletionMessageParam[] = [
+      const conversationMessages: any[] = [
         ...historyMessages,
         { role: 'user', content: text.trim() },
       ];
 
-      let loopMessages: Groq.Chat.ChatCompletionMessageParam[] = [...conversationMessages];
-      let finalText = '';
-      let iterationCount = 0;
-      const MAX_ITERATIONS = 5;
-
       io?.to(userId).emit('ai_stream_start', { messageId: tempMessageId });
 
-      while (iterationCount < MAX_ITERATIONS) {
-        iterationCount++;
+      const { text: aiResponse, toolResults } = await generateText({
+        model: groq('llama-3.3-70b-versatile'),
+        system: SYSTEM_PROMPT + '\n' + userContext,
+        messages: conversationMessages,
+        tools: aiTools,
+        maxSteps: 5,
+        temperature: 0.6,
+      });
 
-        const response = await groq.chat.completions.create({
-          model: 'llama-3.3-70b-versatile',
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT + '\n' + userContext },
-            ...loopMessages,
-          ],
-          tools,
-          tool_choice: 'auto',
-          temperature: 0.6,
-          max_tokens: 800,
-        });
-
-        const choice = response.choices[0];
-        const message = choice.message;
-
-        if (choice.finish_reason === 'stop' || (!message.tool_calls?.length && message.content)) {
-          finalText = message.content || '';
-          break;
+      let finalText = aiResponse || "Got it! I've updated your plans.";
+      
+      // Process DB additions and emit actions
+      if (toolResults && toolResults.length > 0) {
+        for (const res of toolResults) {
+          try {
+             const payload = JSON.parse((res as any).result as string);
+             if (payload.type === 'CALENDAR_UPDATED') {
+               await prisma.calendarEvent.create({
+                 data: { userId, dayIndex: payload.dbData.dayIndex, title: payload.dbData.title, intensity: 'Medium', type: 'workout' },
+               });
+             } else if (payload.type === 'DIET_UPDATED') {
+               await prisma.meal.create({
+                 data: { userId, type: 'snack', name: payload.summary, cals: payload.totalCals, cost: 0 },
+               });
+             }
+             io?.to(userId).emit('ai_stream_action', { messageId: tempMessageId, actionPayload: payload });
+          } catch(e) {}
         }
-
-        if (message.tool_calls?.length) {
-          loopMessages.push({
-            role: 'assistant',
-            content: message.content || '',
-            tool_calls: message.tool_calls,
-          } as any);
-
-          for (const toolCall of message.tool_calls) {
-            const toolName = toolCall.function.name;
-            let toolArgs: any = {};
-            try {
-              toolArgs = JSON.parse(toolCall.function.arguments);
-            } catch {
-              console.error(`[Coach API] Failed to parse JSON for ${toolName}`);
-            }
-
-            const { result } = await executeTool(toolName, toolArgs, userId, io, tempMessageId);
-
-            loopMessages.push({
-              role: 'tool',
-              tool_call_id: toolCall.id,
-              content: result,
-            } as any);
-          }
-          continue;
-        }
-        break;
-      }
-
-      if (!finalText) {
-        finalText = loopMessages.some(m => m.role === 'tool') 
-          ? "I've processed your request and updated your planner accordingly." 
-          : "I couldn't process that request properly. Please try again.";
       }
 
       const CHUNK_SIZE = 8;

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, TextInput, Pressable, KeyboardAvoidingView, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { FadeInUp, SlideInDown, useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence, interpolateColor, Layout, withDelay } from "react-native-reanimated";
+import Animated, { FadeInUp, SlideInDown, useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence, interpolateColor, Layout, withDelay, interpolate, Extrapolation, useAnimatedScrollHandler } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import Svg, { Path, Circle, Rect } from "react-native-svg";
 import { LinearGradient } from "expo-linear-gradient";
@@ -35,13 +35,13 @@ function Icon({ name, size = 24, color = "#fff" }: { name: string; size?: number
 const AnimatedSvg = Animated.createAnimatedComponent(Svg);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
-function CircularProgress({ progress, size = 40, strokeWidth = 4, color = "#eab308" }: any) {
+function GlowingCircularProgress({ progress, size = 48, strokeWidth = 4, color = "#eab308" }: any) {
   const radius = (size - strokeWidth) / 2;
   const circum = radius * 2 * Math.PI;
   const animatedProgress = useSharedValue(0);
 
   useEffect(() => {
-    animatedProgress.value = withTiming(progress, { duration: 800 });
+    animatedProgress.value = withTiming(progress, { duration: 1000 });
   }, [progress]);
 
   const animatedProps = useAnimatedStyle(() => ({
@@ -50,12 +50,13 @@ function CircularProgress({ progress, size = 40, strokeWidth = 4, color = "#eab3
 
   return (
     <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View style={{ position: 'absolute', width: size - 10, height: size - 10, borderRadius: size / 2, backgroundColor: color, filter: 'blur(10px)', opacity: 0.3 }} />
       <AnimatedSvg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
-        <Circle stroke="rgba(255,255,255,0.1)" fill="none" cx={size/2} cy={size/2} r={radius} strokeWidth={strokeWidth} />
+        <Circle stroke="rgba(255,255,255,0.08)" fill="none" cx={size/2} cy={size/2} r={radius} strokeWidth={strokeWidth} />
         <AnimatedCircle stroke={color} fill="none" cx={size/2} cy={size/2} r={radius} strokeWidth={strokeWidth} strokeDasharray={circum} animatedProps={animatedProps} strokeLinecap="round" />
       </AnimatedSvg>
       <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-        <Icon name="flash-on" size={14} color={color} />
+        <Icon name="flash-on" size={16} color={color} />
       </View>
     </View>
   );
@@ -109,67 +110,65 @@ function RestTimer({ duration = 60, onComplete, C }: any) {
 function AnimatedSetRow({ ex, sIdx, isChecked, onToggle, weight, reps, onUpdate, isDark, C, showRestTimer }: any) {
   const scale = useSharedValue(1);
   const bgOpacity = useSharedValue(isChecked ? 1 : 0);
-  const [showConfetti, setShowConfetti] = useState(false);
 
   useEffect(() => {
     bgOpacity.value = withTiming(isChecked ? 1 : 0, { duration: 300 });
-    if (isChecked) {
-      setShowConfetti(true);
-      setTimeout(() => setShowConfetti(false), 1000);
-    }
   }, [isChecked]);
 
   const bgStyle = useAnimatedStyle(() => ({
-    backgroundColor: isDark 
-      ? `rgba(234, 179, 8, ${bgOpacity.value * 0.12})` 
-      : `rgba(234, 179, 8, ${bgOpacity.value * 0.1})`
+    backgroundColor: interpolateColor(bgOpacity.value, [0, 1], 
+      [isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.02)', 'rgba(234, 179, 8, 0.15)']
+    ),
+    borderColor: interpolateColor(bgOpacity.value, [0, 1], 
+      ['transparent', 'rgba(234, 179, 8, 0.4)']
+    )
   }));
 
-  const textStyle = useAnimatedStyle(() => {
-    const color = interpolateColor(bgOpacity.value, [0, 1], [C.onSurface, '#eab308']);
-    return { color };
-  });
+  const textStyle = useAnimatedStyle(() => ({
+    color: interpolateColor(bgOpacity.value, [0, 1], [C.onSurface, '#eab308'])
+  }));
+
+  const animatedScaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }]
+  }));
 
   return (
-    <>
-      <Animated.View layout={Layout.springify()} style={[{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderRadius: 12, paddingHorizontal: 8, marginVertical: 2 }, bgStyle]}>
-        <Text style={{ flex: 0.3, fontFamily: F.num, color: C.onSurfaceVariant, fontSize: 14 }}>{sIdx + 1}</Text>
-        
-        <View style={{ flex: 1, paddingHorizontal: 4 }}>
-          {isChecked ? (
-            <Animated.Text style={[{ fontFamily: F.num, fontSize: 18, textAlign: 'center' }, textStyle]}>{weight}</Animated.Text>
-          ) : (
-            <Stepper value={weight} onChange={(v: number) => onUpdate(sIdx, 'weight', v)} isDark={isDark} C={C} />
-          )}
-        </View>
+    <Pressable
+      onPressIn={() => { scale.value = withSpring(0.96); }}
+      onPressOut={() => { scale.value = withSpring(1); }}
+      onPress={() => {
+        if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        onToggle();
+      }}
+    >
+      <Animated.View layout={Layout.springify().damping(16)} style={[animatedScaleStyle]}>
+        <Animated.View style={[{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderRadius: 16, paddingHorizontal: 12, marginVertical: 4, borderWidth: 1 }, bgStyle]}>
+          <Text style={{ flex: 0.3, fontFamily: F.num, color: C.onSurfaceVariant, fontSize: 15 }}>{sIdx + 1}</Text>
+          
+          <View style={{ flex: 1, paddingHorizontal: 4 }}>
+            {isChecked ? (
+              <Animated.Text style={[{ fontFamily: F.num, fontSize: 20, textAlign: 'center' }, textStyle]}>{weight}</Animated.Text>
+            ) : (
+              <Stepper value={weight} onChange={(v: number) => onUpdate(sIdx, 'weight', v)} isDark={isDark} C={C} />
+            )}
+          </View>
 
-        <View style={{ flex: 1, paddingHorizontal: 4 }}>
-          {isChecked ? (
-            <Animated.Text style={[{ fontFamily: F.num, fontSize: 18, textAlign: 'center' }, textStyle]}>{reps}</Animated.Text>
-          ) : (
-            <Stepper value={reps} onChange={(v: number) => onUpdate(sIdx, 'reps', v)} isDark={isDark} C={C} />
-          )}
-        </View>
+          <View style={{ flex: 1, paddingHorizontal: 4 }}>
+            {isChecked ? (
+              <Animated.Text style={[{ fontFamily: F.num, fontSize: 20, textAlign: 'center' }, textStyle]}>{reps}</Animated.Text>
+            ) : (
+              <Stepper value={reps} onChange={(v: number) => onUpdate(sIdx, 'reps', v)} isDark={isDark} C={C} />
+            )}
+          </View>
 
-        <TouchableOpacity 
-          activeOpacity={0.8}
-          onPress={() => {
-            scale.value = withSequence(withSpring(0.8), withSpring(1));
-            onToggle();
-          }}
-          style={{ flex: 0.4, alignItems: 'flex-end', paddingRight: 4 }}
-        >
-          <Animated.View style={[{ transform: [{ scale }] }, { width: 32, height: 32, borderRadius: 16, backgroundColor: isChecked ? '#eab308' : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'), alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: isChecked ? '#eab308' : C.outlineVariant }]}>
-            <Confetti active={showConfetti} />
-            {isChecked && <Icon name="check" size={20} color="#000" />}
-          </Animated.View>
-        </TouchableOpacity>
+          <View style={{ flex: 0.4, alignItems: 'flex-end', paddingRight: 4 }}>
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: isChecked ? '#eab308' : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'), alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: isChecked ? '#eab308' : C.outlineVariant }}>
+              {isChecked && <Icon name="check" size={22} color="#000" />}
+            </View>
+          </View>
+        </Animated.View>
       </Animated.View>
-      
-      {showRestTimer && isChecked && (
-        <RestTimer duration={60} C={C} />
-      )}
-    </>
+    </Pressable>
   );
 }
 
@@ -209,7 +208,7 @@ function ExpandableNotes({ C, isDark }: any) {
         multiline
       />
       <TouchableOpacity onPress={() => setIsRecording(!isRecording)} style={{ padding: 16 }}>
-        <Animated.View style={[{ transform: [{ scale: micPulse }] }]}>
+        <Animated.View style={[useAnimatedStyle(() => ({ transform: [{ scale: micPulse.value }] }))]}>
            <Icon name="mic" size={20} color={isRecording ? '#ef4444' : C.onSurfaceVariant} />
         </Animated.View>
       </TouchableOpacity>
@@ -223,6 +222,16 @@ export default function ActiveWorkoutScreen({ onFinish, onNavigateBack }: { onFi
   const { data: template } = useQuery({ queryKey: ['currentWorkout'], queryFn: () => fetchCurrentWorkout() });
   
   const btnScale = useSharedValue(1);
+  // Parallax Scroll Header
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (e) => { scrollY.value = e.contentOffset.y; }
+  });
+
+  const headerBlurStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [0, 40], [0, 1], Extrapolation.CLAMP)
+  }));
+
   const [sessionData, setSessionData] = useState<any>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [startTime, setStartTime] = useState<Date | null>(null);
@@ -409,10 +418,10 @@ export default function ActiveWorkoutScreen({ onFinish, onNavigateBack }: { onFi
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
+        <Animated.ScrollView onScroll={scrollHandler} scrollEventThrottle={16} contentContainerStyle={{ padding: 20, paddingTop: 100, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
           {/* Progress Header */}
           <Animated.View entering={FadeInUp.delay(50)} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: isDark ? 'rgba(20, 20, 20, 0.6)' : 'rgba(255, 255, 255, 0.6)', padding: 16, borderRadius: 20, marginBottom: 24, borderWidth: 1, borderColor: C.outlineVariant }}>
-            <CircularProgress progress={progressPercent} size={48} />
+            <GlowingCircularProgress progress={progressPercent} size={56} />
             <View style={{ marginLeft: 16, flex: 1 }}>
               <Text style={{ fontFamily: F.header, fontSize: 16, color: C.onSurface }}>Workout Progress</Text>
               <Text style={{ fontFamily: F.body, fontSize: 13, color: C.onSurfaceVariant, marginTop: 2 }}>{finishedSets} of {totalSets} sets completed</Text>
@@ -499,7 +508,7 @@ export default function ActiveWorkoutScreen({ onFinish, onNavigateBack }: { onFi
               </Animated.View>
             );
           })}
-        </ScrollView>
+        </Animated.ScrollView>
       </SafeAreaView>
 
       {/* Sticky Bottom Finish Button */}
