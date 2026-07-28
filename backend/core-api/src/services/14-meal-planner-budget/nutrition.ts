@@ -113,14 +113,24 @@ Budget: $${pref?.budget || 75} per week.
 Create 3 to 5 meals that STRICTLY adhere to the dietary restrictions (e.g. if Vegetarian, NO MEAT. If Eggetarian, NO MEAT but eggs are allowed).`;
 
     const aiResult = await callAI({
-      system: 'You are an AI nutrition expert producing JSON meal plans.',
-      prompt: promptStr,
-      schema
+      system: 'You are an AI nutrition expert. Output ONLY raw JSON. No markdown, no backticks, no explanations. Just valid JSON matching this schema: { meals: [{ name, type: "Breakfast"|"Lunch"|"Dinner"|"Snack", cals, cost, protein, carbs, fats, aiExplanation }] }',
+      prompt: promptStr
     });
 
-    if (!aiResult.ok || !aiResult.data) {
+    if (!aiResult.ok || !aiResult.text) {
       throw new Error('AI generation failed: ' + aiResult.error);
     }
+
+    let parsedData;
+    try {
+      const text = aiResult.text.replace(/```json/g, '').replace(/```/g, '').trim();
+      parsedData = JSON.parse(text);
+    } catch (err) {
+      throw new Error('AI returned invalid JSON: ' + aiResult.text);
+    }
+    
+    // Override aiResult.data to match expected format
+    aiResult.data = parsedData;
 
     // Save meals
     const savedMeals = [];

@@ -4,7 +4,7 @@ import { createGroq } from '@ai-sdk/groq';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
 const provider = process.env.AI_PROVIDER || 'groq'; // 'groq' or 'google'
-const modelName = process.env.AI_MODEL || (provider === 'google' ? 'gemini-1.5-flash' : 'llama-3.1-8b-instant');
+const modelName = process.env.AI_MODEL || (provider === 'google' ? 'gemini-1.5-pro-latest' : 'llama-3.3-70b-versatile');
 
 const groq = createGroq({ apiKey: process.env.GROQ_API_KEY || '' });
 const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || '' });
