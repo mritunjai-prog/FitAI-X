@@ -1,31 +1,48 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Dimensions, Platform, StatusBar as RNStatusBar, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import {
+  View, Text, StyleSheet, ScrollView, Pressable, Dimensions,
+  Platform, StatusBar as RNStatusBar, TouchableOpacity, TextInput, Modal, KeyboardAvoidingView, Alert
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
-import Animated, { FadeInUp, FadeIn, FadeOut, SlideInDown, SlideOutUp, Layout, useSharedValue, useAnimatedStyle, withSpring, withRepeat, withTiming, Easing } from 'react-native-reanimated';
+import Animated, {
+  FadeInUp, FadeIn, FadeOut, SlideInDown, SlideOutDown, SlideOutUp,
+  useSharedValue, useAnimatedStyle, withSpring, withRepeat, withTiming, Easing, Layout
+} from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import { DarkColors, F } from '../theme';
+import { F } from '../theme';
 import MeshGradientBackground from '../components/MeshGradientBackground';
 import { useTheme } from '../context/ThemeContext';
-
-import { useQuery } from '@tanstack/react-query';
-import { fetchSchedule } from '../services/api/calendar';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { fetchSchedule, addManualWorkout, deleteCalendarEvent } from '../services/api/calendar';
 import { useAuth } from '../context/AuthContext';
 
 const { width } = Dimensions.get('window');
+const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAYS_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// Get current week's real dates anchored to Sunday
+function getWeekDates() {
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0=Sun
+  const sunday = new Date(today);
+  sunday.setDate(today.getDate() - dayOfWeek);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(sunday);
+    d.setDate(sunday.getDate() + i);
+    return { date: d.getDate(), month: d.toLocaleString('default', { month: 'short' }), isToday: i === dayOfWeek };
+  });
+}
 
-// ─── Reusable Scale Card ────────────────────────────────────────────────────────
-function ScaleCard({ children, style, onLongPress, onPress }: any) {
+// ─── ScaleCard ───────────────────────────────────────────────────────────────
+function ScaleCard({ children, style, onPress, onLongPress }: any) {
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-  
   return (
     <Pressable
-      onPressIn={() => { scale.value = withSpring(0.96); }}
-      onPressOut={() => { scale.value = withSpring(1); }}
+      onPressIn={() => { scale.value = withSpring(0.96, { damping: 15, stiffness: 300 }); }}
+      onPressOut={() => { scale.value = withSpring(1, { damping: 15, stiffness: 300 }); }}
       onPress={onPress}
       onLongPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); onLongPress?.(); }}
     >
@@ -34,74 +51,318 @@ function ScaleCard({ children, style, onLongPress, onPress }: any) {
   );
 }
 
-// ─── AI Spinner ───────────────────────────────────────────────────────────────
-function AISpinner() {
-  const { C } = useTheme();
-  const rotation = useSharedValue(0);
-  useEffect(() => {
-    rotation.value = withRepeat(withTiming(360, { duration: 1000, easing: Easing.linear }), -1, false);
-  }, []);
-  const animStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${rotation.value}deg` }] }));
+// ─── Intensity Badge ─────────────────────────────────────────────────────────
+function IntensityBadge({ intensity, C }: { intensity?: string; C: any }) {
+  const color = intensity === 'High' ? '#ef4444' : intensity === 'Moderate' ? '#f59e0b' : intensity === 'Rest' ? '#6b7280' : '#22c55e';
   return (
-    <Animated.View style={[{ width: 64, height: 64, borderRadius: 32, borderWidth: 2, borderColor: `${C.primary}33`, borderTopColor: C.primary }, animStyle]} />
+    <View style={{ backgroundColor: `${color}20`, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+      <Text style={{ color, fontFamily: F.bodyBold, fontSize: 11 }}>{intensity || 'Light'}</Text>
+    </View>
   );
 }
 
+// ─── Muscle Group Icon Helper ──────────────────────────────────────────────────
+const getMuscleIcon = (group?: string) => {
+  const g = (group || '').toLowerCase();
+  if (g.includes('arm') || g.includes('bicep') || g.includes('tricep')) return 'arm-flex';
+  if (g.includes('leg') || g.includes('squat') || g.includes('glute')) return 'human-handsdown';
+  if (g.includes('chest') || g.includes('push')) return 'weight-lifter';
+  if (g.includes('back') || g.includes('pull')) return 'kettlebell';
+  if (g.includes('core') || g.includes('abs')) return 'human-handsdown';
+  return 'dumbbell';
+};
+
+// ─── Exercise Detail Modal ────────────────────────────────────────────────────
+function ExerciseDetailModal({ event, onClose, C }: { event: any; onClose: () => void; C: any }) {
+  const exercises: any[] = useMemo(() => {
+    if (!event?.exercises) return [];
+    try { return JSON.parse(event.exercises); }
+    catch { return []; }
+  }, [event]);
+
+  if (!event) return null;
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+        <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFillObject} />
+        <Animated.View entering={SlideInDown.springify().damping(24).stiffness(80)} style={{ backgroundColor: C.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, maxHeight: '90%', overflow: 'hidden' }}>
+          
+          {/* Header */}
+          <View style={{ padding: 24, borderBottomWidth: 1, borderBottomColor: C.outlineVariant }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <View style={{ flex: 1, marginRight: 12 }}>
+                <Text style={{ color: C.onSurface, fontFamily: F.header, fontSize: 24, letterSpacing: -0.5, marginBottom: 8 }}>{event.title}</Text>
+                {event.description && (
+                  <Text style={{ color: C.onSurfaceVariant, fontFamily: F.body, fontSize: 14, lineHeight: 20 }}>{event.description}</Text>
+                )}
+                <View style={{ marginTop: 12 }}>
+                  <IntensityBadge intensity={event.intensity} C={C} />
+                </View>
+              </View>
+              <TouchableOpacity onPress={onClose} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.glassInset, alignItems: 'center', justifyContent: 'center' }}>
+                <Feather name="x" size={18} color={C.onSurface} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
+            {event.intensity === 'Rest' || exercises.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <MaterialCommunityIcons name="sleep" size={48} color={C.primary} style={{ marginBottom: 16 }} />
+                <Text style={{ color: C.onSurface, fontFamily: F.header, fontSize: 18, marginBottom: 8 }}>Rest & Recovery Day</Text>
+                <Text style={{ color: C.onSurfaceVariant, fontFamily: F.body, fontSize: 14, textAlign: 'center', lineHeight: 20 }}>
+                  {event.description || 'Take time to recover. Light stretching, foam rolling, or a gentle walk is all you need today.'}
+                </Text>
+              </View>
+            ) : (
+              <>
+                <Text style={{ color: C.onSurfaceVariant, fontFamily: F.header, fontSize: 12, letterSpacing: 1.5, marginBottom: 16, textTransform: 'uppercase' }}>
+                  {exercises.length} Exercises
+                </Text>
+                {exercises.map((ex: any, i: number) => {
+                  const hasInstructions = !!ex.instructions || !!ex.notes;
+                  const descText = ex.instructions || ex.notes;
+                  
+                  return (
+                    <Animated.View key={i} entering={FadeInUp.delay(i * 120).springify().damping(22).stiffness(90)} style={{ marginBottom: 16, backgroundColor: C.glassInset, borderRadius: 24, borderWidth: 1, borderColor: C.outlineVariant, overflow: 'hidden' }}>
+                      {/* Top Section: Visual & Title */}
+                      <View style={{ flexDirection: 'row', padding: 16, borderBottomWidth: hasInstructions ? 1 : 0, borderBottomColor: C.outlineVariant }}>
+                        <View style={{ width: 54, height: 54, borderRadius: 16, backgroundColor: `${C.primary}15`, alignItems: 'center', justifyContent: 'center', marginRight: 16 }}>
+                          <MaterialCommunityIcons name={getMuscleIcon(ex.muscleGroup)} size={28} color={C.primary} />
+                        </View>
+                        <View style={{ flex: 1, justifyContent: 'center' }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                            <Text style={{ color: C.onSurface, fontFamily: F.header, fontSize: 16, flex: 1, marginRight: 8 }}>{ex.name}</Text>
+                            {ex.muscleGroup && (
+                              <View style={{ backgroundColor: `${C.outline}33`, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                <Text style={{ color: C.onSurfaceVariant, fontFamily: F.header, fontSize: 10, textTransform: 'uppercase' }}>{ex.muscleGroup}</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={{ color: C.primary, fontFamily: 'JetBrainsMono-Regular', fontSize: 13 }}>
+                            {ex.sets} SETS × {ex.reps} REPS  •  {ex.weight}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Bottom Section: Instructions */}
+                      {hasInstructions && (
+                        <View style={{ padding: 16, backgroundColor: `${C.bg}66` }}>
+                          <Text style={{ color: C.onSurfaceVariant, fontFamily: F.header, fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 6 }}>How to perform</Text>
+                          <Text style={{ color: C.onSurface, fontFamily: F.body, fontSize: 13, lineHeight: 18 }}>{descText}</Text>
+                        </View>
+                      )}
+                    </Animated.View>
+                  );
+                })}
+              </>
+            )}
+          </ScrollView>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Add Manual Workout Modal ─────────────────────────────────────────────────
+function AddWorkoutModal({ dayIndex, dayName, onClose, onSave, C }: { dayIndex: number; dayName: string; onClose: () => void; onSave: (data: any) => void; C: any }) {
+  const [title, setTitle] = useState('');
+  const [intensity, setIntensity] = useState('Moderate');
+  const [exercises, setExercises] = useState([{ name: '', sets: 3, reps: 10, weight: 'Bodyweight', notes: '' }]);
+
+  const addExercise = () => setExercises(prev => [...prev, { name: '', sets: 3, reps: 10, weight: 'Bodyweight', notes: '' }]);
+  const removeExercise = (i: number) => setExercises(prev => prev.filter((_, idx) => idx !== i));
+  const updateExercise = (i: number, field: string, val: any) => {
+    setExercises(prev => prev.map((ex, idx) => idx === i ? { ...ex, [field]: val } : ex));
+  };
+
+  const handleSave = () => {
+    if (!title.trim()) { Alert.alert('Missing title', 'Please enter a workout title.'); return; }
+    const validExercises = exercises.filter(ex => ex.name.trim());
+    if (validExercises.length === 0) { Alert.alert('No exercises', 'Add at least one exercise.'); return; }
+    onSave({ title: title.trim(), intensity, exercises: validExercises });
+  };
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFillObject} />
+          <Animated.View entering={SlideInDown.springify().damping(18)} style={{ backgroundColor: C.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, maxHeight: '95%' }}>
+            
+            {/* Header */}
+            <View style={{ padding: 24, borderBottomWidth: 1, borderBottomColor: C.outlineVariant, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View>
+                <Text style={{ color: C.onSurface, fontFamily: F.header, fontSize: 20, letterSpacing: -0.5 }}>Add Workout</Text>
+                <Text style={{ color: C.onSurfaceVariant, fontFamily: F.body, fontSize: 13, marginTop: 2 }}>{dayName}</Text>
+              </View>
+              <TouchableOpacity onPress={onClose} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: C.glassInset, alignItems: 'center', justifyContent: 'center' }}>
+                <Feather name="x" size={18} color={C.onSurface} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 32 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              {/* Title */}
+              <Text style={{ color: C.onSurface, fontFamily: F.header, fontSize: 13, marginBottom: 8, letterSpacing: 0.5 }}>WORKOUT TITLE</Text>
+              <TextInput
+                value={title}
+                onChangeText={setTitle}
+                placeholder="e.g. Push Day — Chest & Shoulders"
+                placeholderTextColor={C.outline}
+                style={{ backgroundColor: C.glassInset, borderWidth: 1, borderColor: C.outlineVariant, borderRadius: 14, padding: 14, color: C.onSurface, fontFamily: F.body, fontSize: 15, marginBottom: 20 }}
+              />
+
+              {/* Intensity */}
+              <Text style={{ color: C.onSurface, fontFamily: F.header, fontSize: 13, marginBottom: 12, letterSpacing: 0.5 }}>INTENSITY</Text>
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 24 }}>
+                {['Light', 'Moderate', 'High'].map(level => (
+                  <Pressable key={level} onPress={() => setIntensity(level)} style={{ flex: 1, paddingVertical: 12, borderRadius: 14, alignItems: 'center', backgroundColor: intensity === level ? C.primary : C.glassInset, borderWidth: 1, borderColor: intensity === level ? C.primary : C.outlineVariant }}>
+                    <Text style={{ color: intensity === level ? C.onPrimary : C.onSurface, fontFamily: F.header, fontSize: 13 }}>{level}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {/* Exercises */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <Text style={{ color: C.onSurface, fontFamily: F.header, fontSize: 13, letterSpacing: 0.5 }}>EXERCISES</Text>
+                <TouchableOpacity onPress={addExercise} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Feather name="plus" size={16} color={C.primary} />
+                  <Text style={{ color: C.primary, fontFamily: F.header, fontSize: 13 }}>Add</Text>
+                </TouchableOpacity>
+              </View>
+
+              {exercises.map((ex, i) => (
+                <Animated.View key={i} entering={FadeInUp.springify()} layout={Layout.springify()} style={{ backgroundColor: C.glassInset, borderRadius: 18, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: C.outlineVariant }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <Text style={{ color: C.onSurfaceVariant, fontFamily: F.header, fontSize: 12 }}>Exercise {i + 1}</Text>
+                    {exercises.length > 1 && (
+                      <TouchableOpacity onPress={() => removeExercise(i)}>
+                        <Feather name="trash-2" size={15} color="#ef4444" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  <TextInput
+                    value={ex.name}
+                    onChangeText={v => updateExercise(i, 'name', v)}
+                    placeholder="Exercise name (e.g. Bench Press)"
+                    placeholderTextColor={C.outline}
+                    style={{ backgroundColor: C.bg, borderRadius: 10, padding: 10, color: C.onSurface, fontFamily: F.body, fontSize: 14, marginBottom: 10, borderWidth: 1, borderColor: C.outlineVariant }}
+                  />
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: C.onSurfaceVariant, fontFamily: F.body, fontSize: 11, marginBottom: 4 }}>Sets</Text>
+                      <TextInput
+                        value={String(ex.sets)}
+                        onChangeText={v => updateExercise(i, 'sets', parseInt(v) || 1)}
+                        keyboardType="number-pad"
+                        style={{ backgroundColor: C.bg, borderRadius: 10, padding: 10, color: C.onSurface, fontFamily: F.header, fontSize: 14, textAlign: 'center', borderWidth: 1, borderColor: C.outlineVariant }}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: C.onSurfaceVariant, fontFamily: F.body, fontSize: 11, marginBottom: 4 }}>Reps</Text>
+                      <TextInput
+                        value={String(ex.reps)}
+                        onChangeText={v => updateExercise(i, 'reps', parseInt(v) || 1)}
+                        keyboardType="number-pad"
+                        style={{ backgroundColor: C.bg, borderRadius: 10, padding: 10, color: C.onSurface, fontFamily: F.header, fontSize: 14, textAlign: 'center', borderWidth: 1, borderColor: C.outlineVariant }}
+                      />
+                    </View>
+                    <View style={{ flex: 2 }}>
+                      <Text style={{ color: C.onSurfaceVariant, fontFamily: F.body, fontSize: 11, marginBottom: 4 }}>Weight</Text>
+                      <TextInput
+                        value={ex.weight}
+                        onChangeText={v => updateExercise(i, 'weight', v)}
+                        placeholder="e.g. 60kg"
+                        placeholderTextColor={C.outline}
+                        style={{ backgroundColor: C.bg, borderRadius: 10, padding: 10, color: C.onSurface, fontFamily: F.body, fontSize: 13, borderWidth: 1, borderColor: C.outlineVariant }}
+                      />
+                    </View>
+                  </View>
+                </Animated.View>
+              ))}
+
+              {/* Save */}
+              <Pressable onPress={handleSave} style={{ backgroundColor: C.primary, borderRadius: 20, paddingVertical: 18, alignItems: 'center', marginTop: 8 }}>
+                <Text style={{ color: C.onPrimary, fontFamily: F.header, fontSize: 16 }}>Save Workout</Text>
+              </Pressable>
+            </ScrollView>
+          </Animated.View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// ─── MAIN SCREEN ─────────────────────────────────────────────────────────────
 export default function CalendarScreen({ onNavigateToNotifications, onNavigateBack }: any) {
   const { isDark, C, bgColors } = useTheme();
-  const styles = React.useMemo(() => getStyles(C), [C]);
+  const styles = useMemo(() => getStyles(C), [C]);
   const { user } = useAuth();
-  
-  const { data: events = [] } = useQuery({ 
-    queryKey: ['calendar', user?.id], 
+  const queryClient = useQueryClient();
+  const weekDates = useMemo(() => getWeekDates(), []);
+  const todayIndex = new Date().getDay();
+
+  const [selectedDayIndex, setSelectedDayIndex] = useState(todayIndex);
+  const [selectedEvent, setSelectedEvent] = useState<any | null>(null);
+  const [addModalDayIndex, setAddModalDayIndex] = useState<number | null>(null);
+
+  const { data: events = [], isLoading } = useQuery({
+    queryKey: ['calendar', user?.id],
     queryFn: () => fetchSchedule(user?.id),
     enabled: !!user?.id
   });
-  
-  // Transform flat events into schedule array
-  const scheduleData = React.useMemo(() => {
-    const arr = Array.from({ length: 7 }).map((_, i) => ({ day: i, items: [] as any[] }));
+
+  // Group events by day
+  const scheduleByDay = useMemo(() => {
+    const map: Record<number, any[]> = {};
+    for (let i = 0; i < 7; i++) map[i] = [];
     events.forEach((evt: any) => {
-      if (arr[evt.dayIndex]) {
-        arr[evt.dayIndex].items.push(evt);
-      }
+      if (map[evt.dayIndex] !== undefined) map[evt.dayIndex].push(evt);
     });
-    return arr;
+    return map;
   }, [events]);
 
-  const [schedule, setSchedule] = useState(scheduleData);
-  const [selectedDayIndex, setSelectedDayIndex] = useState(2);
-  useEffect(() => {
-    setSchedule(scheduleData);
-  }, [scheduleData]);
-
-  const [isRecalculating, setIsRecalculating] = useState(false);
-  const [warningMsg, setWarningMsg] = useState<string | null>(null);
-  const [selectedWorkout, setSelectedWorkout] = useState<any | null>(null);
-
-  const simulateDragAndDrop = () => {
-    setIsRecalculating(true);
-    
-    // Simulate AI thinking delay
-    setTimeout(() => {
-      // Actually shift the data to trigger Layout Animations
-      const newSchedule = [...schedule];
-      const runItem = newSchedule[6].items.pop(); // Remove from Sat
-      if (runItem) newSchedule[0].items.push(runItem); // Move to Sun
-      
-      setSchedule(newSchedule);
-      setIsRecalculating(false);
-      setWarningMsg("AI Shifted 'Long Run' to Sunday due to Heavy Legs on Thursday.");
+  // Add manual workout mutation
+  const addMutation = useMutation({
+    mutationFn: addManualWorkout,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['calendar', user?.id] });
+      setAddModalDayIndex(null);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      
-      setTimeout(() => setWarningMsg(null), 4000);
-    }, 1500);
-  };
+    }
+  });
+
+  // Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: deleteCalendarEvent,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['calendar', user?.id] })
+  });
+
+  const handleAddSave = useCallback((data: any) => {
+    if (!user?.id || addModalDayIndex === null) return;
+    addMutation.mutate({
+      userId: user.id,
+      dayIndex: addModalDayIndex,
+      ...data
+    });
+  }, [user?.id, addModalDayIndex]);
+
+  const handleDeleteEvent = useCallback((id: string) => {
+    Alert.alert('Remove Workout', 'Remove this workout from the calendar?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => deleteMutation.mutate(id) }
+    ]);
+  }, []);
+
+  const selectedDayEvents = scheduleByDay[selectedDayIndex] || [];
 
   return (
     <View style={styles.container}>
       <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
       <SafeAreaView style={{ flex: 1 }}>
+
+        {/* Header */}
         <View style={styles.header}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             {onNavigateBack && (
@@ -111,181 +372,151 @@ export default function CalendarScreen({ onNavigateToNotifications, onNavigateBa
             )}
             <View>
               <Text style={styles.title}>Smart Calendar</Text>
-              <Text style={styles.subtitle}>Hold & drag to reschedule. AI adapts instantly.</Text>
+              <Text style={styles.subtitle}>AI-generated · Tap a day to explore</Text>
             </View>
           </View>
         </View>
 
-      {warningMsg && (
-        <Animated.View entering={SlideInDown.springify()} exiting={SlideOutUp} style={styles.warningBox}>
-          <Feather name="alert-triangle" size={18} color={C.primary} />
-          <Text style={styles.warningText}>{warningMsg}</Text>
-        </Animated.View>
-      )}
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
 
-      <ScrollView style={styles.scrollContent} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
-        
-        {/* Horizontal Days Header */}
-        <View style={styles.calendarHeaderRow}>
-          {DAYS.map((day, i) => {
-            const isActive = i === selectedDayIndex; 
-            return (
-              <TouchableOpacity key={day} style={styles.dayCol} onPress={() => setSelectedDayIndex(i)}>
-                <Text style={[styles.dayText, isActive && { color: C.onPrimary }]}>{day}</Text>
-                <View style={[styles.dateWrapper, isActive && { backgroundColor: C.primary }]}>
-                  <Text style={[styles.dateText, isActive && { color: C.onPrimary }]}>{22 + i}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Calendar Body */}
-        <View style={styles.calendarBody}>
-          {isRecalculating && (
-            <Animated.View entering={FadeIn.duration(300)} exiting={FadeOut.duration(300)} style={styles.recalcOverlay}>
-              <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFillObject} />
-              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-                <AISpinner />
-                <View style={{ position: 'absolute' }}>
-                  <MaterialCommunityIcons name="brain" size={24} color={C.primary} />
-                </View>
-              </View>
-              <Text style={styles.recalcTitle}>Recalculating Ecosystem</Text>
-              <Text style={styles.recalcSub}>Adjusting recovery windows...</Text>
-            </Animated.View>
-          )}
-
-          {schedule.filter((_, index) => index === selectedDayIndex).map((dayPlan) => (
-            <View key={selectedDayIndex} style={styles.dayRow}>
-              <View style={styles.dayLabel}>
-                <Text style={styles.dayLabelText}>{DAYS[selectedDayIndex]}</Text>
-              </View>
-              <View style={styles.dayContent}>
-                {dayPlan.items.length === 0 ? (
-                  <View style={styles.emptySlot}>
-                    <Text style={styles.emptyText}>Rest / Unscheduled</Text>
+          {/* Week Header — real dates */}
+          <View style={styles.calendarHeaderRow}>
+            {DAYS_SHORT.map((day, i) => {
+              const isActive = i === selectedDayIndex;
+              const isToday = weekDates[i]?.isToday;
+              const hasEvent = (scheduleByDay[i] || []).length > 0;
+              return (
+                <TouchableOpacity key={day} style={styles.dayCol} onPress={() => { setSelectedDayIndex(i); Haptics.selectionAsync(); }}>
+                  <Text style={[styles.dayText, isActive && { color: C.primary }]}>{day}</Text>
+                  <View style={[styles.dateWrapper, isActive && { backgroundColor: C.primary }, isToday && !isActive && { borderWidth: 2, borderColor: C.primary }]}>
+                    <Text style={[styles.dateText, isActive && { color: C.onPrimary }]}>{weekDates[i]?.date}</Text>
                   </View>
-                ) : (
-                  dayPlan.items.map((item, itemIndex) => (
-                    <Animated.View 
-                      layout={Layout.springify().damping(16).stiffness(120)} 
-                      entering={FadeInUp.delay(itemIndex * 100).springify()} 
-                      key={item.id}
-                      style={{ marginBottom: 8 }}
-                    >
-                      <Animated.View {...{ sharedTransitionTag: `card-${item.id}` }}>
-                        <ScaleCard 
-                          style={[styles.itemCard, item.type === 'meal' && styles.mealCard, { marginBottom: 0 }]}
-                          onLongPress={simulateDragAndDrop}
-                          onPress={() => {
-                            if(item.type === 'workout') {
-                              setSelectedWorkout(item);
-                            }
-                          }}
-                        >
-                          <View style={[styles.iconBox, item.type === 'meal' ? { backgroundColor: `${C.success}20` } : { backgroundColor: `${C.primary}20` }]}>
-                            <MaterialCommunityIcons 
-                              name={item.type === 'workout' ? 'dumbbell' : 'food-apple'} 
-                              size={18} 
-                              color={item.type === 'workout' ? C.primary : C.success} 
-                            />
-                          </View>
-                          <View style={{ marginLeft: 12, flex: 1 }}>
-                            <Text style={styles.itemTitle}>{item.title}</Text>
-                            {item.intensity && <Text style={styles.itemSub}>{item.intensity} Intensity</Text>}
-                          </View>
-                          <Feather name="menu" size={16} color={C.outlineVariant} />
-                        </ScaleCard>
-                      </Animated.View>
-                    </Animated.View>
-                  ))
-                )}
-              </View>
-            </View>
-          ))}
-        </View>
-      </ScrollView>
-      </SafeAreaView>
+                  {hasEvent && <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: isActive ? C.onPrimary : C.primary, marginTop: 2 }} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
-      {/* Shared Transition Full Screen View */}
-      {selectedWorkout && (
-        <View style={StyleSheet.absoluteFillObject} pointerEvents="box-none">
-          <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFillObject} />
-          
-          <Animated.View 
-            {...{ sharedTransitionTag: `card-${selectedWorkout.id}` }}
-            style={styles.fullScreenCard}
-          >
-            <View style={{ padding: 24, paddingTop: 60, flex: 1 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <View style={[styles.iconBox, { backgroundColor: `${C.primary}20`, width: 48, height: 48, borderRadius: 16 }]}>
-                  <MaterialCommunityIcons name="dumbbell" size={24} color={C.primary} />
-                </View>
-                <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedWorkout(null)}>
-                  <Feather name="x" size={24} color={C.onSurface} />
+          {/* Day Content */}
+          <View style={{ paddingHorizontal: 20 }}>
+            <Animated.View key={selectedDayIndex} entering={FadeInUp.duration(250).springify()}>
+              {/* Day Title */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <Text style={{ color: C.onSurface, fontFamily: F.header, fontSize: 22, letterSpacing: -0.5 }}>
+                  {DAYS_FULL[selectedDayIndex]}
+                  {weekDates[selectedDayIndex]?.isToday && (
+                    <Text style={{ color: C.primary, fontFamily: F.body, fontSize: 14 }}> — Today</Text>
+                  )}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => { setAddModalDayIndex(selectedDayIndex); Haptics.selectionAsync(); }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: `${C.primary}15`, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 }}
+                >
+                  <Feather name="plus" size={16} color={C.primary} />
+                  <Text style={{ color: C.primary, fontFamily: F.header, fontSize: 13 }}>Add</Text>
                 </TouchableOpacity>
               </View>
-              
-              <Text style={[styles.itemTitle, { fontSize: 32, fontFamily: F.header, marginTop: 24, letterSpacing: -1 }]}>
-                {selectedWorkout.title}
-              </Text>
-              <Text style={[styles.itemSub, { fontSize: 16, marginTop: 8 }]}>
-                {selectedWorkout.intensity} Intensity • AI Optimized
-              </Text>
-              
-              <View style={{ marginTop: 40 }}>
-                <Text style={styles.recalcTitle}>Workout Plan</Text>
-                {/* Dummy list to simulate details */}
-                {[1,2,3].map(i => (
-                  <Animated.View entering={FadeInUp.delay(i*100)} key={i} style={{ flexDirection: 'row', padding: 16, backgroundColor: C.glassInset, borderRadius: 12, marginTop: 12, borderWidth: 1, borderColor: C.outlineVariant }}>
-                    <Text style={{ color: C.onSurface, fontFamily: F.bodyMed }}>Exercise {i}</Text>
-                  </Animated.View>
-                ))}
-              </View>
-            </View>
-          </Animated.View>
-        </View>
+
+              {isLoading ? (
+                <View style={[styles.emptySlot, { height: 120 }]}>
+                  <MaterialCommunityIcons name="loading" size={28} color={C.outline} />
+                  <Text style={[styles.emptyText, { marginTop: 8 }]}>Loading your plan...</Text>
+                </View>
+              ) : selectedDayEvents.length === 0 ? (
+                <Pressable
+                  onPress={() => { setAddModalDayIndex(selectedDayIndex); Haptics.selectionAsync(); }}
+                  style={[styles.emptySlot, { height: 120 }]}
+                >
+                  <Feather name="plus-circle" size={28} color={C.outline} />
+                  <Text style={[styles.emptyText, { marginTop: 10 }]}>Rest Day</Text>
+                  <Text style={{ color: C.outline, fontFamily: F.body, fontSize: 12, marginTop: 4 }}>Tap to add a workout</Text>
+                </Pressable>
+              ) : (
+                selectedDayEvents.map((item: any, itemIndex: number) => {
+                  const isRestDay = item.intensity === 'Rest';
+                  return (
+                    <Animated.View
+                      key={item.id}
+                      layout={Layout.springify().damping(16)}
+                      entering={FadeInUp.delay(itemIndex * 80).springify()}
+                      style={{ marginBottom: 14 }}
+                    >
+                      <ScaleCard
+                        style={[styles.itemCard, isRestDay && { borderColor: `${C.outline}44` }]}
+                        onPress={() => setSelectedEvent(item)}
+                        onLongPress={() => handleDeleteEvent(item.id)}
+                      >
+                        <View style={[styles.iconBox, { backgroundColor: isRestDay ? `${C.outline}20` : `${C.primary}20` }]}>
+                          <MaterialCommunityIcons
+                            name={isRestDay ? 'sleep' : 'dumbbell'}
+                            size={20}
+                            color={isRestDay ? C.outline : C.primary}
+                          />
+                        </View>
+                        <View style={{ marginLeft: 14, flex: 1 }}>
+                          <Text style={styles.itemTitle} numberOfLines={1}>{item.title}</Text>
+                          {item.description && (
+                            <Text style={styles.itemSub} numberOfLines={1}>{item.description}</Text>
+                          )}
+                          {!isRestDay && item.exercises && (
+                            <Text style={{ color: C.primary, fontFamily: 'JetBrainsMono-Regular', fontSize: 11, marginTop: 3 }}>
+                              {(() => { try { return `${JSON.parse(item.exercises).length} exercises`; } catch { return ''; } })()}
+                            </Text>
+                          )}
+                        </View>
+                        <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                          <IntensityBadge intensity={item.intensity} C={C} />
+                          <Feather name="chevron-right" size={14} color={C.outline} />
+                        </View>
+                      </ScaleCard>
+                    </Animated.View>
+                  );
+                })
+              )}
+            </Animated.View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+
+      {/* Exercise Detail Modal */}
+      {selectedEvent && (
+        <ExerciseDetailModal event={selectedEvent} onClose={() => setSelectedEvent(null)} C={C} />
       )}
 
+      {/* Add Manual Workout Modal */}
+      {addModalDayIndex !== null && (
+        <AddWorkoutModal
+          dayIndex={addModalDayIndex}
+          dayName={`${DAYS_FULL[addModalDayIndex]}, ${weekDates[addModalDayIndex]?.month} ${weekDates[addModalDayIndex]?.date}`}
+          onClose={() => setAddModalDayIndex(null)}
+          onSave={handleAddSave}
+          C={C}
+        />
+      )}
     </View>
   );
 }
 
 const getStyles = (C: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  header: { paddingHorizontal: 24, marginBottom: 20, marginTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 0) + 20 : 20 },
-  title: { fontSize: 32, fontFamily: F.header, color: C.onSurface, letterSpacing: -1, marginBottom: 4 },
-  subtitle: { fontSize: 14, fontFamily: F.body, color: C.onSurfaceVariant },
-  warningBox: { marginHorizontal: 24, marginBottom: 16, backgroundColor: `${C.primary}1A`, borderColor: `${C.primary}4D`, borderWidth: 1, padding: 14, borderRadius: 16, flexDirection: 'row', alignItems: 'center' },
-  warningText: { color: C.primary, fontFamily: F.bodyMed, fontSize: 13, marginLeft: 12, flex: 1, lineHeight: 18 },
-  scrollContent: { flex: 1 },
-  
-  calendarHeaderRow: { flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 16, marginBottom: 16 },
+  header: {
+    paddingHorizontal: 24, marginBottom: 16,
+    marginTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 0) + 16 : 16
+  },
+  title: { fontSize: 30, fontFamily: F.header, color: C.onSurface, letterSpacing: -1, marginBottom: 2 },
+  subtitle: { fontSize: 13, fontFamily: F.body, color: C.onSurfaceVariant },
+
+  calendarHeaderRow: { flexDirection: 'row', paddingHorizontal: 12, paddingBottom: 16, marginBottom: 8 },
   dayCol: { flex: 1, alignItems: 'center', gap: 6 },
   dayText: { fontSize: 10, color: C.onSurfaceVariant, fontFamily: F.header, textTransform: 'uppercase', letterSpacing: 1 },
   dateWrapper: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  dateText: { fontSize: 16, color: C.onSurface, fontFamily: F.num },
-  
-  calendarBody: { paddingHorizontal: 16, position: 'relative', minHeight: 400 },
-  dayRow: { flexDirection: 'row', marginBottom: 16, minHeight: 60 },
-  dayLabel: { width: 44, alignItems: 'center', paddingTop: 16 },
-  dayLabelText: { fontSize: 11, color: C.onSurfaceVariant, fontFamily: F.header, textTransform: 'uppercase', letterSpacing: 1 },
-  dayContent: { flex: 1, borderLeftWidth: 1, borderLeftColor: C.outlineVariant, paddingLeft: 16, paddingBottom: 16 },
-  
-  emptySlot: { height: 64, borderStyle: 'dashed', borderWidth: 1, borderColor: C.outlineVariant, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: C.glassInset },
-  emptyText: { fontFamily: F.bodyMed, fontSize: 12, color: C.outline },
-  
-  itemCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.glassInset, borderWidth: 1, borderColor: C.outlineVariant, borderRadius: 16, padding: 16, marginBottom: 8 },
-  mealCard: { backgroundColor: `${C.success}0A`, borderColor: `${C.success}33` },
-  iconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  itemTitle: { color: C.onSurface, fontSize: 15, fontFamily: F.bodyBold },
-  itemSub: { color: C.onSurfaceVariant, fontSize: 12, fontFamily: F.body, marginTop: 2 },
-  
-  recalcOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 10, alignItems: 'center', justifyContent: 'center', borderRadius: 24, overflow: 'hidden' },
-  recalcTitle: { color: C.onSurface, fontSize: 22, fontFamily: F.header, marginTop: 24 },
-  recalcSub: { color: C.primary, fontSize: 14, fontFamily: F.bodyMed, marginTop: 6 },
-  
-  fullScreenCard: { ...StyleSheet.absoluteFillObject, backgroundColor: C.bg, zIndex: 50 },
-  closeBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: C.glassInset, alignItems: 'center', justifyContent: 'center' }
+  dateText: { fontSize: 15, color: C.onSurface, fontFamily: F.num },
+
+  emptySlot: { borderStyle: 'dashed', borderWidth: 1.5, borderColor: C.outlineVariant, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: C.glassInset },
+  emptyText: { fontFamily: F.bodyBold, fontSize: 14, color: C.outline },
+
+  itemCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.glassInset, borderWidth: 1, borderColor: C.outlineVariant, borderRadius: 20, padding: 16 },
+  iconBox: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  itemTitle: { color: C.onSurface, fontSize: 15, fontFamily: F.bodyBold, letterSpacing: -0.2 },
+  itemSub: { color: C.onSurfaceVariant, fontSize: 12, fontFamily: F.body, marginTop: 2, lineHeight: 16 },
 });

@@ -271,64 +271,194 @@ Instructions:
     } else if (job.name === 'generate_onboarding_plan') {
       const { userId, goal, equipment, diet } = job.data;
       const io = getIo();
-      
-      const { text: aiResponse } = await generateText({
+
+      // Fetch full user profile for personalization
+      const userProfile = await prisma.user.findUnique({ where: { id: userId } });
+      const experience = userProfile?.experience || 'Beginner';
+      const age = userProfile?.age || 25;
+      const weight = userProfile?.weight || 70;
+
+      // Step 1: Generate welcome message
+      const { text: welcomeMsg } = await generateText({
         model: groq('llama-3.3-70b-versatile'),
-        system: `You are Rachel, an elite AI fitness coach. A new user just completed onboarding. Generate a highly personalized 1-paragraph welcome message based on their profile:
-        Goal: ${goal}
-        Equipment: ${equipment}
-        Diet: ${diet}
-        Be enthusiastic and explain that their dashboard, calendar, and nutrition plans have been dynamically generated.`,
-        prompt: 'Generate welcome message'
+        system: `You are Rachel, an elite AI fitness coach. A new user just onboarded. 
+Write a short (2-3 sentence) enthusiastic welcome message personalized to their goal and experience level. 
+Mention that their 7-day smart calendar has been built for them.`,
+        prompt: `Goal: ${goal}, Experience: ${experience}, Equipment: ${equipment}, Diet: ${diet}, Age: ${age}`
       });
 
-      // Insert welcome message
       await prisma.coachMessage.create({
-        data: { userId, role: 'ai', content: aiResponse }
+        data: { userId, role: 'ai', content: welcomeMsg }
       });
 
-      // Clear existing data to prevent duplicates if user re-runs onboarding
+      // Step 2: Generate a full 7-day personalized plan using AI (as raw JSON text, then parse)
+      const experienceDesc = experience === 'Beginner'
+        ? 'The user is a complete beginner. Use basic exercises, light weights, and simple movements. Limit to 4-5 exercises per workout day.'
+        : experience === 'Intermediate'
+        ? 'The user is intermediate. Use compound movements with moderate intensity. 5-6 exercises per workout day.'
+        : 'The user is advanced. Include challenging compound and isolation movements. 6-8 exercises per workout day.';
+
+      const equipmentDesc = equipment === 'No Equipment'
+        ? 'Use only bodyweight exercises (Push-ups, Squats, Lunges, Planks, Burpees, Mountain Climbers, etc.)'
+        : equipment === 'Dumbbells'
+        ? 'Use dumbbell-based exercises only.'
+        : equipment === 'Full Gym'
+        ? 'Use full gym equipment including barbells, cables, machines, and dumbbells.'
+        : `Available equipment: ${equipment}`;
+
+      const goalPlan: Record<string, string> = {
+        'Build Muscle': 'Push/Pull/Legs split — focus on progressive overload and hypertrophy. 3-4 workout days, 2-3 rest days.',
+        'Lose Weight': 'Full body HIIT and strength circuits — maximize calorie burn. 4-5 active days.',
+        'Improve Endurance': 'Cardio-focused with bodyweight circuits. Mix running intervals with strength. 4-5 days active.',
+        'Stay Fit': 'Balanced full-body training 3 days per week with active recovery days.',
+        'Increase Strength': 'Powerlifting-style: Squat, Bench, Deadlift focus. 3-4 heavy days with full rest between.'
+      };
+
+      const todayIndex = new Date().getDay(); // 0=Sunday, 6=Saturday
+
+      const { text: planText } = await generateText({
+        model: groq('llama-3.3-70b-versatile'),
+        system: `You are an elite certified personal trainer. Generate a complete personalized 7-day workout schedule.
+${experienceDesc}
+${equipmentDesc}
+Goal strategy: ${goalPlan[goal] || `Goal: ${goal}`}
+
+CRITICAL TIME INSTRUCTION: 
+Today is dayIndex ${todayIndex}. Any day with a dayIndex LESS THAN ${todayIndex} has already passed this week.
+You MUST set isRestDay=true, intensity="Rest", title="Rest Day", and exercises=[] for ALL days where dayIndex < ${todayIndex}.
+Start the actual active workout plan on dayIndex ${todayIndex} and continue forward.
+
+For actual rest days: isRestDay=true, exercises=[], intensity="Rest".
+IMPORTANT: Use REAL exercise names only. Never use generic names.
+You MUST respond with ONLY a valid JSON object. The JSON must match this exact structure:
+{
+  "weekPlan": [
+    {
+      "dayIndex": 0,
+      "isRestDay": false,
+      "title": "Push Day - Chest and Shoulders",
+      "intensity": "Moderate",
+      "description": "Focus on pushing movements for chest, shoulders and triceps.",
+      "exercises": [
+        { 
+          "name": "Barbell Bench Press", 
+          "sets": 4, 
+          "reps": 10, 
+          "weight": "Bodyweight", 
+          "muscleGroup": "Chest",
+          "instructions": "Lie flat on the bench. Lower the bar to your mid-chest, keeping your elbows at a 45-degree angle. Press the bar back up explosively."
+        }
+      ]
+    }
+  ]
+}`,
+        prompt: `Create a 7-day plan (dayIndex 0=Sunday to 6=Saturday) for: Goal=${goal}, Experience=${experience}, Equipment=${equipment}, Age=${age}, Weight=${weight}kg. Return ONLY the JSON object. Remember today is dayIndex ${todayIndex}.`
+      });
+
+      // Parse the JSON response - strip any accidental markdown wrappers
+      let plan: { weekPlan: any[] };
+      try {
+        const cleaned = planText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        plan = JSON.parse(cleaned);
+        // Ensure exactly 7 days
+        if (!plan.weekPlan || plan.weekPlan.length !== 7) {
+          throw new Error(`Expected 7 days, got ${plan.weekPlan?.length}`);
+        }
+      } catch (parseErr) {
+        console.error('[Onboarding] Failed to parse AI plan JSON, using fallback:', parseErr);
+        // Fallback: generate a static beginner plan
+        plan = {
+          weekPlan: [
+            { dayIndex: 0, isRestDay: true, title: 'Rest Day', intensity: 'Rest', description: 'Take the day off. Light stretching welcome.', exercises: [] },
+            { dayIndex: 1, isRestDay: false, title: 'Full Body Workout A', intensity: 'Moderate', description: 'Foundational full body workout targeting all major muscle groups.', exercises: [
+              { name: 'Push-ups', sets: 3, reps: 10, weight: 'Bodyweight', muscleGroup: 'Chest', instructions: 'Keep your core tight and your body in a straight line. Lower your chest until it almost touches the floor, then push back up.' },
+              { name: 'Bodyweight Squats', sets: 3, reps: 15, weight: 'Bodyweight', muscleGroup: 'Legs', instructions: 'Stand with feet shoulder-width apart. Lower your hips back and down as if sitting in a chair, keeping your chest up.' },
+              { name: 'Plank', sets: 3, reps: 30, weight: 'Bodyweight', muscleGroup: 'Core', instructions: 'Rest on your forearms and toes, keeping your body in a straight line. Hold this position.' },
+              { name: 'Lunges', sets: 3, reps: 10, weight: 'Bodyweight', muscleGroup: 'Legs', instructions: 'Step forward with one leg and lower your hips until both knees are bent at a 90-degree angle. Push back up and alternate.' }
+            ]},
+            { dayIndex: 2, isRestDay: true, title: 'Active Recovery', intensity: 'Rest', description: 'Go for a light 20-minute walk or gentle stretching.', exercises: [] },
+            { dayIndex: 3, isRestDay: false, title: 'Full Body Workout B', intensity: 'Moderate', description: 'Second full body session with a focus on posterior chain.', exercises: [
+              { name: 'Glute Bridges', sets: 3, reps: 15, weight: 'Bodyweight', muscleGroup: 'Glutes', instructions: 'Lie on your back with knees bent and feet flat on the floor. Squeeze your glutes and lift your hips toward the ceiling.' },
+              { name: 'Incline Push-ups', sets: 3, reps: 12, weight: 'Bodyweight', muscleGroup: 'Chest', instructions: 'Place your hands on an elevated surface like a bench or sturdy chair. Perform a push-up keeping your core tight.' },
+              { name: 'Mountain Climbers', sets: 3, reps: 20, weight: 'Bodyweight', muscleGroup: 'Core', instructions: 'Start in a plank position. Quickly alternate bringing your knees toward your chest as if running in place.' },
+              { name: 'Superman Hold', sets: 3, reps: 12, weight: 'Bodyweight', muscleGroup: 'Back', instructions: 'Lie on your stomach with arms extended forward. Lift your arms, chest, and legs off the ground simultaneously and hold.' }
+            ]},
+            { dayIndex: 4, isRestDay: true, title: 'Rest Day', intensity: 'Rest', description: 'Rest and recover. Hydrate well.', exercises: [] },
+            { dayIndex: 5, isRestDay: false, title: 'Full Body Workout C', intensity: 'Moderate', description: 'Third session of the week for consistency and progressive overload.', exercises: [
+              { name: 'Burpees', sets: 3, reps: 8, weight: 'Bodyweight', muscleGroup: 'Full Body', instructions: 'Drop into a squat position, kick your feet back into a plank, perform a push-up, jump your feet forward, and explosively jump up.' },
+              { name: 'Jump Squats', sets: 3, reps: 12, weight: 'Bodyweight', muscleGroup: 'Legs', instructions: 'Perform a normal bodyweight squat, but explode upwards at the bottom of the movement so your feet leave the ground.' },
+              { name: 'Tricep Dips', sets: 3, reps: 10, weight: 'Bodyweight', muscleGroup: 'Arms', instructions: 'Sit on the edge of a sturdy chair or bench. Place your hands next to your hips, slide off the edge, and lower your body by bending your elbows.' },
+              { name: 'Leg Raises', sets: 3, reps: 12, weight: 'Bodyweight', muscleGroup: 'Core', instructions: 'Lie on your back with your legs straight. Keep your lower back pressed into the floor as you lift your legs up toward the ceiling.' }
+            ]},
+            { dayIndex: 6, isRestDay: true, title: 'Rest Day', intensity: 'Rest', description: 'Full rest before the next week begins.', exercises: [] }
+
+          ]
+        };
+      }
+
+      // Step 3: Clear old data and save new plan
       await prisma.calendarEvent.deleteMany({ where: { userId } });
-      await prisma.workout.deleteMany({ where: { userId } });
+      await prisma.workout.updateMany({ where: { userId }, data: { isCurrent: false } });
       await prisma.meal.deleteMany({ where: { userId } });
 
-      // Generate a sample workout based on equipment
-      await prisma.workout.create({
-        data: {
-          userId,
-          title: `Initial ${goal} Workout`,
-          duration: '45 mins',
-          aiExplanation: `Custom built for ${equipment} constraints`,
-          exercises: {
-            create: [
-              { name: 'Warmup', sets: 1, reps: 10, weight: 'BW' },
-              { name: 'Main Compound', sets: 3, reps: 8, weight: 'Moderate' }
-            ]
-          }
-        }
-      });
+      for (const day of plan.weekPlan) {
+        const exercisesJson = JSON.stringify(day.exercises);
 
-      // Generate a sample meal
+        // Save calendar event with full exercise data
+        await prisma.calendarEvent.create({
+          data: {
+            userId,
+            dayIndex: day.dayIndex,
+            title: day.title,
+            intensity: day.isRestDay ? 'Rest' : day.intensity,
+            description: day.description,
+            exercises: day.isRestDay ? null : exercisesJson,
+            type: 'workout'
+          }
+        });
+
+        // Save the workout days as actual Workout records too
+        if (!day.isRestDay && day.exercises.length > 0) {
+          await prisma.workout.create({
+            data: {
+              userId,
+              title: day.title,
+              duration: experience === 'Beginner' ? '30 mins' : experience === 'Intermediate' ? '45 mins' : '60 mins',
+              difficulty: day.intensity,
+              goal,
+              equipment,
+              description: day.description,
+              isCurrent: day.dayIndex === plan.weekPlan.find(d => !d.isRestDay)?.dayIndex,
+              aiExplanation: `AI-generated for ${goal} goal at ${experience} level.`,
+              exercises: {
+                create: day.exercises.map((ex: any, idx: number) => ({
+                  name: ex.name,
+                  sets: ex.sets,
+                  reps: ex.reps,
+                  weight: ex.weight,
+                  restTime: 60,
+                  notes: ex.notes,
+                  order: idx
+                }))
+              }
+            }
+          });
+        }
+      }
+
+      // Generate a starter meal
       await prisma.meal.create({
         data: {
           userId,
-          name: `High-Protein ${diet} Meal`,
+          name: goal === 'Build Muscle' ? 'High-Protein Chicken & Rice' : goal === 'Lose Weight' ? 'Green Salad with Grilled Salmon' : 'Balanced Chicken Wrap',
           type: 'Lunch',
-          cals: 650,
-          cost: 8.50
+          cals: goal === 'Build Muscle' ? 750 : goal === 'Lose Weight' ? 450 : 600,
+          cost: 9.50
         }
       });
 
-      // Generate a quick 3-day calendar
-      const days = ['Legs & Core', 'Active Recovery', 'Upper Body'];
-      for (let i = 0; i < 3; i++) {
-        await prisma.calendarEvent.create({
-          data: { userId, dayIndex: i + 1, title: days[i], type: 'workout' }
-        });
-      }
-
-      // Notify the frontend
-      io?.emit('system_notification', { message: 'Rachel has finished building your neural model! Your customized calendar is ready.' });
+      io?.emit('system_notification', { message: 'Rachel has built your personalized 7-day plan! Your smart calendar is ready.' });
+      io?.emit('calendar_update', { refresh: true });
       
       return { success: true };
     }

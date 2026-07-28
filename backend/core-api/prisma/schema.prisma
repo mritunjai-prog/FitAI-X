@@ -168,17 +168,21 @@ model Meal {
 }
 
 model CalendarEvent {
-  id        String    @id @default(uuid())
-  userId    String
-  dayIndex  Int     
-  type      String    // workout or meal
-  title     String
-  intensity String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(uuid())
+  userId      String
+  dayIndex    Int     
+  type        String    // workout or meal
+  title       String
+  intensity   String?
+  description String?   // brief workout description
+  exercises   String?   // JSON array of { name, sets, reps, weight, notes }
+  workoutId   String?   // optional link to a Workout record
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
 
 model MedicalDocument {
   id        String    @id @default(uuid())
