@@ -385,7 +385,7 @@ export default function CoachScreen({ onNavigateToNotifications, onNavigateBack 
           </TouchableOpacity>
         </View>
 
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}>
           <ScrollView 
             ref={scrollViewRef}
             style={styles.chatList} 
@@ -505,7 +505,7 @@ const getStyles = (C: any) => StyleSheet.create({
   inputArea: {
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 30,
+    paddingBottom: Platform.OS === 'ios' ? 100 : 90, // gap for absolute bottom nav
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -517,7 +517,7 @@ const getStyles = (C: any) => StyleSheet.create({
     paddingRight: 45,
     minHeight: 48,
     maxHeight: 120,
-    borderWidth: 1,
+    borderWidth: 0, // removed internal border as requested
   },
   iconBtnWrapper: {
     position: 'absolute',
