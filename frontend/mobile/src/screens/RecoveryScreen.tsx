@@ -71,8 +71,10 @@ function PressableCard({ children, style, entering }: any) {
       onPressOut={() => { scale.value = withSpring(1, { damping: 15, stiffness: 300 }); }}
       style={{ flex }}
     >
-      <Animated.View entering={entering} layout={Layout.springify()} style={[restStyle, { flexGrow: 1 }, animStyle]}>
-        {children}
+      <Animated.View entering={entering} layout={Layout.springify()} style={{ flexGrow: 1 }}>
+        <Animated.View style={[restStyle, { flexGrow: 1 }, animStyle]}>
+          {children}
+        </Animated.View>
       </Animated.View>
     </Pressable>
   );
