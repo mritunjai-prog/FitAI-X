@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import prisma from '../../db';
-import Groq from 'groq-sdk';
+import { callAI, buildUserContext } from '../ai/aiService';
+import { z } from 'zod';
 
 const router = Router();
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 // ─── GET /api/v1/recovery/overview ─────────────────────────────────────────
 router.get('/overview', async (req, res) => {
@@ -159,34 +159,36 @@ router.get('/ai-insights', async (req, res) => {
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
     const vitals = await prisma.vitals.findUnique({ where: { userId } });
+    const userContext = await buildUserContext(userId);
     
-    const prompt = `You are Rachel AI, a fitness coach. The user's recovery score is ${Math.round((vitals?.recoveryCor || 0) * 100)}/100, body battery is ${Math.round((vitals?.bodyBattery || 0) * 100)}%, and resting HR is ${Math.max(50, (vitals?.bpm || 72) - 15)} bpm.
-Provide brief recovery advice. Respond EXACTLY in this JSON format:
-{
-  "summary": "1 sentence overview",
-  "recommendation": "1 actionable tip"
-}`;
-
-    const completion = await groq.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 200,
-      temperature: 0.7,
+    const schema = z.object({
+      summary: z.string().describe("1 sentence overview"),
+      recommendation: z.string().describe("1 actionable tip")
     });
 
-    const raw = completion.choices[0]?.message?.content || '{}';
-    let insights;
-    try {
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      insights = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
-    } catch {
-      insights = {
-        summary: `Your recovery score is ${Math.round((vitals?.recoveryCor || 0.8) * 100)}, meaning you are well rested.`,
-        recommendation: "Keep hydrating and maintain your sleep schedule.",
-      };
+    const promptStr = `You are Rachel AI, a fitness coach. 
+User's recovery score is ${Math.round((vitals?.recoveryCor || 0) * 100)}/100.
+Body battery is ${Math.round((vitals?.bodyBattery || 0) * 100)}%.
+Resting HR is ${Math.max(50, (vitals?.bpm || 72) - 15)} bpm.
+
+Additional Context:
+Diet: ${userContext.profile.diet}
+Recent Workout History: ${JSON.stringify(userContext.weeklyHistory)}
+Injuries: ${userContext.profile.injuries}
+
+Provide brief, personalized recovery advice based on this data.`;
+
+    const aiResult = await callAI({
+      system: 'You are Rachel AI, a fitness coach providing recovery advice.',
+      prompt: promptStr,
+      schema
+    });
+
+    if (!aiResult.ok || !aiResult.data) {
+      throw new Error('AI generation failed');
     }
 
-    res.json(insights);
+    res.json(aiResult.data);
   } catch (e: any) {
     console.error('[Recovery AI] Error:', e.message);
     res.status(500).json({ error: e.message });

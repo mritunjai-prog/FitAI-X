@@ -4,6 +4,7 @@ import { getIo } from '../../realtime/socket';
 import { createGroq } from '@ai-sdk/groq';
 import { generateText, tool } from 'ai';
 import { z } from 'zod';
+import { buildUserContext } from '../ai/aiService';
 
 const router = Router();
 
@@ -112,21 +113,11 @@ router.post('/messages', async (req, res) => {
     const tempMessageId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
     try {
-      const currentWorkout = await prisma.workout.findFirst({
-        where: { userId, isCurrent: true },
-        include: { exercises: true },
-      });
-
+      const contextObj = await buildUserContext(userId);
       const userContext = `
---- USER PROFILE ---
-Name: ${existingUser.name || 'Not provided'}
-Goal: ${existingUser.goal || 'Not provided'}
-Height: ${existingUser.height ? existingUser.height + ' cm' : 'Not provided'}
-Weight: ${existingUser.weight ? existingUser.weight + ' kg' : 'Not provided'}
-Diet Preference: ${existingUser.diet || 'Not provided'}
-Injuries: ${existingUser.currentInjuries || 'None'}
-Current Workout: ${currentWorkout ? `"${(currentWorkout as any).title}"` : 'None'}
---------------------`;
+--- COMPREHENSIVE USER CONTEXT ---
+${JSON.stringify(contextObj, null, 2)}
+----------------------------------`;
 
       const chatHistory = await prisma.coachMessage.findMany({
         where: { userId, id: { not: userMsg.id } },
