@@ -943,7 +943,7 @@ export default function ProfileScreen({
                         <Text style={[S.chipText, S.chipTextActive]}>
                           {toSentenceCase(g)}
                         </Text>
-                        <View style={S.chipGlow} pointerEvents="none" />
+                        <View style={[S.chipGlow, { pointerEvents: "none" as any }]} />
                       </View>
                     ))
                   ) : (
@@ -1691,10 +1691,15 @@ const getStyles = (C: ThemeColors) =>
       height: 6,
       borderRadius: 3,
       backgroundColor: C.primary,
-      shadowColor: C.primary,
-      shadowOffset: { width: 0, height: 0 },
-      shadowOpacity: 1,
-      shadowRadius: 6,
+      ...Platform.select({
+        web: { boxShadow: `0px 0px 6px ${C.primary}` } as any,
+        default: {
+          shadowColor: C.primary,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 1,
+          shadowRadius: 6,
+        },
+      }),
     },
     navItem: {
       flex: 1,
@@ -1715,9 +1720,14 @@ const getStyles = (C: ThemeColors) =>
       backgroundColor: C.primary,
       alignItems: "center",
       justifyContent: "center",
-      shadowColor: C.primary,
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.4,
-      shadowRadius: 12,
+      ...Platform.select({
+        web: { boxShadow: `0px 4px 12px ${C.primary}66` } as any,
+        default: {
+          shadowColor: C.primary,
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.4,
+          shadowRadius: 12,
+        },
+      }),
     },
   });
