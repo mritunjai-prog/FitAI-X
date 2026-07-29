@@ -1714,7 +1714,10 @@ function PlanTab({
         </View>
 
         <SectionLabel text={`${day.label} · Meals`} C={C} action="Add" onAction={() => undefined} />
-        {meals.filter(m => ['Breakfast','Lunch','Dinner'].includes(m.type)).map((m, i) => {
+        {meals
+          .filter(m => ['Breakfast','Lunch','Dinner'].includes(m.type))
+          .filter((m, i, arr) => arr.findIndex(x => x.type === m.type) === i) // 1 per type
+          .map((m, i) => {
           const isExpanded = expandedMeal === m.id;
           return (
           <View key={m.id}>
