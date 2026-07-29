@@ -1351,6 +1351,18 @@ function TodayTab({
                               {(typeof m.ingredients === 'string' ? JSON.parse(m.ingredients) : m.ingredients).slice(0, 4).join(' · ')}
                             </Text>
                           )}
+                          <View style={{ flexDirection: 'row', gap: 20, marginTop: 8 }}>
+                            <Pressable onPress={() => { haptic('medium'); onRegenerate(m.id); }} hitSlop={6}
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <Icon name="refresh" size={12} color={C.primary} />
+                              <Text style={{ fontFamily: F.header, fontSize: 10.5, color: C.primary }}>Regenerate</Text>
+                            </Pressable>
+                            <Pressable onPress={() => { haptic('medium'); onRegenerate(m.id); }} hitSlop={6}
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <Icon name="swap-horiz" size={12} color={C.primary} />
+                              <Text style={{ fontFamily: F.header, fontSize: 10.5, color: C.primary }}>Swap</Text>
+                            </Pressable>
+                          </View>
                         </View>
                       </View>
                     </View>
@@ -1397,6 +1409,18 @@ function TodayTab({
                               {(typeof m.ingredients === 'string' ? JSON.parse(m.ingredients) : m.ingredients).slice(0, 4).join(' · ')}
                             </Text>
                           )}
+                          <View style={{ flexDirection: 'row', gap: 20, marginTop: 8 }}>
+                            <Pressable onPress={() => { haptic('medium'); onRegenerate(m.id); }} hitSlop={6}
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <Icon name="refresh" size={12} color={C.primary} />
+                              <Text style={{ fontFamily: F.header, fontSize: 10.5, color: C.primary }}>Regenerate</Text>
+                            </Pressable>
+                            <Pressable onPress={() => { haptic('medium'); onRegenerate(m.id); }} hitSlop={6}
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <Icon name="swap-horiz" size={12} color={C.primary} />
+                              <Text style={{ fontFamily: F.header, fontSize: 10.5, color: C.primary }}>Swap</Text>
+                            </Pressable>
+                          </View>
                         </View>
                       </View>
                     </View>
