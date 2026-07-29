@@ -1228,6 +1228,7 @@ interface OverviewTabProps {
   workout?: Workout | null;
   exercises: WorkoutExercise[];
   readiness: ReadinessMetric[];
+  sessions?: HistorySession[];
   onStart: () => void;
   onCustomise: () => void;
   onHistory: () => void;
@@ -1239,6 +1240,7 @@ function OverviewTab({
   workout,
   exercises,
   readiness,
+  sessions = [],
   onStart,
   onCustomise,
   onHistory,
@@ -1250,7 +1252,9 @@ function OverviewTab({
   const [aiOpen, setAiOpen] = useState(false);
 
   const totalSets = exercises.reduce((a, b) => a + b.sets, 0);
-  const [firstWord, ...restWords] = (workout?.title ?? 'Push Strength').split(' ');
+  // Calculate estimated calories from exercises (rough: ~8 kcal per set-pair)
+  const estimatedKcal = Math.round(exercises.reduce((a, e) => a + e.sets * (e.weight > 0 ? 8 : 4), 0));
+  const [firstWord, ...restWords] = (workout?.title ?? 'No Workout').split(' ');
   const rest = restWords.join(' ');
 
   const toneFor = (t: ReadinessMetric['tone']) =>
@@ -1308,7 +1312,7 @@ function OverviewTab({
               lineHeight: 20,
             }}
           >
-            {workout?.targetMuscles ?? 'Chest · Shoulders · Triceps'} {'  •  '}Progressive overload block
+            {(workout?.targetMuscles ?? exercises.map(e => e.muscle).filter(Boolean).join(' · ')) || 'Full Body'} {'  •  '}{exercises.length} exercises
           </Text>
         </View>
       </Entrance>
@@ -1321,7 +1325,7 @@ function OverviewTab({
           items={[
             { value: String(workout?.duration ?? 45), unit: 'min', label: 'Duration' },
             { value: String(exercises.length), unit: `/ ${totalSets} sets`, label: 'Exercises' },
-            { value: '420', unit: 'kcal', label: 'Est. burn', tone: C.primary },
+            { value: String(estimatedKcal), unit: 'kcal', label: 'Est. burn', tone: C.primary },
           ]}
         />
       </View>
@@ -1413,12 +1417,8 @@ function OverviewTab({
           </View>
 
           <Text style={{ fontFamily: F.bodyMed, fontSize: 14, lineHeight: 22.6, color: C.onSurface }}>
-            {workout?.aiExplanation ? (
-              workout.aiExplanation
-            ) : (
-              <>
-                Chest is <Text style={{ fontFamily: F.bodyBold }}>fully recovered</Text> (92%). Pushing volume raised <Text style={{ fontFamily: F.bodyBold, color: A.green }}>+8%</Text> and bench load <Text style={{ fontFamily: F.bodyBold, color: C.primary }}>+2.5 kg</Text> versus your last logged session.
-              </>
+            {workout?.aiExplanation ?? (
+              `${exercises.length} exercises · ${totalSets} total sets in this session. Ready to train at ${readiness?.[0]?.value ?? 'optimal'}% readiness.`
             )}
           </Text>
 
@@ -1432,7 +1432,7 @@ function OverviewTab({
               />
             </View>
             <Text style={{ fontFamily: F.header, fontSize: 9.5, letterSpacing: 0.9, color: C.onSurfaceVariant }}>
-              88% CONFIDENCE
+              {readiness?.[0]?.value ?? '88'}% READY
             </Text>
           </View>
 
@@ -1440,16 +1440,16 @@ function OverviewTab({
             <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)} style={{ marginTop: 16 }}>
               {[
                 {
-                  t: 'Progressive Overload',
-                  s: 'Bench Press 80 → 82.5 kg. You cleared 4×8 at RPE 7.5 last Monday.',
+                  t: 'Exercises',
+                  s: `${exercises.length} exercises planned. Total training volume: ${estimatedKcal} estimated kcal burn.`,
                 },
                 {
-                  t: 'Recovery Adjustment',
-                  s: 'Lateral raise volume trimmed 1 set — side delts logged 3 sessions in 7 days.',
+                  t: 'Recovery',
+                  s: `Current readiness: ${readiness?.[0]?.value ?? 'Ready'}%. Sleep: ${readiness?.[1]?.value ?? '7h'}.`,
                 },
                 {
-                  t: 'Injury Memory',
-                  s: "Left shoulder flagged Apr '26 — overhead press capped at 45 kg, tempo 3-1-1.",
+                  t: 'Plan',
+                  s: `Duration: ${workout?.duration ?? 45} min. ${totalSets} sets across ${exercises.length} movements.`,
                 },
               ].map((d, i) => (
                 <View key={d.t} style={{ paddingVertical: 13 }}>
@@ -1501,7 +1501,7 @@ function OverviewTab({
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <Text style={{ fontFamily: F.num, fontSize: 14, color: C.onSurfaceVariant }}>
-              ~{Math.round(e.sets * e.reps * 0.8)}
+              ~{Math.round(e.sets * (e.reps * (e.weight > 0 ? e.weight * 0.03 : 2)))}
             </Text>
             <Text style={{ fontFamily: F.header, fontSize: 9, letterSpacing: 0.8, color: C.onSurfaceVariant, marginTop: 2 }}>
               KCAL
@@ -1516,10 +1516,10 @@ function OverviewTab({
       <Row C={C} isDark={isDark} first onPress={() => undefined}>
         <View style={{ flex: 1 }}>
           <Text style={{ fontFamily: F.header, fontSize: 15.5, letterSpacing: -0.2, color: C.onSurface }}>
-            Warm-up protocol
+            Session
           </Text>
           <Text style={{ fontFamily: F.bodyMed, fontSize: 12.5, color: C.onSurfaceVariant, marginTop: 3 }}>
-            Band pull-aparts · Scap push-ups · 6 min
+            {workout?.title ?? 'Workout'} · {totalSets} sets · {workout?.duration ?? '~45'} min
           </Text>
         </View>
         <Icon name="chevron-right" size={17} color={C.onSurfaceVariant} />
@@ -1527,21 +1527,21 @@ function OverviewTab({
       <Row C={C} isDark={isDark} onPress={() => undefined}>
         <View style={{ flex: 1 }}>
           <Text style={{ fontFamily: F.header, fontSize: 15.5, letterSpacing: -0.2, color: C.onSurface }}>
-            Superset pairing
+            Target muscles
           </Text>
           <Text style={{ fontFamily: F.bodyMed, fontSize: 12.5, color: C.onSurfaceVariant, marginTop: 3 }}>
-            Lateral raise ⇄ Triceps pushdown
+            {exercises.map(e => e.muscle).filter(Boolean).join(' · ') || 'Full Body'} 
           </Text>
         </View>
-        <Text style={{ fontFamily: F.header, fontSize: 9.5, letterSpacing: 0.8, color: C.primary }}>ON</Text>
+        <Text style={{ fontFamily: F.header, fontSize: 9.5, letterSpacing: 0.8, color: C.primary }}>{exercises.length} EX</Text>
       </Row>
       <Row C={C} isDark={isDark} onPress={onHistory}>
         <View style={{ flex: 1 }}>
           <Text style={{ fontFamily: F.header, fontSize: 15.5, letterSpacing: -0.2, color: C.onSurface }}>
-            Compare to last Push day
+            Last session overview
           </Text>
           <Text style={{ fontFamily: F.bodyMed, fontSize: 12.5, color: C.onSurfaceVariant, marginTop: 3 }}>
-            27 Jul · 52 min · 8.4 t volume
+            {sessions?.[0]?.date ?? 'No past sessions'} · {sessions?.[0]?.duration ?? '~'} min · {sessions?.[0]?.volume ?? '0'} t volume
           </Text>
         </View>
         <Icon name="chevron-right" size={17} color={C.onSurfaceVariant} />
@@ -2013,6 +2013,7 @@ interface ActiveTabProps {
   restRemaining: number | null;
   finished: boolean;
   savedSummary?: string;
+  sessionTitle?: string;
   onToggleSet: (exIdx: number, setIdx: number) => void;
   onAddSet: (exIdx: number) => void;
   onExtendRest: () => void;
@@ -2029,6 +2030,7 @@ function ActiveTab({
   restRemaining,
   finished,
   savedSummary,
+  sessionTitle = 'Workout',
   onToggleSet,
   onAddSet,
   onExtendRest,
@@ -2111,10 +2113,10 @@ function ActiveTab({
               </Text>
             </View>
             <Text style={{ fontFamily: F.header, fontSize: 17, letterSpacing: -0.4, color: C.onSurface, marginTop: 5 }}>
-              Push Strength
+              {sessionTitle}
             </Text>
             <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant, marginTop: 3 }}>
-              {done} of {total} sets · {(done * 0.42).toFixed(1)} t moved
+              {done} of {total} sets · {exercises.reduce((a, e) => a + e.setsData.filter(s => s.completed).reduce((b, s) => b + (s.weight * s.reps), 0), 0).toFixed(1)} kg moved
             </Text>
           </View>
 
@@ -2490,6 +2492,7 @@ interface HistoryTabProps {
   sessions: HistorySession[];
   loading?: boolean;
   weeklyLoad: Array<{ label: string; value: number }>;
+  streak?: number;
   onStartWorkout: () => void;
   C: ThemeColors;
   isDark: boolean;
@@ -2499,6 +2502,7 @@ function HistoryTab({
   sessions,
   loading = false,
   weeklyLoad,
+  streak = 0,
   onStartWorkout,
   C,
   isDark,
@@ -2705,7 +2709,7 @@ function HistoryTab({
           { value: String(summary.count), label: 'Sessions' },
           { value: summary.volume, unit: 't', label: 'Volume' },
           { value: summary.hours, unit: 'hrs', label: 'Time' },
-          { value: '6', label: 'Streak', tone: C.primary },
+          { value: String(streak), label: 'Streak', tone: C.primary },
         ]}
       />
 
@@ -2720,10 +2724,10 @@ function HistoryTab({
         }}
       >
         <Text style={{ fontFamily: F.num, fontSize: 19, letterSpacing: -0.7, color: C.onSurface }}>
-          31.2
-          <Text style={{ fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant }}> t this week</Text>
+          {sessions.length}
+          <Text style={{ fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant }}> session{sessions.length !== 1 ? 's' : ''} logged</Text>
         </Text>
-        <Text style={{ fontFamily: F.header, fontSize: 11.5, color: A.green }}>▲ 12%</Text>
+        <Text style={{ fontFamily: F.header, fontSize: 11.5, color: A.green }}>{summary.volume}t</Text>
       </View>
       <View style={{ paddingHorizontal: T.gutter }}>
         <BarChart height={70} color={C.primary} data={weeklyLoad} />
@@ -3011,7 +3015,7 @@ export default function WorkoutScreen({
   userId: propUserId,
 }: WorkoutScreenProps) {
   const { user } = useAuth();
-  const userId = propUserId || user?.id || 'demo-user-id';
+  const userId = propUserId || user?.id || '';
   const { C, isDark, bgColors } = useTheme();
   const T = useMemo(() => makeTokens(C, isDark), [C, isDark]);
   const qc = useQueryClient();
@@ -3113,7 +3117,7 @@ export default function WorkoutScreen({
     startMutation.mutate({
       userId,
       workoutId: workout?.id,
-      title: workout?.title ?? 'Push Strength',
+      title: workout?.title ?? (templateExercises.length > 0 ? `${templateExercises.length} Exercise Workout` : 'Untitled Workout'),
       exercises: templateExercises,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -3121,20 +3125,27 @@ export default function WorkoutScreen({
 
   const handleFinish = useCallback(() => {
     session.finish();
+    const realSessionId = sessionId;
+    const estimatedCalories = Math.round(session.stats.volume * 0.05 + session.stats.minutes * 5);
     completeMutation.mutate({
-      sessionId: sessionId ?? 'local-session',
+      sessionId: realSessionId,
       duration: session.stats.minutes,
-      caloriesBurned: session.stats.minutes * 8,
-      notes: '',
+      caloriesBurned: estimatedCalories,
+      notes: `Completed ${session.stats.done} sets · ${(session.stats.volume / 1000).toFixed(1)}t volume`,
       completedSetIds: [],
     });
-  }, [completeMutation, session, sessionId]);
+    if (!realSessionId) {
+      console.warn('[Workout] No sessionId — session completed locally only.');
+      void qc.invalidateQueries({ queryKey: ['workoutHistory'] });
+    }
+  }, [completeMutation, session, sessionId, qc]);
 
   const handleSaveBuilder = useCallback(() => {
+    const estDuration = Math.round(builderExercises.reduce((a, e) => a + e.sets * ((e.rest ?? 60) + 40), 0) / 60);
     saveMutation.mutate({
       userId,
-      title: workout?.title ?? 'Push Day',
-      duration: workout?.duration ?? '60',
+      title: workout?.title ?? (builderExercises.length > 0 ? `Custom ${builderExercises.length} Exercise Workout` : 'Custom Workout'),
+      duration: workout?.duration ?? String(estDuration),
       parentVersionId: workout?.parentVersionId ?? workout?.id,
       exercises: builderExercises,
     });
@@ -3146,12 +3157,15 @@ export default function WorkoutScreen({
     opacity: interpolate(scrollY.value, [10, 46], [0, 1], Extrapolation.CLAMP),
   }));
 
+  const currentWorkoutTitle = workout?.title ?? 'No workout';
   const subtitle =
     tab === 'active'
       ? session.finished
         ? 'Session complete · saved'
         : 'Session running'
-      : 'Push · Week 6 · Day 3';
+      : workout
+        ? `${currentWorkoutTitle} · v${workout.versionNumber ?? 1}`
+        : 'Loading workout…';
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -3237,6 +3251,7 @@ export default function WorkoutScreen({
                 workout={workout}
                 exercises={templateExercises}
                 readiness={readinessData}
+                sessions={sessions}
                 onStart={() => setTab('active')}
                 onCustomise={() => setTab('builder')}
                 onHistory={() => setTab('history')}
@@ -3273,6 +3288,7 @@ export default function WorkoutScreen({
                 savedSummary={`Session saved · ${Math.floor(session.elapsed / 60)}:${(session.elapsed % 60)
                   .toString()
                   .padStart(2, '0')} · ${session.stats.done} sets logged`}
+                sessionTitle={workout?.title ?? (templateExercises.length > 0 ? `${templateExercises.length} Exercise Workout` : 'Workout')}
                 onToggleSet={session.toggleSet}
                 onAddSet={session.addSet}
                 onExtendRest={session.extendRest}
@@ -3291,6 +3307,7 @@ export default function WorkoutScreen({
                 sessions={sessions}
                 loading={historyLoading}
                 weeklyLoad={weeklyLoadData}
+                streak={(user as any)?.currentStreak ?? 0}
                 onStartWorkout={() => setTab('overview')}
                 C={C}
                 isDark={isDark}
