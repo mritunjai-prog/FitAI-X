@@ -111,6 +111,7 @@ export interface Meal {
   cost: number;
   state: MealState;
   versions?: MealVersion[];
+  date?: string; // ISO date string from DB
 }
 
 export interface GroceryItem {
@@ -1716,7 +1717,11 @@ function PlanTab({
         <SectionLabel text={`${day.label} · Meals`} C={C} action="Add" onAction={() => undefined} />
         {meals
           .filter(m => ['Breakfast','Lunch','Dinner'].includes(m.type))
-          .filter((m, i, arr) => arr.findIndex(x => x.type === m.type) === i) // 1 per type
+          .filter((m, i, arr) => arr.findIndex(x => x.type === m.type) === i)
+          .filter(m => {
+            if (!m.date) return true;
+            return new Date(m.date).getDate() === day.dayOfMonth;
+          })
           .map((m, i) => {
           const isExpanded = expandedMeal === m.id;
           return (
@@ -2382,6 +2387,7 @@ function toMeal(raw: any, index: number): Meal {
     cost: Number(active?.cost ?? 0),
     state: raw?.isLogged ? 'done' : index === 2 ? 'now' : 'pending',
     versions: raw?.versions,
+    date: raw?.date || undefined,
   };
 }
 
