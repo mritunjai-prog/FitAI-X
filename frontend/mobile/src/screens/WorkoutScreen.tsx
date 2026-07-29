@@ -1,1246 +1,3304 @@
-import React, { useState, useEffect, useMemo } from "react";
+/**
+ * ════════════════════════════════════════════════════════════════════════════
+ *  FitAI X — WORKOUT HUB
+ *  Single-file screen. Overview · Builder · Active · History.
+ * ════════════════════════════════════════════════════════════════════════════
+ *
+ *  DESIGN CONTRACT — "no cards"
+ *  Nothing in this file renders `borderRadius + borderWidth + backgroundColor`
+ *  as a *container*. Hierarchy is carried by four mechanisms instead:
+ *
+ *    1. Two hairline weights — T.hair (section) vs T.hairSoft (row). That
+ *       contrast is what replaces a card boundary.
+ *    2. Separator insets — 22px normally, 58px beside a leading numeral.
+ *    3. Fading washes — LinearGradient to transparent at 80%, so active and
+ *       completed states read as emphasis with no visible edge.
+ *    4. Type scale — 40 hero / 15.5 row / 12.5 meta / 9.5 overline.
+ *
+ *  Shapes survive ONLY on controls (buttons, chips, steppers, tick circle),
+ *  because flattening those would destroy affordance.
+ *
+ *  CHARTS — this file deliberately does NOT hand-roll ring/spark/bar SVG.
+ *  It calls the shared ActivityRings / SplineChart / BarChart components so
+ *  there is exactly one chart implementation in the app.
+ *
+ *  ICONS — ICON_PATHS below is a local copy for drop-in portability. Replace
+ *  it with your shared registry import; see the note at its declaration.
+ *  CONTENTS
+ *  ----------------------------------------------------------------------
+ *    TYPES ......................................... L102
+ *    DESIGN TOKENS ................................. L211
+ *    PRIMITIVES .................................... L268
+ *    TAB BAR ....................................... L662
+ *    MUSCLE MAP .................................... L795
+ *    HOLD TO CONFIRM ............................... L950
+ *    LIVE SESSION HOOK ............................. L1069
+ *    TAB · OVERVIEW ................................ L1247
+ *    TAB · BUILDER ................................. L1590
+ *    TAB · ACTIVE .................................. L2062
+ *    TAB · HISTORY ................................. L2536
+ *    SCREEN ........................................ L3022
+ *
+ * ════════════════════════════════════════════════════════════════════════════
+ */
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-    ScrollView,
-    Platform,
-    TextInput,
-    Pressable,
-    Dimensions,
-    StatusBar as RNStatusBar,
-    KeyboardAvoidingView,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+  ActivityIndicator,
+  AppState,
+  AppStateStatus,
+  KeyboardAvoidingView,
+  LayoutChangeEvent,
+  Platform,
+  Pressable,
+  ScrollView,
+  StatusBar as RNStatusBar,
+  StyleProp,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  ViewStyle,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
-    FadeInUp,
-    FadeIn,
-    FadeOut,
-    Layout,
-    useSharedValue,
-    useAnimatedStyle,
-    withSpring,
-    withTiming,
-    withRepeat,
-    withSequence,
-    interpolate,
-    interpolateColor,
-    Extrapolation,
-} from "react-native-reanimated";
-import * as Haptics from "expo-haptics";
-import Svg, { Path, Circle, Ellipse, Rect } from "react-native-svg";
-import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-
-import { useTheme } from "../context/ThemeContext";
-import { F, ThemeColors } from "../theme";
-import MeshGradientBackground from "../components/MeshGradientBackground";
+  Easing,
+  Extrapolation,
+  FadeIn,
+  FadeInDown,
+  FadeOut,
+  Layout,
+  cancelAnimation,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import Svg, { Circle, Ellipse, Path, Rect } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
+import MaskedView from '@react-native-masked-view/masked-view';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import MeshGradientBackground from '../components/MeshGradientBackground';
+import ActivityRings from '../components/charts/ActivityRings';
+import BarChart from '../components/charts/BarChart';
+import SplineChart from '../components/charts/SplineChart';
+import { useTheme } from '../context/ThemeContext';
 import {
-    fetchCurrentWorkout,
-    fetchWorkoutHistory,
-    generateWorkout,
-    saveWorkout,
-    startSession,
-    completeSession,
-    updateExerciseStatus,
-} from "../services/api/workout";
+  completeSession,
+  fetchCurrentWorkout,
+  fetchWorkoutHistory,
+  generateWorkout,
+  saveWorkout,
+  startSession,
+} from '../services/api/workout';
+import { fetchVitals } from '../services/api/dashboard';
+import { fetchSleepData, fetchRecoveryScore } from '../services/api/recovery';
+import { F, ThemeColors } from '../theme';
+import { MaterialIcons as Icon } from '@expo/vector-icons';
+import { useAuth } from '../context/AuthContext';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
+/* ──────────────────────────────────────────────────────────────────────────
+   TYPES
+   Shared domain types.
+   (was types.ts)
+   ────────────────────────────────────────────────────────────────────────── */
+/**
+ * Workout Hub — shared types
+ */
 
-// ─────────────────────────────────────────────────────────────────────────
-// ICONS — consolidated path set used across Dashboard / Profile / Workout
-// ─────────────────────────────────────────────────────────────────────────
-const ICON_PATHS: Record<string, string> = {
-    "chevron-left": "M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z",
-    "chevron-right": "M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z",
-    history:
-        "M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z",
-    "auto-awesome":
-        "M19 4h-2V2h-2v2h-2v2h2v2h2V6h2V4zM10.83 8.35l-2.33-6.14c-.16-.41-.75-.41-.91 0L5.26 8.35 1.55 9.77c-.45.17-.45.8 0 .97l3.71 1.42 2.33 6.14c.16.41.75.41.91 0l2.33-6.14 3.71-1.42c.45-.17.45-.8 0-.97l-3.71-1.42zM7.5 13.91L6.37 10.9 3.36 9.77l3.01-1.13 1.13-3.01 1.13 3.01 3.01 1.13-3.01 1.13-1.13 3.01zM19 14h-2v-2h-2v2h-2v2h2v2h2v-2h2v-2z",
-    "more-vert":
-        "M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z",
-    "play-circle":
-        "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z",
-    "play-arrow": "M8 5v14l11-7z",
-    check: "M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z",
-    timer:
-        "M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42A8.962 8.962 0 0012 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z",
-    "flash-on": "M7 2v11h3v9l7-12h-4l4-8z",
-    "keyboard-arrow-down": "M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z",
-    "keyboard-arrow-up": "M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6 1.41 1.41z",
-    filter: "M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z",
-    calendar:
-        "M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z",
-    "fitness-center":
-        "M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z",
-    "trending-up":
-        "M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z",
-    favorite:
-        "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z",
-    mic: "M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zM17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z",
-    notifications:
-        "M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5S10.5 3.17 10.5 4v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z",
-};
+export type TabKey = 'overview' | 'builder' | 'active' | 'history';
 
-function Icon({
-    name,
-    size = 24,
-    color = "#fff",
-}: {
-    name: string;
-    size?: number;
-    color?: string;
-}) {
-    const d = ICON_PATHS[name];
-    if (!d) return null;
-    return (
-        <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-            <Path d={d} />
-        </Svg>
-    );
+export type MuscleGroup =
+  | 'Chest'
+  | 'Front Delts'
+  | 'Side Delts'
+  | 'Triceps'
+  | 'Core'
+  | 'Back'
+  | 'Biceps'
+  | 'Quads'
+  | 'Hamstrings'
+  | 'Glutes'
+  | 'Calves';
+
+/** A single prescribed exercise inside a workout template. */
+export interface WorkoutExercise {
+  id: string;
+  name: string;
+  muscle?: string;
+  sets: number;
+  reps: number;
+  /** Prescribed load in kg. */
+  weight: number;
+  /** Rest between sets, seconds. */
+  rest?: number;
+  /** Ghost value from the previous logged session, e.g. "80×8". */
+  prev?: string;
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// SHARED PRIMITIVES — same visual language as DashboardScreen / ProfileScreen
-// ─────────────────────────────────────────────────────────────────────────
+export interface Workout {
+  id: string;
+  title: string;
+  duration?: string | number;
+  targetMuscles?: string;
+  aiExplanation?: string;
+  exercises: WorkoutExercise[];
+  versionNumber?: number;
+  parentVersionId?: string;
+  isCurrent?: boolean;
+}
 
-function haptic(style: "light" | "medium" | "success" = "light") {
-    if (Platform.OS === "web") return;
-    if (style === "success") {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } else if (style === "medium") {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } else {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
+/** One logged set inside a live session. */
+export interface SetEntry {
+  weight: number;
+  reps: number;
+  completed: boolean;
+}
+
+/** Live-session working copy of an exercise. */
+export interface ActiveExercise extends WorkoutExercise {
+  setsData: SetEntry[];
+}
+
+export interface HistoryExerciseSummary {
+  name: string;
+  scheme: string;
+  load: string;
+  pr?: boolean;
+}
+
+export interface HistorySession {
+  id: string;
+  title: string;
+  /** ISO date, used for range filtering. */
+  iso: string;
+  date: string;
+  /** Minutes. */
+  duration: number;
+  /** Tonnage string, e.g. "8.4". */
+  volume: string;
+  sets: number;
+  calories: number;
+  pr?: boolean;
+  exercises: HistoryExerciseSummary[];
+}
+
+export type HistoryFilterKey = 'all' | 'week' | 'month' | 'pr';
+
+export interface HistoryFilter {
+  key: HistoryFilterKey;
+  label: string;
+  count: number;
+}
+
+export interface MuscleActivation {
+  muscle: string;
+  /** 0..1 */
+  value: number;
+}
+
+export interface ReadinessMetric {
+  key: string;
+  label: string;
+  value: string;
+  unit?: string;
+  tone: 'green' | 'cyan' | 'gold';
+  trend: number[];
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   DESIGN TOKENS
+   Hairlines, washes, tracks. Two hairline weights carry all grouping.
+   (was tokens.ts)
+   ────────────────────────────────────────────────────────────────────────── */
+/**
+ * Workout Hub design tokens.
+ *
+ * These mirror the CSS custom properties from the HTML spec. Everything that
+ * was a `--var` there is derived from your existing ThemeContext `C` object
+ * here, so there is a single source of truth for colour.
+ *
+ * The flattened design leans on exactly two hairline weights — that contrast
+ * is what replaces card borders as the grouping signal.
+ */
+interface WorkoutTokens {
+  /** Section boundary rule. */
+  hair: string;
+  /** Row-level rule inside a section. Deliberately ~half the weight of `hair`. */
+  hairSoft: string;
+  /** Accent rule for AI / composer affordances. */
+  hairGold: string;
+  /** Inert track behind progress bars and rings. */
+  track: string;
+  /** Faint gold tint for pressed + selected states. */
+  wash: string;
+  /** True 1px on every density. */
+  hairline: number;
+  /** Standard horizontal page gutter. */
+  gutter: number;
+  /** Left inset for separators that sit beside a leading numeral. */
+  indent: number;
+}
+
+const makeTokens = (_C: ThemeColors, isDark: boolean): WorkoutTokens => ({
+  hair: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(20,18,10,0.13)',
+  hairSoft: isDark ? 'rgba(255,255,255,0.055)' : 'rgba(20,18,10,0.07)',
+  hairGold: isDark ? 'rgba(245,196,0,0.28)' : 'rgba(160,118,0,0.36)',
+  track: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(20,18,10,0.10)',
+  wash: isDark ? 'rgba(245,196,0,0.055)' : 'rgba(245,196,0,0.10)',
+  hairline: StyleSheet.hairlineWidth,
+  gutter: 22,
+  indent: 58,
+});
+
+/**
+ * Semantic accents. Light mode needs genuinely darker values — a straight
+ * invert of the dark palette fails contrast on a light background.
+ */
+const accents = (isDark: boolean) => ({
+  green: isDark ? '#A3E635' : '#5E8B00',
+  cyan: isDark ? '#7DD3FC' : '#0E7490',
+  amber: isDark ? '#F59E0B' : '#B26B00',
+  red: isDark ? '#F87171' : '#C2413E',
+});
+
+
+/* ──────────────────────────────────────────────────────────────────────────
+   PRIMITIVES
+   Row / Rule / StatColumns / Icon / haptics. No component here draws a card.
+   (was primitives.tsx)
+   ────────────────────────────────────────────────────────────────────────── */
+/* ────────────────────────────────────────────────────────────────
+   Haptics
+   ──────────────────────────────────────────────────────────────── */
+type HapticStyle = 'light' | 'medium' | 'heavy' | 'success' | 'select';
+
+function haptic(style: HapticStyle = 'light'): void {
+  if (Platform.OS === 'web') return;
+  switch (style) {
+    case 'success':
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      break;
+    case 'select':
+      void Haptics.selectionAsync();
+      break;
+    case 'heavy':
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+      break;
+    case 'medium':
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      break;
+    default:
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }
+}
+
+/* ────────────────────────────────────────────────────────────────
+   Icon — reuses the app-wide path registry.
+   NOTE: in your codebase this should import the shared ICON_PATHS
+   rather than redeclaring. Kept local-import shaped for portability.
+   ──────────────────────────────────────────────────────────────── */
+
+
+/* ────────────────────────────────────────────────────────────────
+   PressableScale — spring press feedback, no surface of its own.
+   ──────────────────────────────────────────────────────────────── */
+interface PressableScaleProps {
+  children: React.ReactNode;
+  onPress?: () => void;
+  onLongPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
+  hapticStyle?: HapticStyle;
+  scaleTo?: number;
+  hitSlop?: number;
 }
 
 function PressableScale({
-    children,
-    onPress,
-    style,
-    disabled = false,
-}: {
-    children: React.ReactNode;
-    onPress?: () => void;
-    style?: any;
-    disabled?: boolean;
-}) {
-    const scale = useSharedValue(1);
-    const animatedStyle = useAnimatedStyle(() => ({
-        transform: [{ scale: scale.value }],
-    }));
-    return (
-        <Pressable
-            disabled={disabled}
-            onPressIn={() => {
-                scale.value = withSpring(0.96, { damping: 15, stiffness: 300 });
-            }}
-            onPressOut={() => {
-                scale.value = withSpring(1, { damping: 15, stiffness: 300 });
-            }}
-            onPress={() => {
-                haptic("light");
-                onPress?.();
-            }}
-            style={style}
-        >
-            <Animated.View style={animatedStyle}>{children}</Animated.View>
-        </Pressable>
-    );
+  children,
+  onPress,
+  onLongPress,
+  style,
+  disabled = false,
+  hapticStyle = 'light',
+  scaleTo = 0.96,
+  hitSlop = 0,
+}: PressableScaleProps) {
+  const scale = useSharedValue(1);
+  const animated = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
+  return (
+    <Pressable
+      disabled={disabled}
+      hitSlop={hitSlop}
+      onPressIn={() => {
+        scale.value = withSpring(scaleTo, { damping: 15, stiffness: 320 });
+      }}
+      onPressOut={() => {
+        scale.value = withSpring(1, { damping: 15, stiffness: 320 });
+      }}
+      onPress={() => {
+        if (disabled) return;
+        haptic(hapticStyle);
+        onPress?.();
+      }}
+      onLongPress={onLongPress}
+      style={style}
+    >
+      <Animated.View style={animated}>{children}</Animated.View>
+    </Pressable>
+  );
 }
 
-/** Glass card matching Dashboard's `.card` / Profile's `TiltCard` surface. */
-function GlassCard({
-    children,
-    style,
-    C,
-    glow,
-}: {
-    children: React.ReactNode;
-    style?: any;
-    C: ThemeColors;
-    glow?: boolean;
-}) {
-    return (
-        <View
-            style={[
-                {
-                    padding: 16,
-                },
-                style,
-            ]}
-        >
-            {children}
-        </View>
-    );
-}
-
-function SectionLabel({ text, C }: { text: string; C: ThemeColors }) {
-    return (
-        <Text
-            style={{
-                fontFamily: F.header,
-                fontSize: 11,
-                letterSpacing: 1.5,
-                color: C.onSurfaceVariant,
-                marginBottom: 12,
-                marginLeft: 4,
-            }}
-        >
-            {text}
-        </Text>
-    );
-}
-
+/* ────────────────────────────────────────────────────────────────
+   Entrance — staggered mount animation.
+   ──────────────────────────────────────────────────────────────── */
 function Entrance({
-    children,
-    index = 0,
-    style,
+  children,
+  index = 0,
+  style,
 }: {
-    children: React.ReactNode;
-    index?: number;
-    style?: any;
+  children: React.ReactNode;
+  index?: number;
+  style?: StyleProp<ViewStyle>;
 }) {
-    return (
-        <Animated.View
-            entering={FadeInUp.delay(index * 90)
-                .springify()
-                .damping(15)}
-            layout={Layout.springify().damping(16)}
-            style={style}
-        >
-            {children}
-        </Animated.View>
-    );
+  return (
+    <Animated.View
+      entering={FadeInDown.delay(index * 70).springify().damping(16).mass(0.85)}
+      style={style}
+    >
+      {children}
+    </Animated.View>
+  );
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// SEGMENTED TAB BAR — animated sliding pill (same feel as Profile's nav dot)
-// ─────────────────────────────────────────────────────────────────────────
-const TABS = [
-    { key: "overview", label: "Overview" },
-    { key: "builder", label: "Builder" },
-    { key: "active", label: "Active" },
-    { key: "history", label: "History" },
-] as const;
-type TabKey = (typeof TABS)[number]["key"];
+/* ────────────────────────────────────────────────────────────────
+   Structural primitives — these replace cards entirely.
+   ──────────────────────────────────────────────────────────────── */
 
-function WorkoutTabs({
-    active,
-    onChange,
-    C,
-    isDark,
+/** Full-bleed horizontal rule. `soft` = row-level, default = section-level. */
+function Rule({
+  C,
+  isDark,
+  soft = false,
+  inset = 0,
+  style,
 }: {
-    active: TabKey;
-    onChange: (t: TabKey) => void;
-    C: ThemeColors;
-    isDark: boolean;
+  C: ThemeColors;
+  isDark: boolean;
+  soft?: boolean;
+  inset?: number;
+  style?: StyleProp<ViewStyle>;
 }) {
-    const [barWidth, setBarWidth] = useState(0);
-    const segW = barWidth / TABS.length;
-    const activeIndex = TABS.findIndex((t) => t.key === active);
-    const pos = useSharedValue(0);
-
-    useEffect(() => {
-        if (segW > 0) {
-            pos.value = withSpring(activeIndex * segW, { damping: 16, stiffness: 180 });
-        }
-    }, [activeIndex, segW]);
-
-    const pillStyle = useAnimatedStyle(() => ({
-        transform: [{ translateX: pos.value }],
-        width: segW,
-    }));
-
-    return (
-        <View
-            onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
-            style={{
-                flexDirection: "row",
-                backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
-                borderRadius: 18,
-                borderWidth: 1,
-                borderColor: C.outlineVariant,
-                padding: 4,
-                marginHorizontal: 20,
-                marginBottom: 20,
-            }}
-        >
-            {barWidth > 0 && (
-                <Animated.View
-                    style={[
-                        {
-                            position: "absolute",
-                            top: 4,
-                            bottom: 4,
-                            left: 4,
-                            borderRadius: 14,
-                            backgroundColor: C.primary,
-                        },
-                        pillStyle,
-                    ]}
-                />
-            )}
-            {TABS.map((t) => {
-                const isActive = t.key === active;
-                return (
-                    <TouchableOpacity
-                        key={t.key}
-                        onPress={() => {
-                            haptic("light");
-                            onChange(t.key);
-                        }}
-                        style={{ flex: 1, paddingVertical: 10, alignItems: "center" }}
-                    >
-                        <Text
-                            style={{
-                                fontFamily: isActive ? F.header : F.bodyMed,
-                                fontSize: 13,
-                                color: isActive ? C.onPrimary : C.onSurfaceVariant,
-                            }}
-                        >
-                            {t.label}
-                        </Text>
-                    </TouchableOpacity>
-                );
-            })}
-        </View>
-    );
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// MUSCLE MAP — small wireframe body used in Builder tab
-// ─────────────────────────────────────────────────────────────────────────
-function MuscleMap({
-    targeted,
-    C,
-}: {
-    targeted: string[];
-    C: ThemeColors;
-}) {
-    const wire = C.onSurfaceVariant + "40";
-    const hit = (m: string) => targeted.includes(m);
-    const getStyle = (m: string) => ({
-        fill: hit(m) ? C.primary + "55" : "none",
-        stroke: hit(m) ? C.primary : wire,
-    });
-    return (
-        <View style={{ height: 190, alignItems: "center", justifyContent: "center" }}>
-            <Svg width={140} height={180} viewBox="0 0 140 200">
-                <Ellipse cx={70} cy={18} rx={16} ry={18} {...getStyle("Neck")} strokeWidth={1.5} />
-                <Rect x={63} y={35} width={14} height={10} fill="none" stroke={wire} strokeWidth={1} />
-                <Path d="M30,58 Q50,48 70,48 Q90,48 110,58" {...getStyle("Shoulders")} strokeWidth={1.5} />
-                <Path d="M38,58 L34,115 Q70,125 106,115 L102,58" {...getStyle("Chest")} strokeWidth={1.5} />
-                <Ellipse cx={70} cy={117} rx={22} ry={8} {...getStyle("Core")} strokeWidth={1.2} />
-                <Path d="M38,58 L18,95 L15,130" {...getStyle("Arms")} strokeWidth={1.5} strokeLinecap="round" />
-                <Path d="M102,58 L122,95 L125,130" {...getStyle("Arms")} strokeWidth={1.5} strokeLinecap="round" />
-                <Path d="M55,122 L50,162 L48,192" {...getStyle("Quads")} strokeWidth={1.5} strokeLinecap="round" />
-                <Path d="M85,122 L90,162 L92,192" {...getStyle("Quads")} strokeWidth={1.5} strokeLinecap="round" />
-                <Circle cx={50} cy={162} r={4} {...getStyle("Knees")} strokeWidth={1.5} />
-                <Circle cx={90} cy={162} r={4} {...getStyle("Knees")} strokeWidth={1.5} />
-            </Svg>
-        </View>
-    );
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// OVERVIEW TAB — hero + AI recommendation + inset exercise list (WorkoutHome)
-// ─────────────────────────────────────────────────────────────────────────
-function OverviewTab({
-    workout,
-    onGoBuilder,
-    onGoActive,
-    onGoHistory,
-    C,
-    isDark,
-}: any) {
-    const [aiOpen, setAiOpen] = useState(false);
-    const exercises = workout?.exercises?.length
-        ? workout.exercises
-        : [
-            { id: "m1", name: "Barbell Bench Press", sets: 4, reps: 8, weight: 80 },
-            { id: "m2", name: "Incline Dumbbell Press", sets: 3, reps: 10, weight: 30 },
-            { id: "m3", name: "Overhead Press", sets: 3, reps: 10, weight: 45 },
-            { id: "m4", name: "Lateral Raises", sets: 4, reps: 15, weight: 12 },
-        ];
-
-    return (
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
-            {/* Hero */}
-            <Entrance index={0}>
-                <GlassCard C={C} glow style={{ borderRadius: 32, padding: 20, marginBottom: 20 }}>
-                    <View
-                        style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                            gap: 6,
-                            alignSelf: "flex-start",
-                            backgroundColor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.06)",
-                            paddingHorizontal: 12,
-                            paddingVertical: 6,
-                            borderRadius: 20,
-                            marginBottom: 12,
-                        }}
-                    >
-                        <Icon name="auto-awesome" size={12} color={C.primary} />
-                        <Text style={{ fontFamily: F.header, fontSize: 11, letterSpacing: 1.5, color: C.primary }}>
-                            TODAY'S OPTIMIZED PLAN
-                        </Text>
-                    </View>
-                    <Text style={{ fontFamily: F.header, fontSize: 26, color: C.onSurface, letterSpacing: -0.5 }}>
-                        {workout?.title || "Push Strength"}
-                    </Text>
-                    <Text style={{ fontFamily: F.bodyMed, fontSize: 14, color: C.onSurfaceVariant, marginTop: 4 }}>
-                        Focus: {workout?.targetMuscles || "Chest • Shoulders • Triceps"}
-                    </Text>
-
-                    <View style={{ flexDirection: "row", gap: 24, marginTop: 16 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                            <Icon name="timer" size={18} color={C.primary} />
-                            <Text style={{ fontFamily: "JetBrainsMono-Regular", fontSize: 14, color: C.onSurface }}>
-                                {workout?.duration || "45"}m
-                            </Text>
-                        </View>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                            <Icon name="fitness-center" size={18} color={C.primary} />
-                            <Text style={{ fontFamily: "JetBrainsMono-Regular", fontSize: 14, color: C.onSurface }}>
-                                {exercises.length} Ex
-                            </Text>
-                        </View>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                            <Icon name="trending-up" size={18} color={C.primary} />
-                            <Text style={{ fontFamily: "JetBrainsMono-Regular", fontSize: 14, color: C.onSurface }}>420 kcal</Text>
-                        </View>
-                    </View>
-
-                    <View style={{ flexDirection: "row", gap: 12, marginTop: 20 }}>
-                        <PressableScale
-                            onPress={onGoActive}
-                            style={{
-                                flex: 1.4,
-                                backgroundColor: C.primary,
-                                borderRadius: 12,
-                                paddingVertical: 10,
-                                flexDirection: "row",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                gap: 8,
-                            }}
-                        >
-                            <Icon name="play-arrow" size={16} color={C.onPrimary} />
-                            <Text style={{ fontFamily: F.header, fontSize: 14, color: C.onPrimary }}>Start</Text>
-                        </PressableScale>
-                        <PressableScale
-                            onPress={onGoBuilder}
-                            style={{
-                                flex: 1,
-                                backgroundColor: "transparent",
-                                borderRadius: 12,
-                                paddingVertical: 10,
-                                alignItems: "center",
-                                justifyContent: "center",
-                                borderWidth: 1,
-                                borderColor: C.outlineVariant,
-                            }}
-                        >
-                            <Text style={{ fontFamily: F.header, fontSize: 14, color: C.onSurface }}>Customize</Text>
-                        </PressableScale>
-                    </View>
-                </GlassCard>
-            </Entrance>
-
-            {/* AI Recommendation */}
-            <Entrance index={1}>
-                <GlassCard C={C} glow style={{ marginBottom: 20 }}>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                            <Icon name="auto-awesome" size={18} color={C.primary} />
-                            <Text style={{ fontFamily: F.header, fontSize: 17, color: C.onSurface }}>AI Recommendation</Text>
-                        </View>
-                        <TouchableOpacity onPress={() => setAiOpen(!aiOpen)} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                            <Text style={{ fontFamily: F.bodyBold, fontSize: 13, color: C.onSurfaceVariant }}>Details</Text>
-                            <Icon name={aiOpen ? "keyboard-arrow-up" : "keyboard-arrow-down"} size={18} color={C.onSurfaceVariant} />
-                        </TouchableOpacity>
-                    </View>
-
-                    <View
-                        style={{
-                            flexDirection: "row",
-                            justifyContent: "space-between",
-                            backgroundColor: isDark ? "rgba(0,0,0,0.2)" : "rgba(255,255,255,0.5)",
-                            borderRadius: 20,
-                            padding: 12,
-                            marginBottom: 16,
-                        }}
-                    >
-                        <View style={{ alignItems: "center", gap: 4 }}>
-                            <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: "rgba(74,222,128,0.15)", alignItems: "center", justifyContent: "center" }}>
-                                <Icon name="favorite" size={18} color="#4ade80" />
-                            </View>
-                            <Text style={{ fontFamily: "JetBrainsMono-Regular", fontSize: 15, color: C.onSurface }}>92%</Text>
-                            <Text style={{ fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant }}>RECOVERY</Text>
-                        </View>
-                        <View style={{ alignItems: "center", gap: 4 }}>
-                            <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: "rgba(56,189,248,0.15)", alignItems: "center", justifyContent: "center" }}>
-                                <Icon name="timer" size={18} color="#38bdf8" />
-                            </View>
-                            <Text style={{ fontFamily: "JetBrainsMono-Regular", fontSize: 15, color: C.onSurface }}>7h 45m</Text>
-                            <Text style={{ fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant }}>SLEEP</Text>
-                        </View>
-                        <View style={{ alignItems: "center", gap: 4 }}>
-                            <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: "rgba(251,191,36,0.15)", alignItems: "center", justifyContent: "center" }}>
-                                <Icon name="auto-awesome" size={18} color="#fbbf24" />
-                            </View>
-                            <Text style={{ fontFamily: "JetBrainsMono-Regular", fontSize: 15, color: C.onSurface }}>High</Text>
-                            <Text style={{ fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant }}>READINESS</Text>
-                        </View>
-                    </View>
-
-                    <Text style={{ fontFamily: F.body, fontSize: 14, color: C.onSurface, lineHeight: 22 }}>
-                        {workout?.aiExplanation ||
-                            "Chest fully recovered. Increase pushing volume by 8% based on your logged history."}
-                    </Text>
-
-                    {aiOpen && (
-                        <Animated.View entering={FadeInUp.springify().damping(15)} exiting={FadeOut.duration(150)} style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: C.outlineVariant }}>
-                            <Text style={{ fontFamily: F.bodyBold, fontSize: 13, color: C.onSurface, marginBottom: 4 }}>Recovery Adjustment</Text>
-                            <Text style={{ fontFamily: F.body, fontSize: 13, color: C.onSurfaceVariant, marginBottom: 12 }}>
-                                Reduced volume by 10% due to low HRV this morning.
-                            </Text>
-                            <Text style={{ fontFamily: F.bodyBold, fontSize: 13, color: C.onSurface, marginBottom: 4 }}>Progressive Overload</Text>
-                            <Text style={{ fontFamily: F.body, fontSize: 13, color: C.onSurfaceVariant }}>
-                                Increased Bench Press weight by 5 lbs from last session.
-                            </Text>
-                        </Animated.View>
-                    )}
-                </GlassCard>
-            </Entrance>
-
-            {/* Inset exercise list */}
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12, paddingHorizontal: 4 }}>
-                <SectionLabel text="TODAY'S EXERCISES" C={C} />
-                <TouchableOpacity onPress={onGoBuilder}>
-                    <Text style={{ fontFamily: F.header, fontSize: 14, color: C.primary }}>Edit</Text>
-                </TouchableOpacity>
-            </View>
-            <Entrance index={2}>
-                <GlassCard C={C} style={{ padding: 0, marginBottom: 20 }}>
-                    {exercises.map((ex: any, i: number) => (
-                        <View
-                            key={ex.id || i}
-                            style={{
-                                flexDirection: "row",
-                                alignItems: "center",
-                                paddingVertical: 14,
-                                paddingHorizontal: 16,
-                                borderBottomWidth: i === exercises.length - 1 ? 0 : 1,
-                                borderBottomColor: C.outlineVariant,
-                            }}
-                        >
-                            <View
-                                style={{
-                                    width: 32,
-                                    height: 32,
-                                    borderRadius: 16,
-                                    backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                }}
-                            >
-                                <Text style={{ fontFamily: "JetBrainsMono-Regular", fontSize: 13, color: C.onSurfaceVariant }}>{i + 1}</Text>
-                            </View>
-                            <View style={{ flex: 1, marginHorizontal: 14 }}>
-                                <Text style={{ fontFamily: F.header, fontSize: 16, color: C.onSurface, letterSpacing: -0.3 }}>{ex.name}</Text>
-                                <Text style={{ fontFamily: "JetBrainsMono-Regular", fontSize: 12, color: C.primary, marginTop: 2 }}>
-                                    {ex.sets}x{ex.reps} • {ex.weight}kg
-                                </Text>
-                            </View>
-                            <View style={{ alignItems: "flex-end" }}>
-                                <Text style={{ fontFamily: "JetBrainsMono-Regular", fontSize: 15, color: C.onSurface }}>
-                                    ~{Math.round(ex.sets * ex.reps * 0.8)}
-                                </Text>
-                                <Text style={{ fontFamily: F.bodyMed, fontSize: 10, color: C.onSurfaceVariant, marginTop: 2 }}>kcal</Text>
-                            </View>
-                        </View>
-                    ))}
-                </GlassCard>
-            </Entrance>
-
-            <TouchableOpacity onPress={onGoHistory} style={{ alignItems: "center", paddingVertical: 8 }}>
-                <Text style={{ fontFamily: F.bodyBold, fontSize: 13, color: C.onSurfaceVariant }}>View past sessions →</Text>
-            </TouchableOpacity>
-        </ScrollView>
-    );
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// BUILDER TAB — muscle map, AI editor, chips, editable exercise cards
-// ─────────────────────────────────────────────────────────────────────────
-function BuilderExerciseCard({ ex, C, isDark }: any) {
-    return (
-        <Entrance style={{ marginBottom: 14 }}>
-            <View style={{ paddingVertical: 12 }}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-                        <View
-                            style={{
-                                width: 40,
-                                height: 40,
-                                borderRadius: 10,
-                                backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-                                marginRight: 12,
-                                alignItems: "center",
-                                justifyContent: "center",
-                            }}
-                        >
-                            <Icon name="play-circle" size={22} color={C.onSurfaceVariant} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={{ fontFamily: F.header, fontSize: 16, color: C.onSurface }}>{ex.name}</Text>
-                            <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.primary, marginTop: 2 }}>
-                                {ex.muscle || "Full Body"} • {ex.sets} Sets
-                            </Text>
-                        </View>
-                    </View>
-                    <TouchableOpacity style={{ padding: 8 }}>
-                        <Icon name="more-vert" size={20} color={C.onSurface} />
-                    </TouchableOpacity>
-                </View>
-                <View style={{ flexDirection: "row", gap: 10 }}>
-                    {[
-                        { label: "TARGET", val: `${ex.reps} Reps` },
-                        { label: "WEIGHT", val: `${ex.weight} lbs` },
-                        { label: "REST", val: "60s" },
-                    ].map((s) => (
-                        <View
-                            key={s.label}
-                            style={{
-                                flex: 1,
-                                backgroundColor: isDark ? "rgba(0,0,0,0.2)" : "rgba(0,0,0,0.03)",
-                                padding: 10,
-                                borderRadius: 12,
-                                alignItems: "center",
-                            }}
-                        >
-                            <Text style={{ fontFamily: F.bodyBold, fontSize: 10, color: C.onSurfaceVariant }}>{s.label}</Text>
-                            <Text style={{ fontFamily: "JetBrainsMono-Regular", fontSize: 14, color: C.onSurface, marginTop: 4 }}>{s.val}</Text>
-                        </View>
-                    ))}
-                </View>
-            </View>
-        </Entrance>
-    );
-}
-
-function BuilderTab({ workout, onSave, C, isDark }: any) {
-    const [exercises, setExercises] = useState<any[]>([]);
-    const [aiPrompt, setAiPrompt] = useState("");
-
-    useEffect(() => {
-        if (workout?.exercises) setExercises(workout.exercises);
-    }, [workout]);
-
-    const { mutate: aiGenerate, isPending } = useMutation({
-        mutationFn: (prompt: string) => generateWorkout(prompt, workout?.id),
-        onSuccess: (data) => {
-            if (data?.exercises) setExercises(data.exercises);
-            setAiPrompt("");
-            haptic("success");
+  const T = useMemo(() => makeTokens(C, isDark), [C, isDark]);
+  return (
+    <View
+      style={[
+        {
+          height: T.hairline,
+          backgroundColor: soft ? T.hairSoft : T.hair,
+          marginLeft: inset,
         },
-    });
-
-    const targeted = Array.from(new Set(exercises.map((e) => e.muscle || "Full Body")));
-
-    return (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
-                <Entrance index={0}>
-                    <View style={{ marginBottom: 24 }}>
-                        <SectionLabel text="MUSCLE ACTIVATION" C={C} />
-                        <MuscleMap targeted={targeted} C={C} />
-                    </View>
-                </Entrance>
-
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, marginBottom: 16 }}>
-                    {["Home", "20 Min", "Injury Friendly", "Resistance Band"].map((chip) => (
-                        <TouchableOpacity
-                            key={chip}
-                            style={{
-                                paddingHorizontal: 16,
-                                paddingVertical: 10,
-                                borderRadius: 20,
-                                backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
-                                borderWidth: 1,
-                                borderColor: C.outlineVariant,
-                            }}
-                        >
-                            <Text style={{ fontFamily: F.bodyMed, color: C.onSurface, fontSize: 13 }}>{chip}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-
-                <View
-                    style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
-                        borderRadius: 24,
-                        paddingHorizontal: 16,
-                        borderWidth: 1,
-                        borderColor: C.outlineVariant,
-                        marginBottom: 20,
-                    }}
-                >
-                    <Icon name="auto-awesome" size={18} color={C.primary} />
-                    <TextInput
-                        placeholder="Ask AI to replace an exercise..."
-                        placeholderTextColor={C.onSurfaceVariant}
-                        style={{ flex: 1, padding: 12, fontFamily: F.body, fontSize: 14, color: C.onSurface, height: 46 }}
-                        value={aiPrompt}
-                        onChangeText={setAiPrompt}
-                        onSubmitEditing={() => aiPrompt && aiGenerate(aiPrompt)}
-                    />
-                    {isPending && <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: C.primary }} />}
-                </View>
-
-                <SectionLabel text="EXERCISES" C={C} />
-                {exercises.map((ex, i) => (
-                    <BuilderExerciseCard key={ex.id || i} ex={ex} C={C} isDark={isDark} />
-                ))}
-            </ScrollView>
-
-            <View
-                style={{
-                    position: "absolute",
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    paddingHorizontal: 24,
-                    paddingTop: 16,
-                    paddingBottom: Platform.OS === "ios" ? 34 : 20,
-                }}
-            >
-                <BlurView intensity={isDark ? 80 : 100} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFillObject} />
-                <PressableScale
-                    onPress={() => onSave(exercises)}
-                    style={{ borderRadius: 100, overflow: "hidden" }}
-                >
-                    <LinearGradient
-                        colors={[C.primary, C.primaryDim]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={{ paddingVertical: 16, alignItems: "center" }}
-                    >
-                        <Text style={{ fontFamily: F.header, fontSize: 16, color: C.onPrimary, letterSpacing: 0.5 }}>
-                            Save & Lock Workout
-                        </Text>
-                    </LinearGradient>
-                </PressableScale>
-            </View>
-        </KeyboardAvoidingView>
-    );
+        style,
+      ]}
+    />
+  );
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// ACTIVE TAB — live session with set tracking, rest timer, progress ring
-// ─────────────────────────────────────────────────────────────────────────
-function CircularProgress({ progress, size = 52, color = "#eab308" }: any) {
-    const strokeWidth = 4;
-    const radius = (size - strokeWidth) / 2;
-    const circum = radius * 2 * Math.PI;
-    const dashOffset = circum - (progress / 100) * circum;
-    return (
-        <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
-            <Svg width={size} height={size} style={{ transform: [{ rotate: "-90deg" }] }}>
-                <Circle stroke="rgba(255,255,255,0.08)" fill="none" cx={size / 2} cy={size / 2} r={radius} strokeWidth={strokeWidth} />
-                <Circle
-                    stroke={color}
-                    fill="none"
-                    cx={size / 2}
-                    cy={size / 2}
-                    r={radius}
-                    strokeWidth={strokeWidth}
-                    strokeDasharray={circum}
-                    strokeDashoffset={dashOffset}
-                    strokeLinecap="round"
-                />
-            </Svg>
-            <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }]}>
-                <Icon name="flash-on" size={16} color={color} />
-            </View>
-        </View>
-    );
-}
-
-function SetRow({ sIdx, isChecked, onToggle, weight, reps, C, isDark }: any) {
-    return (
-        <TouchableOpacity
+/** Uppercase section label with optional trailing action. */
+function SectionLabel({
+  text,
+  C,
+  action,
+  onAction,
+  actionNode,
+}: {
+  text: string;
+  C: ThemeColors;
+  action?: string;
+  onAction?: () => void;
+  actionNode?: React.ReactNode;
+}) {
+  return (
+    <View style={s.secLbl}>
+      <Text
+        style={{
+          fontFamily: F.header,
+          fontSize: 11,
+          letterSpacing: 1.5,
+          color: C.onSurfaceVariant,
+          textTransform: 'uppercase',
+        }}
+      >
+        {text}
+      </Text>
+      {actionNode ??
+        (action ? (
+          <Text
             onPress={() => {
-                haptic("light");
-                onToggle();
+              haptic('select');
+              onAction?.();
             }}
-            style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingVertical: 12,
-                paddingHorizontal: 12,
-                borderRadius: 16,
-                marginVertical: 4,
-                borderWidth: 1,
-                backgroundColor: isChecked
-                    ? "rgba(234, 179, 8, 0.15)"
-                    : isDark
-                        ? "rgba(0,0,0,0.2)"
-                        : "rgba(0,0,0,0.02)",
-                borderColor: isChecked ? "rgba(234, 179, 8, 0.4)" : "transparent",
-            }}
+            style={{ fontFamily: F.header, fontSize: 13, color: C.primary }}
+          >
+            {action}
+          </Text>
+        ) : null)}
+    </View>
+  );
+}
+
+/**
+ * StatColumns — the flattened replacement for stat tiles.
+ * Columns divided by vertical hairlines; `bordered` adds top/bottom rules.
+ */
+interface StatColumn {
+  value: string;
+  unit?: string;
+  label: string;
+  tone?: string;
+  /** Optional slot rendered under the label (e.g. a sparkline). */
+  footer?: React.ReactNode;
+}
+
+function StatColumns({
+  items,
+  C,
+  isDark,
+  bordered = false,
+}: {
+  items: StatColumn[];
+  C: ThemeColors;
+  isDark: boolean;
+  bordered?: boolean;
+}) {
+  const T = useMemo(() => makeTokens(C, isDark), [C, isDark]);
+  return (
+    <View
+      style={[
+        { flexDirection: 'row', paddingHorizontal: T.gutter },
+        bordered && {
+          borderTopWidth: T.hairline,
+          borderBottomWidth: T.hairline,
+          borderColor: T.hair,
+        },
+      ]}
+    >
+      {items.map((it, i) => (
+        <View
+          key={`${it.label}-${i}`}
+          style={{ flex: 1, paddingVertical: 15, paddingLeft: i === 0 ? 0 : 16, minWidth: 0 }}
         >
-            <Text style={{ flex: 0.3, fontFamily: "JetBrainsMono-Regular", color: C.onSurfaceVariant, fontSize: 14 }}>{sIdx + 1}</Text>
-            <Text style={{ flex: 1, textAlign: "center", fontFamily: "JetBrainsMono-Regular", fontSize: 16, color: isChecked ? C.primary : C.onSurface }}>
-                {weight}
-            </Text>
-            <Text style={{ flex: 1, textAlign: "center", fontFamily: "JetBrainsMono-Regular", fontSize: 16, color: isChecked ? C.primary : C.onSurface }}>
-                {reps}
-            </Text>
-            <View style={{ flex: 0.4, alignItems: "flex-end" }}>
-                <View
-                    style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 16,
-                        backgroundColor: isChecked ? C.primary : "transparent",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        borderWidth: 1.5,
-                        borderColor: isChecked ? C.primary : C.outlineVariant,
-                    }}
-                >
-                    {isChecked && <Icon name="check" size={18} color={C.onPrimary} />}
-                </View>
-            </View>
-        </TouchableOpacity>
-    );
-}
-
-function ActiveTab({ workout, onFinish, C, isDark }: any) {
-    const queryClient = useQueryClient();
-    const [sessionId, setSessionId] = useState<string | null>(null);
-    const [startTime, setStartTime] = useState<Date | null>(null);
-    const [elapsed, setElapsed] = useState(0);
-    const [exercises, setExercises] = useState<any[]>([]);
-    const [completed, setCompleted] = useState<Record<string, boolean>>({});
-
-    const activeTemplate = workout || {
-        id: "mock-workout-id",
-        title: "Push Strength",
-        exercises: [
-            { id: "m1", name: "Barbell Bench Press", sets: 4, reps: 8, weight: 80 },
-            { id: "m2", name: "Incline Dumbbell Press", sets: 3, reps: 10, weight: 30 },
-            { id: "m3", name: "Overhead Press", sets: 3, reps: 10, weight: 45 },
-        ],
-    };
-
-    const startMutation = useMutation({
-        mutationFn: startSession,
-        onSuccess: (data) => {
-            setSessionId(data.id);
-            setStartTime(new Date(data.startTime));
-        },
-    });
-
-    const completeMutation = useMutation({
-        mutationFn: completeSession,
-        onSuccess: () => {
-            haptic("success");
-            onFinish();
-        },
-    });
-
-    useEffect(() => {
-        if (exercises.length === 0) {
-            setExercises(
-                activeTemplate.exercises.map((ex: any) => ({
-                    ...ex,
-                    setsData: Array.from({ length: ex.sets }).map(() => ({ weight: ex.weight, reps: ex.reps })),
-                }))
-            );
-        }
-        if (!sessionId && !startMutation.isPending) {
-            startMutation.mutate({
-                userId: "demo-user-id",
-                workoutId: activeTemplate.id,
-                title: activeTemplate.title,
-                exercises: activeTemplate.exercises,
-            });
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    useEffect(() => {
-        if (!startTime) return;
-        const t = setInterval(() => setElapsed(Math.floor((Date.now() - startTime.getTime()) / 1000)), 1000);
-        return () => clearInterval(t);
-    }, [startTime]);
-
-    const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
-
-    const toggleSet = (exIdx: number, sIdx: number) => {
-        setCompleted((prev) => ({ ...prev, [`${exIdx}-${sIdx}`]: !prev[`${exIdx}-${sIdx}`] }));
-    };
-
-    let totalSets = 0;
-    let doneSets = 0;
-    exercises.forEach((ex, i) => {
-        totalSets += ex.sets;
-        for (let s = 0; s < ex.sets; s++) if (completed[`${i}-${s}`]) doneSets++;
-    });
-    const progress = totalSets > 0 ? (doneSets / totalSets) * 100 : 0;
-
-    const handleFinish = () => {
-        const duration = startTime ? Math.floor((Date.now() - startTime.getTime()) / 60000) : 45;
-        completeMutation.mutate({
-            sessionId: sessionId || "mock-session-id",
-            duration,
-            caloriesBurned: duration * 8,
-            notes: "",
-            completedSetIds: [],
-        });
-        queryClient.invalidateQueries({ queryKey: ["workoutHistory"] });
-    };
-
-    if (exercises.length === 0) {
-        return (
-            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ color: C.onSurface, fontFamily: F.body }}>Loading Workout...</Text>
-            </View>
-        );
-    }
-
-    return (
-        <View style={{ flex: 1 }}>
-            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
-                <Entrance index={0}>
-                    <GlassCard C={C} style={{ flexDirection: "row", alignItems: "center", marginBottom: 20 }}>
-                        <CircularProgress progress={progress} />
-                        <View style={{ marginLeft: 16, flex: 1 }}>
-                            <Text style={{ fontFamily: F.header, fontSize: 16, color: C.onSurface }}>Workout Progress</Text>
-                            <Text style={{ fontFamily: F.body, fontSize: 13, color: C.onSurfaceVariant, marginTop: 2 }}>
-                                {doneSets} of {totalSets} sets completed
-                            </Text>
-                        </View>
-                        <View
-                            style={{
-                                backgroundColor: "rgba(234,179,8,0.1)",
-                                paddingHorizontal: 12,
-                                paddingVertical: 6,
-                                borderRadius: 20,
-                                flexDirection: "row",
-                                alignItems: "center",
-                                gap: 6,
-                                borderWidth: 1,
-                                borderColor: "rgba(234,179,8,0.2)",
-                            }}
-                        >
-                            <Icon name="timer" size={16} color={C.primary} />
-                            <Text style={{ color: C.primary, fontFamily: "JetBrainsMono-Regular", fontSize: 15 }}>{formatTime(elapsed)}</Text>
-                        </View>
-                    </GlassCard>
-                </Entrance>
-
-                {exercises.map((ex, i) => (
-                    <Entrance index={i + 1} key={i} style={{ marginBottom: 16 }}>
-                        <GlassCard C={C} style={{ borderRadius: 22 }}>
-                            <Text style={{ fontFamily: F.header, fontSize: 18, color: C.onSurface, marginBottom: 12 }}>{ex.name}</Text>
-                            <View style={{ flexDirection: "row", paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: C.outlineVariant, marginBottom: 6 }}>
-                                <Text style={{ flex: 0.3, fontFamily: F.bodyBold, color: C.onSurfaceVariant, fontSize: 11, letterSpacing: 1 }}>SET</Text>
-                                <Text style={{ flex: 1, textAlign: "center", fontFamily: F.bodyBold, color: C.onSurfaceVariant, fontSize: 11, letterSpacing: 1 }}>LBS</Text>
-                                <Text style={{ flex: 1, textAlign: "center", fontFamily: F.bodyBold, color: C.onSurfaceVariant, fontSize: 11, letterSpacing: 1 }}>REPS</Text>
-                                <Text style={{ flex: 0.4 }} />
-                            </View>
-                            {ex.setsData.map((sd: any, sIdx: number) => (
-                                <SetRow
-                                    key={sIdx}
-                                    sIdx={sIdx}
-                                    weight={sd.weight}
-                                    reps={sd.reps}
-                                    isChecked={!!completed[`${i}-${sIdx}`]}
-                                    onToggle={() => toggleSet(i, sIdx)}
-                                    C={C}
-                                    isDark={isDark}
-                                />
-                            ))}
-                        </GlassCard>
-                    </Entrance>
-                ))}
-            </ScrollView>
-
+          {i > 0 && (
             <View
-                style={{
-                    position: "absolute",
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    paddingHorizontal: 24,
-                    paddingTop: 16,
-                    paddingBottom: Platform.OS === "ios" ? 34 : 20,
-                }}
+              style={{
+                position: 'absolute',
+                left: 0,
+                top: 15,
+                bottom: 15,
+                width: T.hairline,
+                backgroundColor: T.hairSoft,
+              }}
+            />
+          )}
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
+            <Text
+              style={{
+                fontFamily: F.num,
+                fontSize: 20,
+                letterSpacing: -0.7,
+                color: it.tone ?? C.onSurface,
+              }}
+              numberOfLines={1}
             >
-                <BlurView intensity={isDark ? 80 : 100} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFillObject} />
-                <PressableScale onPress={handleFinish} style={{ borderRadius: 100, overflow: "hidden" }}>
-                    <LinearGradient
-                        colors={[C.primary, C.primaryDim]}
-                        start={{ x: 0, y: 0 }}
-                        end={{ x: 1, y: 1 }}
-                        style={{ paddingVertical: 16, alignItems: "center" }}
-                    >
-                        <Text style={{ fontFamily: F.header, fontSize: 16, color: C.onPrimary, letterSpacing: 0.5 }}>Finish Workout</Text>
-                    </LinearGradient>
-                </PressableScale>
-            </View>
+              {it.value}
+            </Text>
+            {!!it.unit && (
+              <Text style={{ fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant }}>
+                {it.unit}
+              </Text>
+            )}
+          </View>
+          <Text
+            style={{
+              fontFamily: F.header,
+              fontSize: 9.5,
+              letterSpacing: 1.1,
+              color: C.onSurfaceVariant,
+              marginTop: 6,
+              textTransform: 'uppercase',
+            }}
+            numberOfLines={1}
+          >
+            {it.label}
+          </Text>
+          {it.footer}
         </View>
-    );
+      ))}
+    </View>
+  );
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// HISTORY TAB — timeline of past sessions
-// ─────────────────────────────────────────────────────────────────────────
-function HistoryTab({ history, isLoading, C, isDark }: any) {
-    const [filterOpen, setFilterOpen] = useState(false);
-    const [activeFilter, setActiveFilter] = useState("All Time");
+/**
+ * Row — full-bleed list row. Separator is drawn on the row itself so that
+ * lists need no wrapping container.
+ */
+function Row({
+  children,
+  C,
+  isDark,
+  onPress,
+  first = false,
+  indented = false,
+  style,
+}: {
+  children: React.ReactNode;
+  C: ThemeColors;
+  isDark: boolean;
+  onPress?: () => void;
+  first?: boolean;
+  indented?: boolean;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const T = useMemo(() => makeTokens(C, isDark), [C, isDark]);
+  const body = (
+    <View
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 14,
+          paddingHorizontal: T.gutter,
+          paddingVertical: 14,
+        },
+        style,
+      ]}
+    >
+      {!first && (
+        <View
+          style={{
+            position: 'absolute',
+            left: indented ? T.indent : T.gutter,
+            right: 0,
+            top: 0,
+            height: T.hairline,
+            backgroundColor: T.hairSoft,
+          }}
+        />
+      )}
+      {children}
+    </View>
+  );
 
-    if (isLoading) {
+  if (!onPress) return body;
+  return (
+    <Pressable
+      onPress={() => {
+        haptic('light');
+        onPress();
+      }}
+      android_ripple={{ color: T.wash }}
+      style={({ pressed }) => (pressed ? { backgroundColor: T.wash } : undefined)}
+    >
+      {body}
+    </Pressable>
+  );
+}
+
+const s = StyleSheet.create({
+  secLbl: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingHorizontal: 22,
+    paddingTop: 26,
+    paddingBottom: 11,
+  },
+});
+
+/* ──────────────────────────────────────────────────────────────────────────
+   TAB BAR
+   Sliding underline, measured from real tab layout.
+   (was WorkoutTabs.tsx)
+   ────────────────────────────────────────────────────────────────────────── */
+const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'builder', label: 'Builder' },
+  { key: 'active', label: 'Active' },
+  { key: 'history', label: 'History' },
+] as const;
+
+interface Metrics {
+  x: number;
+  w: number;
+}
+
+/**
+ * Sliding-underline tab bar.
+ *
+ * Replaces the pill-in-a-bordered-track. The ink is positioned from measured
+ * tab layout rather than an equal-width assumption, so labels of differing
+ * length stay correctly underlined.
+ */
+function WorkoutTabs({
+  active,
+  onChange,
+  C,
+  isDark,
+}: {
+  active: TabKey;
+  onChange: (t: TabKey) => void;
+  C: ThemeColors;
+  isDark: boolean;
+}) {
+  const T = useMemo(() => makeTokens(C, isDark), [C, isDark]);
+  const metrics = useRef<Partial<Record<TabKey, Metrics>>>({});
+  const [ready, setReady] = useState(false);
+
+  const inkX = useSharedValue(0);
+  const inkW = useSharedValue(0);
+
+  const settle = useCallback(
+    (key: TabKey, animate: boolean) => {
+      const m = metrics.current[key];
+      if (!m) return;
+      const spring = { damping: 18, stiffness: 190 };
+      if (animate) {
+        inkX.value = withSpring(m.x, spring);
+        inkW.value = withSpring(m.w, spring);
+      } else {
+        inkX.value = m.x;
+        inkW.value = m.w;
+      }
+    },
+    [inkX, inkW],
+  );
+
+  const onTabLayout = useCallback(
+    (key: TabKey) => (e: LayoutChangeEvent) => {
+      const { x, width } = e.nativeEvent.layout;
+      metrics.current[key] = { x, w: width };
+      if (key === active) {
+        settle(key, ready);
+        if (!ready) setReady(true);
+      }
+    },
+    [active, ready, settle],
+  );
+
+  const inkStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: inkX.value }],
+    width: inkW.value,
+  }));
+
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        gap: 22,
+        marginHorizontal: T.gutter,
+        marginTop: 16,
+        borderBottomWidth: T.hairline,
+        borderBottomColor: T.hairSoft,
+      }}
+    >
+      {TABS.map((t) => {
+        const on = t.key === active;
         return (
-            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                <Text style={{ color: C.onSurface, fontFamily: F.body }}>Loading History...</Text>
-            </View>
+          <Pressable
+            key={t.key}
+            onLayout={onTabLayout(t.key)}
+            onPress={() => {
+              if (on) return;
+              haptic('select');
+              onChange(t.key);
+              settle(t.key, true);
+            }}
+            hitSlop={8}
+            style={{ paddingBottom: 11 }}
+          >
+            <Text
+              style={{
+                fontFamily: on ? F.header : F.bodyBold,
+                fontSize: 14.5,
+                letterSpacing: -0.2,
+                color: on ? C.onSurface : C.onSurfaceVariant,
+              }}
+            >
+              {t.label}
+            </Text>
+          </Pressable>
         );
-    }
+      })}
 
-    return (
-        <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: "row", justifyContent: "flex-end", paddingHorizontal: 20, marginBottom: 8 }}>
-                <TouchableOpacity
-                    onPress={() => setFilterOpen((v) => !v)}
-                    style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 6,
-                        backgroundColor: C.glassInset,
-                        borderWidth: 1,
-                        borderColor: C.outlineVariant,
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
-                        borderRadius: 14,
-                    }}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          {
+            position: 'absolute',
+            bottom: -T.hairline,
+            left: 0,
+            height: 2.5,
+            borderRadius: 2,
+            backgroundColor: C.primary,
+          },
+          inkStyle,
+        ]}
+      />
+    </View>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   MUSCLE MAP
+   Front/back anatomical SVG + activation legend.
+   (was MuscleMap.tsx)
+   ────────────────────────────────────────────────────────────────────────── */
+type MapView = 'front' | 'back';
+
+/**
+ * Anatomical activation map.
+ *
+ * Unlike the original binary hit/miss wireframe, fill opacity is driven by the
+ * activation value so relative emphasis is legible at a glance.
+ */
+function MuscleMap({
+  activation,
+  view,
+  onChangeView,
+  C,
+  isDark,
+}: {
+  activation: MuscleActivation[];
+  view: MapView;
+  onChangeView: (v: MapView) => void;
+  C: ThemeColors;
+  isDark: boolean;
+}) {
+  const T = useMemo(() => makeTokens(C, isDark), [C, isDark]);
+
+  const level = useMemo(() => {
+    const m: Record<string, number> = {};
+    activation.forEach((a) => {
+      m[a.muscle] = a.value;
+    });
+    return m;
+  }, [activation]);
+
+  const graphicPrimary = isDark ? C.primary : '#e6b300';
+
+  const paint = (muscle: string) => {
+    const v = level[muscle] ?? 0;
+    const hot = v > 0.4;
+    return {
+      fill: hot ? graphicPrimary : 'none',
+      fillOpacity: hot ? 0.26 : 0,
+      stroke: hot ? graphicPrimary : C.onSurfaceVariant,
+      strokeWidth: hot ? 1.7 : 1,
+      strokeOpacity: hot ? 1 : 0.55,
+    };
+  };
+
+  const inert = {
+    fill: 'none' as const,
+    stroke: C.onSurfaceVariant,
+    strokeWidth: 1,
+    strokeOpacity: 0.5,
+  };
+
+  return (
+    <View style={{ flexDirection: 'row', gap: 18, alignItems: 'center', paddingHorizontal: T.gutter }}>
+      <View style={{ alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', gap: 16, marginBottom: 10 }}>
+          {(['front', 'back'] as const).map((v) => {
+            const on = v === view;
+            return (
+              <Pressable
+                key={v}
+                hitSlop={8}
+                onPress={() => {
+                  haptic('select');
+                  onChangeView(v);
+                }}
+                style={{
+                  paddingBottom: 5,
+                  borderBottomWidth: 2,
+                  borderBottomColor: on ? C.primary : 'transparent',
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: F.header,
+                    fontSize: 10.5,
+                    letterSpacing: 1,
+                    color: on ? C.onSurface : C.onSurfaceVariant,
+                  }}
                 >
-                    <Icon name="filter" size={16} color={C.onSurface} />
-                    <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.onSurface }}>{activeFilter}</Text>
-                </TouchableOpacity>
+                  {v.toUpperCase()}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <Svg width={112} height={176} viewBox="0 0 140 200">
+          <Ellipse cx={70} cy={18} rx={15} ry={17} {...inert} />
+          <Rect x={63} y={34} width={14} height={10} {...inert} strokeWidth={0.9} />
+          {view === 'front' ? (
+            <>
+              <Path d="M30,58 Q50,47 70,47 Q90,47 110,58" {...paint('Side Delts')} />
+              <Path d="M38,58 L34,100 Q70,110 106,100 L102,58 Z" {...paint('Chest')} />
+              <Path d="M40,104 L38,124 Q70,132 102,124 L100,104 Z" {...paint('Core')} />
+              <Path d="M38,58 L20,94 L16,126" {...paint('Front Delts')} fill="none" strokeLinecap="round" />
+              <Path d="M102,58 L120,94 L124,126" {...paint('Front Delts')} fill="none" strokeLinecap="round" />
+              <Path d="M55,130 L50,164 L48,192" {...inert} strokeLinecap="round" />
+              <Path d="M85,130 L90,164 L92,192" {...inert} strokeLinecap="round" />
+              <Circle cx={50} cy={164} r={3.2} {...inert} strokeWidth={0.9} />
+              <Circle cx={90} cy={164} r={3.2} {...inert} strokeWidth={0.9} />
+            </>
+          ) : (
+            <>
+              <Path d="M30,58 Q50,47 70,47 Q90,47 110,58" {...paint('Side Delts')} />
+              <Path d="M38,58 L36,102 Q70,112 104,102 L102,58 Z" {...paint('Back')} />
+              <Path d="M40,58 L24,92 L18,124" {...paint('Triceps')} fill="none" strokeLinecap="round" />
+              <Path d="M100,58 L116,92 L122,124" {...paint('Triceps')} fill="none" strokeLinecap="round" />
+              <Path d="M42,116 L38,132 Q70,140 102,132 L98,116 Z" {...paint('Glutes')} />
+              <Path d="M55,138 L50,168 L48,192" {...paint('Hamstrings')} fill="none" strokeLinecap="round" />
+              <Path d="M85,138 L90,168 L92,192" {...paint('Hamstrings')} fill="none" strokeLinecap="round" />
+            </>
+          )}
+        </Svg>
+      </View>
+
+      <View style={{ flex: 1, gap: 11 }}>
+        {activation.map((a) => (
+          <View key={a.muscle}>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 9 }}>
+              <Text style={{ flex: 1, fontFamily: F.bodyBold, fontSize: 12.5, color: C.onSurface }}>
+                {a.muscle}
+              </Text>
+              <Text style={{ fontFamily: F.num, fontSize: 11, color: C.onSurfaceVariant }}>
+                {Math.round(a.value * 100)}%
+              </Text>
             </View>
+            <View
+              style={{
+                height: 3,
+                borderRadius: 2,
+                backgroundColor: T.track,
+                overflow: 'hidden',
+                marginTop: 5,
+              }}
+            >
+              <View
+                style={{
+                  height: '100%',
+                  width: `${a.value * 100}%`,
+                  borderRadius: 2,
+                  backgroundColor: graphicPrimary,
+                }}
+              />
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
 
-            {filterOpen && (
-                <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)} style={{ paddingHorizontal: 20, marginBottom: 12 }}>
-                    <GlassCard C={C} style={{ padding: 12 }}>
-                        {["All Time", "Past Week", "Past Month"].map((t) => (
-                            <TouchableOpacity
-                                key={t}
-                                onPress={() => {
-                                    setActiveFilter(t);
-                                    setFilterOpen(false);
-                                }}
-                                style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 8 }}
-                            >
-                                <Text style={{ fontFamily: F.bodyBold, fontSize: 14, color: activeFilter === t ? C.primary : C.onSurface }}>{t}</Text>
-                                {activeFilter === t && <Icon name="check" size={16} color={C.primary} />}
-                            </TouchableOpacity>
-                        ))}
-                    </GlassCard>
-                </Animated.View>
+/* ──────────────────────────────────────────────────────────────────────────
+   HOLD TO CONFIRM
+   Press-and-hold gesture. Early release cannot fire onConfirm.
+   (was HoldToConfirm.tsx)
+   ────────────────────────────────────────────────────────────────────────── */
+interface HoldToConfirmProps {
+  label: string;
+  holdingLabel?: string;
+  iconName?: string;
+  /** Milliseconds the user must hold. */
+  duration?: number;
+  onConfirm: () => void;
+  onHoldChange?: (holding: boolean) => void;
+  C: ThemeColors;
+  isDark: boolean;
+  disabled?: boolean;
+}
+
+/**
+ * Press-and-hold confirmation.
+ *
+ * A destructive-ish action (ending a live session) must not be a single tap.
+ * A white sweep fills the button over `duration`; releasing early cancels with
+ * no state change. Only completion calls `onConfirm`.
+ */
+function HoldToConfirm({
+  label,
+  holdingLabel = 'Keep holding…',
+  iconName = 'stop',
+  duration = 1000,
+  onConfirm,
+  onHoldChange,
+  C,
+  isDark,
+  disabled = false,
+}: HoldToConfirmProps) {
+  const progress = useSharedValue(0);
+  const [holding, setHolding] = React.useState(false);
+
+  const setHold = useCallback(
+    (v: boolean) => {
+      setHolding(v);
+      onHoldChange?.(v);
+    },
+    [onHoldChange],
+  );
+
+  const fire = useCallback(() => {
+    setHold(false);
+    progress.value = 0;
+    haptic('success');
+    onConfirm();
+  }, [onConfirm, progress, setHold]);
+
+  const start = useCallback(() => {
+    if (disabled) return;
+    haptic('medium');
+    setHold(true);
+    progress.value = 0;
+    progress.value = withTiming(
+      1,
+      { duration, easing: Easing.linear },
+      (finished) => {
+        if (finished) runOnJS(fire)();
+      },
+    );
+  }, [disabled, duration, fire, progress, setHold]);
+
+  const cancel = useCallback(() => {
+    cancelAnimation(progress);
+    if (progress.value > 0 && progress.value < 1) {
+      progress.value = withTiming(0, { duration: 160 });
+    } else {
+      progress.value = 0;
+    }
+    setHold(false);
+  }, [progress, setHold]);
+
+  const fillStyle = useAnimatedStyle(() => ({
+    width: `${progress.value * 100}%`,
+  }));
+
+  return (
+    <Pressable
+      disabled={disabled}
+      onPressIn={start}
+      onPressOut={cancel}
+      style={{ flex: 1, borderRadius: 14, overflow: 'hidden' }}
+    >
+      <LinearGradient
+        colors={[C.primary, C.primaryDim]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={{
+          paddingVertical: 15,
+          paddingHorizontal: 20,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFillObject,
+            { backgroundColor: isDark ? 'rgba(255,255,255,0.42)' : 'rgba(255,255,255,0.6)' },
+            fillStyle,
+          ]}
+        />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Icon name={iconName} size={17} color={C.onPrimary} />
+          <Text style={{ fontFamily: F.header, fontSize: 14.5, color: C.onPrimary, letterSpacing: -0.1 }}>
+            {holding ? holdingLabel : label}
+          </Text>
+        </View>
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   LIVE SESSION HOOK
+   Timestamp-derived clock, rest countdown, set completion.
+   (was useLiveSession.ts)
+   ────────────────────────────────────────────────────────────────────────── */
+interface Options {
+  template: WorkoutExercise[];
+  /** Auto-start a rest countdown when a set is completed. */
+  autoRest?: boolean;
+}
+
+/**
+ * Owns live-session state: elapsed clock, rest countdown, per-set completion.
+ *
+ * Timing is wall-clock based (start timestamp + delta) rather than an
+ * incrementing counter, so backgrounding the app does not drift the elapsed
+ * time — a plain `setInterval` counter loses seconds when JS is suspended.
+ */
+function useLiveSession({ template, autoRest = true }: Options) {
+  const [exercises, setExercises] = useState<ActiveExercise[]>([]);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
+  const [restRemaining, setRestRemaining] = useState<number | null>(null);
+  const [finished, setFinished] = useState(false);
+
+  /* Hydrate working copy from the template. */
+  useEffect(() => {
+    if (!template.length) return;
+    setExercises((prev) => {
+      if (prev.length) return prev;
+      return template.map((ex) => ({
+        ...ex,
+        setsData: Array.from({ length: ex.sets }, () => ({
+          weight: ex.weight,
+          reps: ex.reps,
+          completed: false,
+        })),
+      }));
+    });
+  }, [template]);
+
+  const start = useCallback((at?: number) => {
+    setStartedAt(at ?? Date.now());
+  }, []);
+
+  /* Elapsed clock — derived from timestamps. */
+  useEffect(() => {
+    if (startedAt === null || finished) return;
+    const tick = () => setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    tick();
+    const id = setInterval(tick, 1000);
+    const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
+      if (s === 'active') tick();
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
+  }, [startedAt, finished]);
+
+  /* Rest countdown. */
+  useEffect(() => {
+    if (restEndsAt === null) {
+      setRestRemaining(null);
+      return;
+    }
+    const tick = () => {
+      const left = Math.ceil((restEndsAt - Date.now()) / 1000);
+      if (left <= 0) {
+        setRestEndsAt(null);
+        setRestRemaining(null);
+      } else {
+        setRestRemaining(left);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [restEndsAt]);
+
+  const toggleSet = useCallback(
+    (exIdx: number, setIdx: number) => {
+      setExercises((prev) => {
+        const next = prev.map((e, i) =>
+          i !== exIdx
+            ? e
+            : {
+                ...e,
+                setsData: e.setsData.map((s, j) =>
+                  j !== setIdx ? s : { ...s, completed: !s.completed },
+                ),
+              },
+        );
+        if (autoRest && next[exIdx]?.setsData[setIdx]?.completed) {
+          setRestEndsAt(Date.now() + (next[exIdx].rest ?? 60) * 1000);
+        }
+        return next;
+      });
+    },
+    [autoRest],
+  );
+
+  const addSet = useCallback((exIdx: number) => {
+    setExercises((prev) =>
+      prev.map((e, i) => {
+        if (i !== exIdx) return e;
+        const lastSet = e.setsData[e.setsData.length - 1];
+        return {
+          ...e,
+          sets: e.sets + 1,
+          setsData: [
+            ...e.setsData,
+            { weight: lastSet?.weight ?? e.weight, reps: lastSet?.reps ?? e.reps, completed: false },
+          ],
+        };
+      }),
+    );
+  }, []);
+
+  const extendRest = useCallback(() => {
+    setRestEndsAt((prev) => (prev === null ? Date.now() + 15_000 : prev + 15_000));
+  }, []);
+
+  const skipRest = useCallback(() => setRestEndsAt(null), []);
+
+  const finish = useCallback(() => {
+    setFinished(true);
+    setRestEndsAt(null);
+  }, []);
+
+  const reset = useCallback(() => {
+    setExercises([]);
+    setStartedAt(null);
+    setElapsed(0);
+    setRestEndsAt(null);
+    setFinished(false);
+  }, []);
+
+  const stats = useMemo(() => {
+    let done = 0;
+    let total = 0;
+    let volume = 0;
+    exercises.forEach((e) =>
+      e.setsData.forEach((s) => {
+        total += 1;
+        if (s.completed) {
+          done += 1;
+          volume += s.weight * s.reps;
+        }
+      }),
+    );
+    return {
+      done,
+      total,
+      volume,
+      minutes: Math.max(1, Math.round(elapsed / 60)),
+      progress: total ? done / total : 0,
+    };
+  }, [exercises, elapsed]);
+
+  return {
+    exercises,
+    setExercises,
+    elapsed,
+    restRemaining,
+    finished,
+    stats,
+    start,
+    toggleSet,
+    addSet,
+    extendRest,
+    skipRest,
+    finish,
+    reset,
+  };
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   TAB · OVERVIEW
+   (was OverviewTab.tsx)
+   ────────────────────────────────────────────────────────────────────────── */
+/** Gradient headline word. Falls back to solid colour on web. */
+function GradientWord({ text, C, style }: { text: string; C: ThemeColors; style: any }) {
+  if (Platform.OS === 'web') return <Text style={[style, { color: C.primary }]}>{text}</Text>;
+  return (
+    <MaskedView maskElement={<Text style={[style, { backgroundColor: 'transparent' }]}>{text}</Text>}>
+      <LinearGradient colors={[C.primary, C.primaryDim]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+        <Text style={[style, { opacity: 0 }]}>{text}</Text>
+      </LinearGradient>
+    </MaskedView>
+  );
+}
+
+interface OverviewTabProps {
+  workout?: Workout | null;
+  exercises: WorkoutExercise[];
+  readiness: ReadinessMetric[];
+  onStart: () => void;
+  onCustomise: () => void;
+  onHistory: () => void;
+  C: ThemeColors;
+  isDark: boolean;
+}
+
+function OverviewTab({
+  workout,
+  exercises,
+  readiness,
+  onStart,
+  onCustomise,
+  onHistory,
+  C,
+  isDark,
+}: OverviewTabProps) {
+  const T = useMemo(() => makeTokens(C, isDark), [C, isDark]);
+  const A = useMemo(() => accents(isDark), [isDark]);
+  const [aiOpen, setAiOpen] = useState(false);
+
+  const totalSets = exercises.reduce((a, b) => a + b.sets, 0);
+  const [firstWord, ...restWords] = (workout?.title ?? 'Push Strength').split(' ');
+  const rest = restWords.join(' ');
+
+  const toneFor = (t: ReadinessMetric['tone']) =>
+    t === 'green' ? A.green : t === 'cyan' ? A.cyan : C.primary;
+
+  return (
+    <ScrollView
+      contentContainerStyle={{ paddingBottom: 40 }}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* ── Hero ───────────────────────────────────────────── */}
+      <Entrance index={0}>
+        <View style={{ paddingHorizontal: T.gutter, paddingTop: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+            <Icon name="auto-awesome" size={13} color={C.primary} />
+            <Text
+              style={{
+                fontFamily: F.header,
+                fontSize: 10,
+                letterSpacing: 1.6,
+                color: C.primary,
+              }}
+            >
+              TODAY'S OPTIMISED PLAN
+            </Text>
+          </View>
+
+          <View style={{ marginTop: 14 }}>
+            <Text
+              style={{
+                fontFamily: F.header,
+                fontSize: 40,
+                letterSpacing: -1.9,
+                lineHeight: 40,
+                color: C.onSurface,
+              }}
+            >
+              {firstWord}
+            </Text>
+            {!!rest && (
+              <GradientWord
+                text={rest}
+                C={C}
+                style={{ fontFamily: F.header, fontSize: 40, letterSpacing: -1.9, lineHeight: 44 }}
+              />
             )}
+          </View>
 
-            <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 4, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
-                <View style={{ position: "absolute", top: 30, bottom: 0, left: 35, width: 2, backgroundColor: C.outlineVariant, opacity: 0.5 }} />
+          <Text
+            style={{
+              fontFamily: F.bodyMed,
+              fontSize: 13.5,
+              color: C.onSurfaceVariant,
+              marginTop: 9,
+              lineHeight: 20,
+            }}
+          >
+            {workout?.targetMuscles ?? 'Chest · Shoulders · Triceps'} {'  •  '}Progressive overload block
+          </Text>
+        </View>
+      </Entrance>
 
-                {(!history || history.length === 0) && (
-                    <Text style={{ fontFamily: F.body, color: C.onSurfaceVariant, textAlign: "center", marginTop: 40 }}>
-                        No sessions logged yet. Finish a workout to see it here.
-                    </Text>
+      <View style={{ marginTop: 20 }}>
+        <StatColumns
+          C={C}
+          isDark={isDark}
+          bordered
+          items={[
+            { value: String(workout?.duration ?? 45), unit: 'min', label: 'Duration' },
+            { value: String(exercises.length), unit: `/ ${totalSets} sets`, label: 'Exercises' },
+            { value: '420', unit: 'kcal', label: 'Est. burn', tone: C.primary },
+          ]}
+        />
+      </View>
+
+      {/* ── Primary actions ────────────────────────────────── */}
+      <View
+        style={{
+          flexDirection: 'row',
+          gap: 10,
+          alignItems: 'center',
+          paddingHorizontal: T.gutter,
+          paddingTop: 20,
+        }}
+      >
+        <PressableScale onPress={onStart} style={{ flex: 1 }} hapticStyle="heavy">
+          <LinearGradient
+            colors={[C.primary, C.primaryDim]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              paddingVertical: 15,
+              borderRadius: 14,
+            }}
+          >
+            <Icon name="play-arrow" size={17} color={C.onPrimary} />
+            <Text style={{ fontFamily: F.header, fontSize: 14.5, color: C.onPrimary }}>
+              Start Session
+            </Text>
+          </LinearGradient>
+        </PressableScale>
+
+        <Pressable onPress={() => { haptic('light'); onCustomise(); }} style={{ paddingVertical: 15, paddingHorizontal: 6 }}>
+          <Text style={{ fontFamily: F.header, fontSize: 14.5, color: C.onSurface }}>Customise</Text>
+        </Pressable>
+      </View>
+
+      {/* ── Readiness ──────────────────────────────────────── */}
+      <SectionLabel text="Readiness" C={C} />
+      <StatColumns
+        C={C}
+        isDark={isDark}
+        items={readiness.map((m) => ({
+          value: m.value,
+          unit: m.unit,
+          label: m.label,
+          tone: toneFor(m.tone),
+          footer: (
+            <View style={{ marginTop: 9, height: 22 }}>
+              <SplineChart width={70} height={22} color={toneFor(m.tone)} data={m.trend} />
+            </View>
+          ),
+        }))}
+      />
+
+      <View style={{ marginTop: 18 }}>
+        <Rule C={C} isDark={isDark} />
+      </View>
+
+      {/* ── AI coach — gradient rail, no surface ───────────── */}
+      <Entrance index={1}>
+        <View style={{ paddingHorizontal: T.gutter, paddingVertical: 16 }}>
+          <LinearGradient
+            colors={[C.primary, 'transparent']}
+            style={{ position: 'absolute', left: 0, top: 16, bottom: 18, width: 2.5 }}
+          />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+            <Icon name="auto-awesome" size={16} color={C.primary} />
+            <Text style={{ flex: 1, fontFamily: F.header, fontSize: 13, letterSpacing: 0.2, color: C.onSurface }}>
+              AI COACH
+            </Text>
+            <Pressable
+              hitSlop={10}
+              onPress={() => { haptic('select'); setAiOpen((v) => !v); }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}
+            >
+              <Text style={{ fontFamily: F.header, fontSize: 12.5, color: C.primary }}>
+                {aiOpen ? 'Less' : 'Details'}
+              </Text>
+              <Icon
+                name={aiOpen ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                size={15}
+                color={C.primary}
+              />
+            </Pressable>
+          </View>
+
+          <Text style={{ fontFamily: F.bodyMed, fontSize: 14, lineHeight: 22.6, color: C.onSurface }}>
+            {workout?.aiExplanation ? (
+              workout.aiExplanation
+            ) : (
+              <>
+                Chest is <Text style={{ fontFamily: F.bodyBold }}>fully recovered</Text> (92%). Pushing volume raised <Text style={{ fontFamily: F.bodyBold, color: A.green }}>+8%</Text> and bench load <Text style={{ fontFamily: F.bodyBold, color: C.primary }}>+2.5 kg</Text> versus your last logged session.
+              </>
+            )}
+          </Text>
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 14 }}>
+            <View style={{ flex: 1, height: 3, borderRadius: 2, backgroundColor: T.track, overflow: 'hidden' }}>
+              <LinearGradient
+                colors={[C.primary, A.cyan]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={{ height: '100%', width: '88%', borderRadius: 2 }}
+              />
+            </View>
+            <Text style={{ fontFamily: F.header, fontSize: 9.5, letterSpacing: 0.9, color: C.onSurfaceVariant }}>
+              88% CONFIDENCE
+            </Text>
+          </View>
+
+          {aiOpen && (
+            <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)} style={{ marginTop: 16 }}>
+              {[
+                {
+                  t: 'Progressive Overload',
+                  s: 'Bench Press 80 → 82.5 kg. You cleared 4×8 at RPE 7.5 last Monday.',
+                },
+                {
+                  t: 'Recovery Adjustment',
+                  s: 'Lateral raise volume trimmed 1 set — side delts logged 3 sessions in 7 days.',
+                },
+                {
+                  t: 'Injury Memory',
+                  s: "Left shoulder flagged Apr '26 — overhead press capped at 45 kg, tempo 3-1-1.",
+                },
+              ].map((d, i) => (
+                <View key={d.t} style={{ paddingVertical: 13 }}>
+                  {i > 0 && (
+                    <View
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        height: T.hairline,
+                        backgroundColor: T.hairSoft,
+                      }}
+                    />
+                  )}
+                  <Text style={{ fontFamily: F.header, fontSize: 12, letterSpacing: 0.3, color: C.onSurface, marginBottom: 4 }}>
+                    {d.t}
+                  </Text>
+                  <Text style={{ fontFamily: F.bodyMed, fontSize: 13, lineHeight: 20, color: C.onSurfaceVariant }}>
+                    {d.s}
+                  </Text>
+                </View>
+              ))}
+            </Animated.View>
+          )}
+        </View>
+      </Entrance>
+
+      <Rule C={C} isDark={isDark} />
+
+      {/* ── Exercise list ──────────────────────────────────── */}
+      <SectionLabel text="Today's Exercises" C={C} action="Edit" onAction={onCustomise} />
+      {exercises.map((e, i) => (
+        <Row key={e.id} C={C} isDark={isDark} first={i === 0} indented onPress={() => undefined}>
+          <Text style={{ width: 22, textAlign: 'center', fontFamily: F.num, fontSize: 13, color: C.onSurfaceVariant }}>
+            {i + 1}
+          </Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontFamily: F.header, fontSize: 15.5, letterSpacing: -0.25, color: C.onSurface }}>
+              {e.name}
+            </Text>
+            <Text style={{ fontFamily: F.num, fontSize: 11.5, color: C.primary, marginTop: 4 }}>
+              {e.sets}×{e.reps}
+              <Text style={{ color: C.onSurfaceVariant }}> · </Text>
+              {e.weight} kg
+              <Text style={{ color: C.onSurfaceVariant }}> · </Text>
+              rest {e.rest ?? 60}s
+            </Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={{ fontFamily: F.num, fontSize: 14, color: C.onSurfaceVariant }}>
+              ~{Math.round(e.sets * e.reps * 0.8)}
+            </Text>
+            <Text style={{ fontFamily: F.header, fontSize: 9, letterSpacing: 0.8, color: C.onSurfaceVariant, marginTop: 2 }}>
+              KCAL
+            </Text>
+          </View>
+          <Icon name="chevron-right" size={17} color={C.onSurfaceVariant} />
+        </Row>
+      ))}
+
+      {/* ── Plan ───────────────────────────────────────────── */}
+      <SectionLabel text="Plan" C={C} />
+      <Row C={C} isDark={isDark} first onPress={() => undefined}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: F.header, fontSize: 15.5, letterSpacing: -0.2, color: C.onSurface }}>
+            Warm-up protocol
+          </Text>
+          <Text style={{ fontFamily: F.bodyMed, fontSize: 12.5, color: C.onSurfaceVariant, marginTop: 3 }}>
+            Band pull-aparts · Scap push-ups · 6 min
+          </Text>
+        </View>
+        <Icon name="chevron-right" size={17} color={C.onSurfaceVariant} />
+      </Row>
+      <Row C={C} isDark={isDark} onPress={() => undefined}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: F.header, fontSize: 15.5, letterSpacing: -0.2, color: C.onSurface }}>
+            Superset pairing
+          </Text>
+          <Text style={{ fontFamily: F.bodyMed, fontSize: 12.5, color: C.onSurfaceVariant, marginTop: 3 }}>
+            Lateral raise ⇄ Triceps pushdown
+          </Text>
+        </View>
+        <Text style={{ fontFamily: F.header, fontSize: 9.5, letterSpacing: 0.8, color: C.primary }}>ON</Text>
+      </Row>
+      <Row C={C} isDark={isDark} onPress={onHistory}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: F.header, fontSize: 15.5, letterSpacing: -0.2, color: C.onSurface }}>
+            Compare to last Push day
+          </Text>
+          <Text style={{ fontFamily: F.bodyMed, fontSize: 12.5, color: C.onSurfaceVariant, marginTop: 3 }}>
+            27 Jul · 52 min · 8.4 t volume
+          </Text>
+        </View>
+        <Icon name="chevron-right" size={17} color={C.onSurfaceVariant} />
+      </Row>
+
+      <Pressable onPress={() => { haptic('light'); onHistory(); }} style={{ paddingVertical: 24 }}>
+        <Text style={{ textAlign: 'center', fontFamily: F.header, fontSize: 13, color: C.primary }}>
+          View all past sessions
+        </Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   TAB · BUILDER
+   (was BuilderTab.tsx)
+   ────────────────────────────────────────────────────────────────────────── */
+type NumericField = 'sets' | 'reps' | 'weight' | 'rest';
+
+const STEP: Record<NumericField, number> = { sets: 1, reps: 1, weight: 2.5, rest: 15 };
+const MIN: Record<NumericField, number> = { sets: 1, reps: 1, weight: 0, rest: 0 };
+
+const CONSTRAINTS = ['Home', '20 min', 'Injury friendly', 'Bands only', 'No overhead', 'Superset'];
+const SUGGESTIONS = ['Make it 30 min', 'Shoulder-safe swap', 'Add finisher', 'More intensity'];
+
+interface BuilderTabProps {
+  exercises: WorkoutExercise[];
+  activation: MuscleActivation[];
+  onChange: (next: WorkoutExercise[]) => void;
+  onSave: () => void;
+  onDiscard: () => void;
+  onGenerate: (prompt: string) => void;
+  generating?: boolean;
+  saving?: boolean;
+  C: ThemeColors;
+  isDark: boolean;
+}
+
+function BuilderTab({
+  exercises,
+  activation,
+  onChange,
+  onSave,
+  onDiscard,
+  onGenerate,
+  generating = false,
+  saving = false,
+  C,
+  isDark,
+}: BuilderTabProps) {
+  const T = useMemo(() => makeTokens(C, isDark), [C, isDark]);
+  const [view, setView] = useState<MapView>('front');
+  const [chips, setChips] = useState<string[]>(['Injury friendly']);
+  const [open, setOpen] = useState<string | null>(exercises[0]?.id ?? null);
+  const [prompt, setPrompt] = useState('');
+
+  const bump = useCallback(
+    (id: string, field: NumericField, dir: 1 | -1) => {
+      haptic('light');
+      onChange(
+        exercises.map((e) =>
+          e.id === id
+            ? {
+                ...e,
+                [field]: Math.max(MIN[field], (e[field] ?? 0) + dir * STEP[field]),
+              }
+            : e,
+        ),
+      );
+    },
+    [exercises, onChange],
+  );
+
+  const remove = useCallback(
+    (id: string) => {
+      haptic('medium');
+      onChange(exercises.filter((e) => e.id !== id));
+    },
+    [exercises, onChange],
+  );
+
+  const toggleChip = (c: string) => {
+    haptic('select');
+    setChips((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
+  };
+
+  const totalSets = exercises.reduce((a, b) => a + b.sets, 0);
+  const tonnage = exercises.reduce((a, b) => a + b.sets * b.reps * b.weight, 0) / 1000;
+  const minutes = Math.round(exercises.reduce((a, b) => a + b.sets * ((b.rest ?? 60) + 35), 0) / 60);
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={90}
+    >
+      <ScrollView contentContainerStyle={{ paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
+        <SectionLabel text="Muscle Activation" C={C} />
+        <MuscleMap activation={activation} view={view} onChangeView={setView} C={C} isDark={isDark} />
+
+        <SectionLabel text="Constraints" C={C} />
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 9, paddingHorizontal: T.gutter, paddingBottom: 4 }}
+        >
+          {CONSTRAINTS.map((c) => {
+            const on = chips.includes(c);
+            return (
+              <Pressable
+                key={c}
+                onPress={() => toggleChip(c)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  paddingHorizontal: 15,
+                  paddingVertical: 9,
+                  borderRadius: 100,
+                  borderWidth: T.hairline,
+                  borderColor: on ? C.primary : T.hair,
+                  backgroundColor: on ? T.wash : 'transparent',
+                }}
+              >
+                {on && <Icon name="check" size={13} color={C.primary} />}
+                <Text
+                  style={{
+                    fontFamily: F.bodyBold,
+                    fontSize: 12.5,
+                    color: on ? C.primary : C.onSurfaceVariant,
+                  }}
+                >
+                  {c}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {/* ── AI composer — underline field, no box ────────── */}
+        <SectionLabel text="Ask Coach" C={C} />
+        <View style={{ paddingHorizontal: T.gutter }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 11,
+              paddingVertical: 11,
+              borderBottomWidth: T.hairline,
+              borderBottomColor: T.hairGold,
+            }}
+          >
+            <Icon name="auto-awesome" size={17} color={C.primary} />
+            <TextInput
+              value={prompt}
+              onChangeText={setPrompt}
+              placeholder="“swap bench for a dumbbell variant”"
+              placeholderTextColor={C.onSurfaceVariant}
+              returnKeyType="send"
+              onSubmitEditing={() => {
+                if (!prompt.trim()) return;
+                onGenerate(prompt.trim());
+                setPrompt('');
+              }}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                fontFamily: F.bodyMed,
+                fontSize: 14,
+                color: C.onSurface,
+                paddingVertical: 0,
+              }}
+            />
+            <PressableScale
+              disabled={!prompt.trim() || generating}
+              onPress={() => {
+                if (!prompt.trim()) return;
+                onGenerate(prompt.trim());
+                setPrompt('');
+              }}
+              scaleTo={0.88}
+            >
+              <LinearGradient
+                colors={[C.primary, C.primaryDim]}
+                style={{ width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Icon name="send" size={14} color={C.onPrimary} />
+              </LinearGradient>
+            </PressableScale>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 18, marginTop: 13 }}>
+            {SUGGESTIONS.map((sg) => (
+              <Pressable key={sg} onPress={() => { haptic('select'); onGenerate(sg); }}>
+                <Text style={{ fontFamily: F.bodyBold, fontSize: 12, color: C.primary, opacity: 0.85 }}>
+                  {sg}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* ── Exercises ────────────────────────────────────── */}
+        <SectionLabel text={`Exercises · ${exercises.length}`} C={C} action="Add" onAction={() => undefined} />
+
+        {exercises.map((e, i) => {
+          const expanded = open === e.id;
+          return (
+            <Animated.View key={e.id} layout={Layout.springify().damping(18)}>
+              <View style={{ paddingHorizontal: T.gutter, paddingVertical: 14 }}>
+                {i > 0 && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: T.gutter,
+                      right: 0,
+                      top: 0,
+                      height: T.hairline,
+                      backgroundColor: T.hairSoft,
+                    }}
+                  />
                 )}
 
-                {history?.map((session: any, index: number) => (
-                    <Entrance index={index} key={session.id} style={{ flexDirection: "row", marginBottom: 20 }}>
-                        <View style={{ width: 32, alignItems: "center", marginRight: 16, marginTop: 20 }}>
-                            <View
-                                style={{
-                                    width: 14,
-                                    height: 14,
-                                    borderRadius: 7,
-                                    backgroundColor: C.primary,
-                                    borderWidth: 3,
-                                    borderColor: isDark ? "#050505" : "#F5F5F7",
-                                }}
-                            />
-                        </View>
-                        <GlassCard C={C} style={{ flex: 1, borderRadius: 22 }}>
-                            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 14 }}>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={{ fontFamily: F.header, fontSize: 17, color: C.onSurface, marginBottom: 4 }}>{session.title}</Text>
-                                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                                        <Icon name="calendar" size={13} color={C.onSurfaceVariant} />
-                                        <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant }}>
-                                            {new Date(session.endTime).toLocaleDateString()}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <View
-                                    style={{
-                                        backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)",
-                                        paddingHorizontal: 12,
-                                        paddingVertical: 8,
-                                        borderRadius: 12,
-                                    }}
-                                >
-                                    <Text style={{ fontFamily: "JetBrainsMono-Regular", fontSize: 16, color: C.primary }}>
-                                        {session.duration}
-                                        <Text style={{ fontSize: 11, color: C.onSurfaceVariant }}> m</Text>
-                                    </Text>
-                                </View>
-                            </View>
-                            <View style={{ height: 1, backgroundColor: C.outlineVariant, marginBottom: 12, opacity: 0.6 }} />
-                            {session.exercises?.slice(0, 3).map((ex: any, exIdx: number) => {
-                                const maxWeight = Math.max(...(ex.sets || []).map((s: any) => s.weight || 0), 0);
-                                return (
-                                    <View key={exIdx} style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
-                                        <Text style={{ fontFamily: F.bodyMed, fontSize: 13, color: C.onSurface }}>
-                                            <Text style={{ color: C.onSurfaceVariant }}>{ex.sets?.length || 0}x</Text> {ex.name}
-                                        </Text>
-                                        <Text style={{ fontFamily: "JetBrainsMono-Regular", fontSize: 13, color: C.primary }}>{maxWeight} lbs</Text>
-                                    </View>
-                                );
-                            })}
-                        </GlassCard>
-                    </Entrance>
-                ))}
-            </ScrollView>
-        </View>
-    );
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// MAIN SCREEN — WorkoutScreen: single hub covering Overview / Builder /
-// Active / History, all styled like Dashboard & Profile.
-// ─────────────────────────────────────────────────────────────────────────
-export default function WorkoutScreen({
-    onNavigateBack,
-    onNavigateToNotifications,
-}: {
-    onNavigateBack?: () => void;
-    onNavigateToNotifications?: () => void;
-}) {
-    const { C, isDark, bgColors } = useTheme();
-    const [tab, setTab] = useState<TabKey>("overview");
-    const queryClient = useQueryClient();
-
-    const { data: workout } = useQuery({ queryKey: ["currentWorkout"], queryFn: () => fetchCurrentWorkout() });
-    const { data: history, isLoading: historyLoading } = useQuery({
-        queryKey: ["workoutHistory"],
-        queryFn: () => fetchWorkoutHistory(),
-    });
-
-    const { mutate: save } = useMutation({
-        mutationFn: (data: any) => saveWorkout(data),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["currentWorkout"] });
-            queryClient.invalidateQueries({ queryKey: ["workoutHistory"] });
-            setTab("overview");
-        },
-    });
-
-    const handleSaveBuilder = (exercises: any[]) => {
-        haptic("medium");
-        save({
-            userId: "demo-user-id",
-            title: workout?.title || "Push Day",
-            duration: workout?.duration || "60",
-            parentVersionId: workout?.parentVersionId || workout?.id,
-            exercises,
-        });
-    };
-
-    return (
-        <View style={{ flex: 1, backgroundColor: C.bg }}>
-            <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
-
-            <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
-                {/* Header — matches Dashboard/Profile top bar */}
-                <View
-                    style={{
-                        paddingHorizontal: 20,
-                        paddingTop: 8,
-                        paddingBottom: 16,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                    }}
+                <Pressable
+                  onPress={() => { haptic('select'); setOpen(expanded ? null : e.id); }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}
                 >
-                    <View style={{ flexDirection: "row", alignItems: "center", flex: 1 }}>
-                        {onNavigateBack && (
-                            <TouchableOpacity
-                                onPress={onNavigateBack}
-                                style={{
-                                    width: 40,
-                                    height: 40,
-                                    borderRadius: 20,
-                                    backgroundColor: C.glassInset,
-                                    borderWidth: 1,
-                                    borderColor: C.outlineVariant,
-                                    alignItems: "center",
-                                    justifyContent: "center",
-                                    marginRight: 12,
-                                }}
+                  <View style={{ width: 15, gap: 3.5, opacity: 0.32 }}>
+                    {[0, 1, 2].map((k) => (
+                      <View key={k} style={{ height: 1.8, borderRadius: 1, backgroundColor: C.onSurface }} />
+                    ))}
+                  </View>
+
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={{ fontFamily: F.header, fontSize: 15.5, letterSpacing: -0.25, color: C.onSurface }}>
+                      {e.name}
+                    </Text>
+                    <Text style={{ fontFamily: F.num, fontSize: 11.5, color: C.primary, marginTop: 4 }}>
+                      <Text style={{ color: C.onSurfaceVariant }}>{e.muscle ?? 'Full Body'}</Text>
+                      {' · '}{e.sets}×{e.reps}{' · '}{e.weight} kg
+                    </Text>
+                  </View>
+
+                  <Icon
+                    name={expanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+                    size={17}
+                    color={C.onSurfaceVariant}
+                  />
+                </Pressable>
+
+                {expanded && (
+                  <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)}>
+                    {/* 2×2 stepper grid — hairline dividers, no boxes */}
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        flexWrap: 'wrap',
+                        marginTop: 15,
+                        borderTopWidth: T.hairline,
+                        borderBottomWidth: T.hairline,
+                        borderColor: T.hairSoft,
+                      }}
+                    >
+                      {(
+                        [
+                          ['SETS', 'sets', ''],
+                          ['REPS', 'reps', ''],
+                          ['WEIGHT', 'weight', 'kg'],
+                          ['REST', 'rest', 's'],
+                        ] as Array<[string, NumericField, string]>
+                      ).map(([label, field, unit], idx) => (
+                        <View key={field} style={{ width: '50%', paddingVertical: 12, alignItems: 'center' }}>
+                          {idx % 2 === 1 && (
+                            <View
+                              style={{
+                                position: 'absolute',
+                                left: 0,
+                                top: 12,
+                                bottom: 12,
+                                width: T.hairline,
+                                backgroundColor: T.hairSoft,
+                              }}
+                            />
+                          )}
+                          {idx >= 2 && (
+                            <View
+                              style={{
+                                position: 'absolute',
+                                left: 0,
+                                right: 0,
+                                top: 0,
+                                height: T.hairline,
+                                backgroundColor: T.hairSoft,
+                              }}
+                            />
+                          )}
+                          <Text
+                            style={{
+                              fontFamily: F.header,
+                              fontSize: 9,
+                              letterSpacing: 1,
+                              color: C.onSurfaceVariant,
+                              marginBottom: 7,
+                            }}
+                          >
+                            {label}
+                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+                            <Stepper sign="−" onPress={() => bump(e.id, field, -1)} C={C} T={T} />
+                            <Text
+                              style={{
+                                fontFamily: F.num,
+                                fontSize: 16,
+                                letterSpacing: -0.5,
+                                color: C.onSurface,
+                                minWidth: 54,
+                                textAlign: 'center',
+                              }}
                             >
-                                <Icon name="chevron-left" size={22} color={C.onSurface} />
-                            </TouchableOpacity>
-                        )}
-                        <Text style={{ fontFamily: F.header, fontSize: 22, color: C.onSurface, letterSpacing: -0.5 }}>Workout Hub</Text>
+                              {e[field] ?? 0}
+                              {!!unit && (
+                                <Text style={{ fontFamily: F.bodyBold, fontSize: 9, color: C.onSurfaceVariant }}>
+                                  {' '}{unit}
+                                </Text>
+                              )}
+                            </Text>
+                            <Stepper sign="+" onPress={() => bump(e.id, field, 1)} C={C} T={T} />
+                          </View>
+                        </View>
+                      ))}
                     </View>
 
-                    <TouchableOpacity
-                        onPress={onNavigateToNotifications}
-                        style={{
-                            width: 40,
-                            height: 40,
-                            borderRadius: 20,
-                            backgroundColor: C.glassInset,
-                            borderWidth: 1,
-                            borderColor: C.outlineVariant,
-                            alignItems: "center",
-                            justifyContent: "center",
-                        }}
-                    >
-                        <Icon name="notifications" size={20} color={C.onSurface} />
-                    </TouchableOpacity>
-                </View>
-
-                <WorkoutTabs active={tab} onChange={setTab} C={C} isDark={isDark} />
-
-                {tab === "overview" && (
-                    <OverviewTab
-                        workout={workout}
-                        onGoBuilder={() => setTab("builder")}
-                        onGoActive={() => setTab("active")}
-                        onGoHistory={() => setTab("history")}
-                        C={C}
-                        isDark={isDark}
-                    />
+                    <View style={{ flexDirection: 'row', gap: 24, marginTop: 14 }}>
+                      <MiniAction icon="swap-horiz" label="Swap" C={C} onPress={() => undefined} />
+                      <MiniAction icon="play-arrow" label="Form video" C={C} onPress={() => undefined} />
+                      <MiniAction icon="delete" label="Remove" C={C} tone={C.error} onPress={() => remove(e.id)} />
+                    </View>
+                  </Animated.View>
                 )}
-                {tab === "builder" && <BuilderTab workout={workout} onSave={handleSaveBuilder} C={C} isDark={isDark} />}
-                {tab === "active" && <ActiveTab workout={workout} onFinish={() => setTab("history")} C={C} isDark={isDark} />}
-                {tab === "history" && <HistoryTab history={history} isLoading={historyLoading} C={C} isDark={isDark} />}
-            </SafeAreaView>
+              </View>
+            </Animated.View>
+          );
+        })}
+
+        <SectionLabel text="Session Estimate" C={C} />
+        <StatColumns
+          C={C}
+          isDark={isDark}
+          bordered
+          items={[
+            { value: String(totalSets), label: 'Total sets' },
+            { value: tonnage.toFixed(1), unit: 't', label: 'Volume' },
+            { value: String(minutes), unit: 'min', label: 'Duration', tone: C.primary },
+          ]}
+        />
+        {/* ── Dock ───────────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: T.gutter, paddingTop: 30, paddingBottom: Platform.OS === 'ios' ? 120 : 100 }}>
+          <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+            <Pressable onPress={() => { haptic('light'); onDiscard(); }} style={{ paddingVertical: 12, paddingHorizontal: 12 }}>
+              <Text style={{ fontFamily: F.header, fontSize: 14.5, color: C.onSurfaceVariant }}>Discard</Text>
+            </Pressable>
+            <PressableScale onPress={onSave} style={{ flex: 1 }} disabled={saving} hapticStyle="medium">
+              <LinearGradient
+                colors={[C.primary, C.primaryDim]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  paddingVertical: 12,
+                  borderRadius: 14,
+                  opacity: saving ? 0.7 : 1,
+                }}
+              >
+                <Icon name="check" size={17} color={C.onPrimary} />
+                <Text style={{ fontFamily: F.header, fontSize: 14.5, color: C.onPrimary }}>
+                  {saving ? 'Saving…' : 'Save & Lock Workout'}
+                </Text>
+              </LinearGradient>
+            </PressableScale>
+          </View>
         </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+function Stepper({
+  sign,
+  onPress,
+  C,
+  T,
+}: {
+  sign: string;
+  onPress: () => void;
+  C: ThemeColors;
+  T: ReturnType<typeof makeTokens>;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={10}
+      style={({ pressed }) => ({
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        borderWidth: T.hairline,
+        borderColor: pressed ? C.primary : T.hair,
+        backgroundColor: pressed ? C.primary : 'transparent',
+        alignItems: 'center',
+        justifyContent: 'center',
+      })}
+    >
+      {({ pressed }) => (
+        <Text
+          style={{
+            fontFamily: F.bodyBold,
+            fontSize: 14,
+            lineHeight: 17,
+            color: pressed ? C.onPrimary : C.onSurfaceVariant,
+          }}
+        >
+          {sign}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
+function MiniAction({
+  icon,
+  label,
+  C,
+  onPress,
+  tone,
+}: {
+  icon: string;
+  label: string;
+  C: ThemeColors;
+  onPress: () => void;
+  tone?: string;
+}) {
+  const color = tone ?? C.onSurfaceVariant;
+  return (
+    <Pressable
+      onPress={() => { haptic('light'); onPress(); }}
+      hitSlop={8}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+    >
+      <Icon name={icon} size={14} color={color} />
+      <Text style={{ fontFamily: F.header, fontSize: 12.5, color }}>{label}</Text>
+    </Pressable>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   TAB · ACTIVE
+   (was ActiveTab.tsx)
+   ────────────────────────────────────────────────────────────────────────── */
+const fmt = (s: number) =>
+  `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
+
+interface ActiveTabProps {
+  exercises: ActiveExercise[];
+  elapsed: number;
+  restRemaining: number | null;
+  finished: boolean;
+  savedSummary?: string;
+  onToggleSet: (exIdx: number, setIdx: number) => void;
+  onAddSet: (exIdx: number) => void;
+  onExtendRest: () => void;
+  onSkipRest: () => void;
+  onFinish: () => void;
+  onViewHistory: () => void;
+  C: ThemeColors;
+  isDark: boolean;
+}
+
+function ActiveTab({
+  exercises,
+  elapsed,
+  restRemaining,
+  finished,
+  savedSummary,
+  onToggleSet,
+  onAddSet,
+  onExtendRest,
+  onSkipRest,
+  onFinish,
+  onViewHistory,
+  C,
+  isDark,
+}: ActiveTabProps) {
+  const T = useMemo(() => makeTokens(C, isDark), [C, isDark]);
+  const A = useMemo(() => accents(isDark), [isDark]);
+
+  const { done, total } = useMemo(() => {
+    let d = 0;
+    let t = 0;
+    exercises.forEach((e) => {
+      e.setsData.forEach((s) => {
+        t += 1;
+        if (s.completed) d += 1;
+      });
+    });
+    return { done: d, total: t };
+  }, [exercises]);
+
+  const progress = total > 0 ? done / total : 0;
+  const currentIdx = exercises.findIndex((e) => e.setsData.some((s) => !s.completed));
+
+  /* Live dot pulse */
+  const pulse = useSharedValue(1);
+  useEffect(() => {
+    if (finished) {
+      pulse.value = 1;
+      return;
+    }
+    pulse.value = withRepeat(
+      withSequence(withTiming(0.35, { duration: 700 }), withTiming(1, { duration: 700 })),
+      -1,
+      false,
     );
+  }, [finished, pulse]);
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: pulse.value }));
+
+  return (
+    <View style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 170 }} showsVerticalScrollIndicator={false}>
+        {/* ── Live strip ─────────────────────────────────── */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 16,
+            paddingHorizontal: T.gutter,
+            paddingVertical: 16,
+            borderBottomWidth: T.hairline,
+            borderBottomColor: T.hair,
+          }}
+        >
+          <View style={{ width: 54, height: 54, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityRings
+              size={54}
+              rings={[{ progress, color: C.primary, radius: 24, strokeWidth: 4 }]}
+            />
+            <View style={{ position: 'absolute', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontFamily: F.num, fontSize: 12, color: C.onSurface }}>
+                {Math.round(progress * 100)}%
+              </Text>
+            </View>
+          </View>
+
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Animated.View
+                style={[
+                  { width: 6, height: 6, borderRadius: 3, backgroundColor: finished ? A.green : A.red },
+                  pulseStyle,
+                ]}
+              />
+              <Text style={{ fontFamily: F.header, fontSize: 9.5, letterSpacing: 1.4, color: C.primary }}>
+                {finished ? 'SESSION COMPLETE' : 'LIVE SESSION'}
+              </Text>
+            </View>
+            <Text style={{ fontFamily: F.header, fontSize: 17, letterSpacing: -0.4, color: C.onSurface, marginTop: 5 }}>
+              Push Strength
+            </Text>
+            <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant, marginTop: 3 }}>
+              {done} of {total} sets · {(done * 0.42).toFixed(1)} t moved
+            </Text>
+          </View>
+
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={{ fontFamily: F.num, fontSize: 23, letterSpacing: -1.1, color: C.onSurface }}>
+              {fmt(elapsed)}
+            </Text>
+            <Text style={{ fontFamily: F.header, fontSize: 9, letterSpacing: 1, color: C.onSurfaceVariant }}>
+              ELAPSED
+            </Text>
+          </View>
+        </View>
+
+        {/* ── Rest timer ─────────────────────────────────── */}
+        {restRemaining !== null && !finished && (
+          <Animated.View entering={FadeIn.duration(200)}>
+            <LinearGradient
+              colors={[
+                isDark ? 'rgba(125,211,252,0.12)' : 'rgba(14,116,144,0.10)',
+                'transparent',
+              ]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 14,
+                paddingHorizontal: T.gutter,
+                paddingVertical: 13,
+                borderBottomWidth: T.hairline,
+                borderBottomColor: T.hairSoft,
+              }}
+            >
+              <ActivityRings
+                size={34}
+                rings={[{ progress: Math.min(restRemaining / 90, 1), color: A.cyan, radius: 15, strokeWidth: 3 }]}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: F.header, fontSize: 9.5, letterSpacing: 1.3, color: A.cyan }}>
+                  REST · NEXT SET
+                </Text>
+                <Text style={{ fontFamily: F.num, fontSize: 21, letterSpacing: -0.9, color: C.onSurface, marginTop: 3 }}>
+                  {fmt(restRemaining)}
+                </Text>
+              </View>
+              <Pressable onPress={() => { haptic('light'); onExtendRest(); }} hitSlop={8} style={{ padding: 8 }}>
+                <Text style={{ fontFamily: F.header, fontSize: 12, color: A.cyan }}>+15s</Text>
+              </Pressable>
+              <Pressable onPress={() => { haptic('light'); onSkipRest(); }} hitSlop={8} style={{ padding: 8 }}>
+                <Text style={{ fontFamily: F.header, fontSize: 12, color: A.cyan }}>Skip</Text>
+              </Pressable>
+            </LinearGradient>
+          </Animated.View>
+        )}
+
+        {/* ── Exercises ──────────────────────────────────── */}
+        {exercises.map((e, i) => {
+          const allDone = e.setsData.every((s) => s.completed);
+          const isNow = i === currentIdx;
+          const label = allDone ? 'DONE' : isNow ? 'NOW' : 'UP NEXT';
+          const labelColor = allDone ? A.green : isNow ? C.primary : C.onSurfaceVariant;
+
+          const Header = (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 14,
+                paddingHorizontal: T.gutter,
+                paddingTop: 16,
+                paddingBottom: 13,
+              }}
+            >
+              <View style={{ width: 22, alignItems: 'center' }}>
+                {allDone ? (
+                  <Icon name="check" size={15} color={A.green} />
+                ) : (
+                  <Text style={{ fontFamily: F.num, fontSize: 13, color: C.onSurfaceVariant }}>{i + 1}</Text>
+                )}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontFamily: F.header, fontSize: 16, letterSpacing: -0.3, color: C.onSurface }}>
+                  {e.name}
+                </Text>
+                <Text style={{ fontFamily: F.bodyMed, fontSize: 11.5, color: C.onSurfaceVariant, marginTop: 3 }}>
+                  {e.muscle ?? 'Full Body'} · rest {e.rest ?? 60}s{e.prev ? ` · prev ${e.prev}` : ''}
+                </Text>
+              </View>
+              <Text style={{ fontFamily: F.header, fontSize: 9.5, letterSpacing: 1, color: labelColor }}>
+                {label}
+              </Text>
+            </View>
+          );
+
+          return (
+            <View key={e.id}>
+              {isNow && !finished ? (
+                <LinearGradient
+                  colors={[T.wash, 'transparent']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  locations={[0, 0.8]}
+                >
+                  {Header}
+                </LinearGradient>
+              ) : (
+                Header
+              )}
+
+              {/* table head */}
+              <View style={{ flexDirection: 'row', paddingHorizontal: T.gutter, paddingBottom: 8 }}>
+                <Text style={{ width: 30, fontFamily: F.header, fontSize: 9, letterSpacing: 1.2, color: C.onSurfaceVariant }}>
+                  SET
+                </Text>
+                <Text style={{ flex: 1, textAlign: 'center', fontFamily: F.header, fontSize: 9, letterSpacing: 1.2, color: C.onSurfaceVariant }}>
+                  WEIGHT
+                </Text>
+                <Text style={{ flex: 1, textAlign: 'center', fontFamily: F.header, fontSize: 9, letterSpacing: 1.2, color: C.onSurfaceVariant }}>
+                  REPS
+                </Text>
+                <View style={{ width: 34 }} />
+              </View>
+
+              {e.setsData.map((sd, sIdx) => (
+                <SetRow
+                  key={sIdx}
+                  index={sIdx}
+                  data={sd}
+                  prev={e.prev}
+                  onToggle={() => onToggleSet(i, sIdx)}
+                  C={C}
+                  isDark={isDark}
+                  disabled={finished}
+                />
+              ))}
+
+              {!finished && (
+                <Pressable
+                  onPress={() => { haptic('light'); onAddSet(i); }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 7,
+                    paddingHorizontal: T.gutter,
+                    paddingVertical: 12,
+                  }}
+                >
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: T.gutter,
+                      right: 0,
+                      top: 0,
+                      height: T.hairline,
+                      backgroundColor: T.hairSoft,
+                    }}
+                  />
+                  <Icon name="add" size={13} color={C.primary} />
+                  <Text style={{ fontFamily: F.header, fontSize: 12.5, color: C.primary }}>Add set</Text>
+                </Pressable>
+              )}
+            </View>
+          );
+        })}
+        {/* ── Dock ───────────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: T.gutter, paddingTop: finished ? 30 : 30, paddingBottom: Platform.OS === 'ios' ? 120 : 100 }}>
+          {finished ? (
+            <Animated.View entering={FadeIn.duration(240)}>
+              <LinearGradient
+                colors={[
+                  isDark ? 'rgba(163,230,53,0.15)' : 'rgba(94,139,0,0.14)',
+                  'transparent',
+                ]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                locations={[0, 0.82]}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                  paddingHorizontal: T.gutter,
+                  paddingVertical: 13,
+                  marginHorizontal: -T.gutter,
+                }}
+              >
+                <Icon name="check" size={16} color={A.green} />
+                <Text style={{ fontFamily: F.bodyBold, fontSize: 13, color: A.green }}>
+                  {savedSummary ?? 'Session saved'}
+                </Text>
+              </LinearGradient>
+
+              <PressableScale onPress={onViewHistory} style={{ marginTop: 10 }} hapticStyle="medium">
+                <LinearGradient
+                  colors={[C.primary, C.primaryDim]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    paddingVertical: 12,
+                    borderRadius: 14,
+                  }}
+                >
+                  <Icon name="calendar-today" size={17} color={C.onPrimary} />
+                  <Text style={{ fontFamily: F.header, fontSize: 14.5, color: C.onPrimary }}>
+                    View in History
+                  </Text>
+                </LinearGradient>
+              </PressableScale>
+            </Animated.View>
+          ) : (
+            <>
+              <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                <Pressable style={{ padding: 12 }} hitSlop={6}>
+                  <Icon name="timer" size={20} color={C.onSurface} />
+                </Pressable>
+                <HoldToConfirm
+                  label="Finish Workout"
+                  onConfirm={onFinish}
+                  C={C}
+                  isDark={isDark}
+                />
+              </View>
+            </>
+          )}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+/* ── Set row ────────────────────────────────────────────── */
+const SetRow = React.memo(function SetRow({
+  index,
+  data,
+  prev,
+  onToggle,
+  C,
+  isDark,
+  disabled,
+}: {
+  index: number;
+  data: { weight: number; reps: number; completed: boolean };
+  prev?: string;
+  onToggle: () => void;
+  C: ThemeColors;
+  isDark: boolean;
+  disabled?: boolean;
+}) {
+  const T = useMemo(() => makeTokens(C, isDark), [C, isDark]);
+  const A = useMemo(() => accents(isDark), [isDark]);
+  const on = data.completed;
+  const [pw, pr] = (prev ?? '').split('×');
+
+  const inner = (
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: T.gutter, paddingVertical: 11 }}>
+      <View
+        style={{
+          position: 'absolute',
+          left: T.gutter,
+          right: 0,
+          top: 0,
+          height: T.hairline,
+          backgroundColor: T.hairSoft,
+        }}
+      />
+      <Text style={{ width: 30, fontFamily: F.num, fontSize: 13, color: C.onSurfaceVariant }}>{index + 1}</Text>
+
+      <View style={{ flex: 1, alignItems: 'center' }}>
+        <Text style={{ fontFamily: F.num, fontSize: 16, letterSpacing: -0.4, color: on ? A.green : C.onSurface }}>
+          {data.weight}
+          <Text style={{ fontFamily: F.bodyBold, fontSize: 9.5, color: C.onSurfaceVariant }}> KG</Text>
+        </Text>
+        {!!pw && <Text style={{ fontFamily: F.num, fontSize: 9.5, color: C.onSurfaceVariant, marginTop: 3, opacity: 0.75 }}>{pw}</Text>}
+      </View>
+
+      <View style={{ flex: 1, alignItems: 'center' }}>
+        <Text style={{ fontFamily: F.num, fontSize: 16, letterSpacing: -0.4, color: on ? A.green : C.onSurface }}>
+          {data.reps}
+        </Text>
+        {!!pr && <Text style={{ fontFamily: F.num, fontSize: 9.5, color: C.onSurfaceVariant, marginTop: 3, opacity: 0.75 }}>{pr}</Text>}
+      </View>
+
+      <View style={{ width: 34, alignItems: 'flex-end' }}>
+        <View
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            borderWidth: on ? 0 : 1.5,
+            borderColor: T.hair,
+            backgroundColor: on ? A.green : 'transparent',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          {on && <Icon name="check" size={14} color={isDark ? C.bg : '#FFFFFF'} />}
+        </View>
+      </View>
+    </View>
+  );
+
+  if (disabled) return inner;
+
+  return (
+    <Pressable onPress={() => { haptic(on ? 'light' : 'success'); onToggle(); }}>
+      {on ? (
+        <LinearGradient
+          colors={[isDark ? 'rgba(163,230,53,0.10)' : 'rgba(94,139,0,0.11)', 'transparent']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          locations={[0, 0.8]}
+        >
+          {inner}
+        </LinearGradient>
+      ) : (
+        inner
+      )}
+    </Pressable>
+  );
+});
+
+/* ──────────────────────────────────────────────────────────────────────────
+   TAB · HISTORY
+   (was HistoryTab.tsx)
+   ────────────────────────────────────────────────────────────────────────── */
+const FILTERS: ReadonlyArray<{ key: HistoryFilterKey; label: string }> = [
+  { key: 'all', label: 'All time' },
+  { key: 'week', label: 'Past week' },
+  { key: 'month', label: 'Past month' },
+  { key: 'pr', label: 'PR sessions only' },
+] as const;
+
+const daysAgo = (n: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+};
+
+/** Range predicate per filter key. */
+export function filterSessions(
+  sessions: HistorySession[],
+  key: HistoryFilterKey,
+): HistorySession[] {
+  switch (key) {
+    case 'pr':
+      return sessions.filter((s) => s.pr);
+    case 'week':
+      return sessions.filter((s) => s.iso >= daysAgo(7));
+    case 'month':
+      return sessions.filter((s) => s.iso >= daysAgo(30));
+    default:
+      return sessions;
+  }
+}
+
+/** Group sessions by "MONTH YYYY" preserving input order. */
+function groupByMonth(sessions: HistorySession[]) {
+  const out: Array<{ month: string; items: HistorySession[] }> = [];
+  sessions.forEach((s) => {
+    const d = new Date(s.iso);
+    const month = `${d.toLocaleString('en-US', { month: 'long' }).toUpperCase()} ${d.getFullYear()}`;
+    const last = out[out.length - 1];
+    if (last && last.month === month) last.items.push(s);
+    else out.push({ month, items: [s] });
+  });
+  return out;
+}
+
+interface HistoryTabProps {
+  sessions: HistorySession[];
+  loading?: boolean;
+  weeklyLoad: Array<{ label: string; value: number }>;
+  onStartWorkout: () => void;
+  C: ThemeColors;
+  isDark: boolean;
+}
+
+function HistoryTab({
+  sessions,
+  loading = false,
+  weeklyLoad,
+  onStartWorkout,
+  C,
+  isDark,
+}: HistoryTabProps) {
+  const T = useMemo(() => makeTokens(C, isDark), [C, isDark]);
+  const A = useMemo(() => accents(isDark), [isDark]);
+
+  const [filter, setFilter] = useState<HistoryFilterKey>('all');
+  const [open, setOpen] = useState(false);
+
+  const counts = useMemo(
+    () =>
+      FILTERS.reduce<Record<HistoryFilterKey, number>>(
+        (acc, f) => {
+          acc[f.key] = filterSessions(sessions, f.key).length;
+          return acc;
+        },
+        { all: 0, week: 0, month: 0, pr: 0 },
+      ),
+    [sessions],
+  );
+
+  const filtered = useMemo(() => filterSessions(sessions, filter), [sessions, filter]);
+  const groups = useMemo(() => groupByMonth(filtered), [filtered]);
+  const active = FILTERS.find((f) => f.key === filter)!;
+
+  /* Summary recomputes with the filter — not a static header. */
+  const summary = useMemo(() => {
+    const vol = filtered.reduce((a, s) => a + parseFloat(s.volume || '0'), 0);
+    const mins = filtered.reduce((a, s) => a + s.duration, 0);
+    return {
+      count: filtered.length,
+      volume: vol.toFixed(1),
+      hours: (mins / 60).toFixed(1),
+    };
+  }, [filtered]);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 }}>
+        <ActivityIndicator color={C.primary} />
+        <Text style={{ fontFamily: F.bodyMed, fontSize: 13, color: C.onSurfaceVariant, marginTop: 14 }}>
+          Loading history…
+        </Text>
+      </View>
+    );
+  }
+
+  const header = (
+    <>
+      <SectionLabel
+        text={active.label}
+        C={C}
+        actionNode={
+          <Pressable
+            hitSlop={10}
+            onPress={() => { haptic('select'); setOpen((v) => !v); }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
+          >
+            <Icon name="filter" size={15} color={C.primary} />
+            <Text style={{ fontFamily: F.header, fontSize: 13, color: C.primary }}>Filter</Text>
+            <Icon
+              name={open ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+              size={15}
+              color={C.primary}
+            />
+          </Pressable>
+        }
+      />
+
+      {open && (
+        <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)}>
+          {FILTERS.map((f, i) => {
+            const on = f.key === filter;
+            return (
+              <Pressable
+                key={f.key}
+                onPress={() => {
+                  haptic('select');
+                  setFilter(f.key);
+                  setOpen(false);
+                }}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                  paddingHorizontal: T.gutter,
+                  paddingVertical: 13,
+                  backgroundColor: pressed ? T.wash : undefined,
+                })}
+              >
+                {i > 0 && (
+                  <View
+                    style={{
+                      position: 'absolute',
+                      left: T.gutter,
+                      right: 0,
+                      top: 0,
+                      height: T.hairline,
+                      backgroundColor: T.hairSoft,
+                    }}
+                  />
+                )}
+                <View style={{ width: 17 }}>
+                  {on && <Icon name="check" size={17} color={C.primary} />}
+                </View>
+                <Text
+                  style={{
+                    flex: 1,
+                    fontFamily: F.bodyBold,
+                    fontSize: 14.5,
+                    color: on ? C.primary : C.onSurface,
+                  }}
+                >
+                  {f.label}
+                </Text>
+                <Text style={{ fontFamily: F.num, fontSize: 11.5, color: C.onSurfaceVariant }}>
+                  {counts[f.key]}
+                </Text>
+              </Pressable>
+            );
+          })}
+          <Rule C={C} isDark={isDark} soft />
+        </Animated.View>
+      )}
+    </>
+  );
+
+  /* ── Empty states — two distinct cases ─────────────── */
+  if (!filtered.length) {
+    const firstRun = sessions.length === 0;
+    return (
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        {header}
+        <View style={{ paddingHorizontal: 36, paddingTop: 66, paddingBottom: 40, alignItems: 'center' }}>
+          <View style={{ opacity: 0.3, marginBottom: 20 }}>
+            <Icon name="fitness-center" size={52} color={C.onSurfaceVariant} />
+          </View>
+          <Text
+            style={{
+              fontFamily: F.header,
+              fontSize: 17.5,
+              letterSpacing: -0.3,
+              color: C.onSurface,
+              marginBottom: 9,
+              textAlign: 'center',
+            }}
+          >
+            {firstRun ? 'No sessions yet' : 'Nothing in this range'}
+          </Text>
+          <Text
+            style={{
+              fontFamily: F.bodyMed,
+              fontSize: 13.5,
+              lineHeight: 22,
+              color: C.onSurfaceVariant,
+              textAlign: 'center',
+              maxWidth: 252,
+            }}
+          >
+            {firstRun
+              ? 'Finish a workout and it lands here — volume, PRs and every set you logged.'
+              : `No ${active.label.toLowerCase()} sessions found. Try widening the range.`}
+          </Text>
+
+          <PressableScale
+            onPress={firstRun ? onStartWorkout : () => setFilter('all')}
+            style={{ marginTop: 24 }}
+            hapticStyle="medium"
+          >
+            <LinearGradient
+              colors={[C.primary, C.primaryDim]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                paddingVertical: 14,
+                paddingHorizontal: 26,
+                borderRadius: 14,
+              }}
+            >
+              <Icon name="play-arrow" size={16} color={C.onPrimary} />
+              <Text style={{ fontFamily: F.header, fontSize: 14, color: C.onPrimary }}>
+                {firstRun ? 'Start your first workout' : 'Show all time'}
+              </Text>
+            </LinearGradient>
+          </PressableScale>
+        </View>
+      </ScrollView>
+    );
+  }
+
+  return (
+    <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+      {header}
+
+      <StatColumns
+        C={C}
+        isDark={isDark}
+        bordered
+        items={[
+          { value: String(summary.count), label: 'Sessions' },
+          { value: summary.volume, unit: 't', label: 'Volume' },
+          { value: summary.hours, unit: 'hrs', label: 'Time' },
+          { value: '6', label: 'Streak', tone: C.primary },
+        ]}
+      />
+
+      <SectionLabel text="Weekly Load" C={C} />
+      <View
+        style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'baseline',
+          paddingHorizontal: T.gutter,
+          paddingBottom: 12,
+        }}
+      >
+        <Text style={{ fontFamily: F.num, fontSize: 19, letterSpacing: -0.7, color: C.onSurface }}>
+          31.2
+          <Text style={{ fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant }}> t this week</Text>
+        </Text>
+        <Text style={{ fontFamily: F.header, fontSize: 11.5, color: A.green }}>▲ 12%</Text>
+      </View>
+      <View style={{ paddingHorizontal: T.gutter }}>
+        <BarChart height={70} color={C.primary} data={weeklyLoad} />
+      </View>
+
+      {/* ── Timeline ───────────────────────────────────── */}
+      {groups.map((g) => (
+        <View key={g.month}>
+          <Text
+            style={{
+              fontFamily: F.header,
+              fontSize: 10.5,
+              letterSpacing: 1.5,
+              color: C.onSurfaceVariant,
+              paddingHorizontal: T.gutter,
+              paddingTop: 24,
+              paddingBottom: 10,
+            }}
+          >
+            {g.month}
+          </Text>
+
+          {g.items.map((s, i) => (
+            <Animated.View key={s.id} layout={Layout.springify().damping(18)}>
+              <SessionEntry
+                session={s}
+                first={i === 0}
+                last={i === g.items.length - 1}
+                C={C}
+                isDark={isDark}
+              />
+            </Animated.View>
+          ))}
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+function SessionEntry({
+  session,
+  first,
+  last,
+  C,
+  isDark,
+}: {
+  session: HistorySession;
+  first: boolean;
+  last: boolean;
+  C: ThemeColors;
+  isDark: boolean;
+}) {
+  const T = useMemo(() => makeTokens(C, isDark), [C, isDark]);
+  const A = useMemo(() => accents(isDark), [isDark]);
+
+  return (
+    <Pressable
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        gap: 15,
+        paddingHorizontal: T.gutter,
+        paddingVertical: 16,
+        backgroundColor: pressed ? T.wash : undefined,
+      })}
+    >
+      {!first && (
+        <View
+          style={{
+            position: 'absolute',
+            left: T.gutter,
+            right: 0,
+            top: 0,
+            height: T.hairline,
+            backgroundColor: T.hairSoft,
+          }}
+        />
+      )}
+
+      {/* continuous rail */}
+      <View
+        style={{
+          position: 'absolute',
+          left: T.gutter + 5,
+          top: first ? 22 : 0,
+          bottom: last ? undefined : 0,
+          height: last ? 22 : undefined,
+          width: 1.5,
+          backgroundColor: T.hair,
+        }}
+      />
+
+      <View style={{ width: 11, paddingTop: 6 }}>
+        <View
+          style={{
+            width: 9,
+            height: 9,
+            borderRadius: 5,
+            backgroundColor: session.pr ? C.primary : A.green,
+            borderWidth: 4,
+            borderColor: C.bg,
+          }}
+        />
+      </View>
+
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+              <Text style={{ fontFamily: F.header, fontSize: 15.5, letterSpacing: -0.25, color: C.onSurface }}>
+                {session.title}
+              </Text>
+              {session.pr && <PRBadge C={C} />}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+              <Icon name="calendar-today" size={11} color={C.onSurfaceVariant} />
+              <Text style={{ fontFamily: F.bodyMed, fontSize: 11.5, color: C.onSurfaceVariant }}>
+                {session.date}
+              </Text>
+            </View>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={{ fontFamily: F.num, fontSize: 16, color: C.primary }}>{session.duration}</Text>
+            <Text style={{ fontFamily: F.header, fontSize: 9, letterSpacing: 0.8, color: C.onSurfaceVariant, marginTop: 2 }}>
+              MIN
+            </Text>
+          </View>
+        </View>
+
+        <View
+          style={{
+            flexDirection: 'row',
+            marginTop: 13,
+            marginBottom: 11,
+            borderTopWidth: T.hairline,
+            borderBottomWidth: T.hairline,
+            borderColor: T.hairSoft,
+          }}
+        >
+          {[
+            { v: `${session.volume} t`, k: 'VOLUME' },
+            { v: String(session.sets), k: 'SETS' },
+            { v: String(session.calories), k: 'KCAL' },
+          ].map((st, i) => (
+            <View key={st.k} style={{ flex: 1, paddingVertical: 9, paddingLeft: i === 0 ? 0 : 12 }}>
+              {i > 0 && (
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    top: 10,
+                    bottom: 10,
+                    width: T.hairline,
+                    backgroundColor: T.hairSoft,
+                  }}
+                />
+              )}
+              <Text style={{ fontFamily: F.num, fontSize: 13.5, letterSpacing: -0.4, color: C.onSurface }}>
+                {st.v}
+              </Text>
+              <Text style={{ fontFamily: F.header, fontSize: 8.5, letterSpacing: 0.9, color: C.onSurfaceVariant, marginTop: 3 }}>
+                {st.k}
+              </Text>
+            </View>
+          ))}
+        </View>
+
+        {session.exercises.map((ex, i) => (
+          <View
+            key={`${ex.name}-${i}`}
+            style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, minWidth: 0 }}>
+              <Text style={{ fontFamily: F.num, fontSize: 11, color: C.onSurfaceVariant, marginRight: 8 }}>
+                {ex.scheme}
+              </Text>
+              <Text style={{ fontFamily: F.bodyMed, fontSize: 12.5, color: C.onSurface }} numberOfLines={1}>
+                {ex.name}
+              </Text>
+              {ex.pr && <PRBadge C={C} />}
+            </View>
+            <Text style={{ fontFamily: F.num, fontSize: 11.5, color: C.onSurfaceVariant }}>{ex.load}</Text>
+          </View>
+        ))}
+      </View>
+    </Pressable>
+  );
+}
+
+function PRBadge({ C }: { C: ThemeColors }) {
+  return (
+    <LinearGradient
+      colors={[C.primary, C.primaryDim]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 }}
+    >
+      <Text style={{ fontFamily: F.header, fontSize: 8.5, letterSpacing: 0.8, color: C.onPrimary }}>PR</Text>
+    </LinearGradient>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   SCREEN
+   Default export. Header, tab routing, queries and mutations.
+   (was WorkoutScreen.tsx)
+   ────────────────────────────────────────────────────────────────────────── */
+
+
+
+/** Derive activation weights from the current exercise list. */
+function deriveActivation(exercises: WorkoutExercise[]): MuscleActivation[] {
+  const totals = new Map<string, number>();
+  let max = 0;
+  exercises.forEach((e) => {
+    const key = e.muscle ?? 'Full Body';
+    const v = (totals.get(key) ?? 0) + e.sets * e.reps;
+    totals.set(key, v);
+    if (v > max) max = v;
+  });
+  return Array.from(totals.entries())
+    .map(([muscle, v]) => ({ muscle, value: max ? v / max : 0 }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 5);
+}
+
+/** Map an API session payload into the shape the timeline renders. */
+function computePRsAndMapHistory(rawHistory: any[]): HistorySession[] {
+  // Sort oldest to newest for calculating PRs
+  const sortedRaw = [...rawHistory].sort((a, b) => new Date(a.endTime || 0).getTime() - new Date(b.endTime || 0).getTime());
+  
+  const bests: Record<string, number> = {};
+
+  return sortedRaw.map((raw, idx) => {
+    const end = raw?.endTime ? new Date(raw.endTime) : new Date();
+    const exs = Array.isArray(raw?.exercises) ? raw.exercises : [];
+    const volume = exs.reduce(
+      (a: number, ex: any) =>
+        a + (ex.sets ?? []).reduce((b: number, s: any) => b + (s.weight ?? 0) * (s.reps ?? 0), 0),
+      0,
+    );
+    
+    let sessionHasPR = false;
+    const mappedExercises = exs.slice(0, 3).map((ex: any) => {
+      const maxWeight = Math.max(0, ...(ex.sets ?? []).map((s: any) => s.weight ?? 0));
+      let isPR = false;
+      if (maxWeight > 0) {
+        if (!bests[ex.name] || maxWeight > bests[ex.name]) {
+          isPR = true;
+          bests[ex.name] = maxWeight;
+          sessionHasPR = true;
+        }
+      }
+      return {
+        name: ex.name,
+        scheme: `${ex.sets?.length ?? 0}×${ex.sets?.[0]?.reps ?? 0}`,
+        load: `${maxWeight} kg`,
+        pr: isPR,
+      };
+    });
+
+    return {
+      id: raw?.id ?? `s-${idx}`,
+      title: raw?.title ?? 'Session',
+      iso: end.toISOString().slice(0, 10),
+      date: end.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }),
+      duration: raw?.duration ?? 0,
+      volume: (volume / 1000).toFixed(1),
+      sets: exs.reduce((a: number, ex: any) => a + (ex.sets?.length ?? 0), 0),
+      calories: raw?.caloriesBurned ?? 0,
+      pr: sessionHasPR,
+      exercises: mappedExercises,
+    };
+  }).reverse(); // Return newest to oldest
+}
+
+export interface WorkoutScreenProps {
+  onNavigateBack?: () => void;
+  onNavigateToNotifications?: () => void;
+  userId?: string;
+}
+
+export default function WorkoutScreen({
+  onNavigateBack,
+  onNavigateToNotifications,
+  userId: propUserId,
+}: WorkoutScreenProps) {
+  const { user } = useAuth();
+  const userId = propUserId || user?.id || 'demo-user-id';
+  const { C, isDark, bgColors } = useTheme();
+  const T = useMemo(() => makeTokens(C, isDark), [C, isDark]);
+  const qc = useQueryClient();
+
+  const { data: vitals } = useQuery({ queryKey: ['vitals'], queryFn: fetchVitals, refetchInterval: 3000 });
+  const { data: sleepData } = useQuery({ queryKey: ['sleep', userId], queryFn: () => fetchSleepData(userId) });
+  const { data: recoveryScore } = useQuery({ queryKey: ['recoveryScore', userId], queryFn: () => fetchRecoveryScore(userId) });
+
+  const readinessData: ReadinessMetric[] = useMemo(() => {
+    if (!vitals) return [];
+    
+    // Process sleep trend from chartData
+    const sleepTrend = sleepData?.chartData ? sleepData.chartData.map((d: any) => d.value) : [];
+    const sleepStr = sleepData?.current || '0h';
+    const sleepVal = sleepStr.replace('h', ':').replace('m', '').replace(' ', '');
+    
+    return [
+      { key: 'recovery', label: 'Recovery', value: vitals.bodyBattery.toString(), unit: '%', tone: 'green', trend: [vitals.recoveryUpr, vitals.recoveryLwr, vitals.recoveryCor, vitals.recoveryCrd] },
+      { key: 'sleep', label: 'Sleep', value: sleepVal, unit: 'hrs', tone: 'cyan', trend: sleepTrend.length > 0 ? sleepTrend : [0] },
+      { key: 'readiness', label: 'Readiness', value: recoveryScore?.status || 'Unknown', tone: 'gold', trend: [] },
+    ];
+  }, [vitals, sleepData, recoveryScore]);
+
+  const weeklyLoadData = useMemo(() => {
+    if (!vitals) return [];
+    const loads = [vitals.loadM, vitals.loadT, vitals.loadW, vitals.loadTh, vitals.loadF, vitals.loadSa, vitals.loadSu];
+    const maxLoad = Math.max(...loads, 1); // Avoid division by zero
+    return loads.map((load, i) => ({
+      label: ['M', 'T', 'W', 'T', 'F', 'S', 'S'][i],
+      value: load / maxLoad,
+    }));
+  }, [vitals]);
+
+  const [tab, setTab] = useState<TabKey>('overview');
+  const [draft, setDraft] = useState<WorkoutExercise[] | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  /* ── Queries ──────────────────────────────────────── */
+  const { data: workout } = useQuery<Workout | null>({
+    queryKey: ['currentWorkout', userId],
+    queryFn: async () => (await fetchCurrentWorkout(userId)) as any as Workout,
+  });
+
+  const { data: historyRaw, isLoading: historyLoading } = useQuery({
+    queryKey: ['workoutHistory', userId],
+    queryFn: async () => (await fetchWorkoutHistory(userId)) as any[],
+  });
+
+  const templateExercises = workout?.exercises ?? [];
+  const builderExercises = draft ?? templateExercises;
+  const activation = useMemo(() => deriveActivation(builderExercises), [builderExercises]);
+
+  const sessions = useMemo<HistorySession[]>(
+    () => (Array.isArray(historyRaw) ? computePRsAndMapHistory(historyRaw) : []),
+    [historyRaw],
+  );
+
+  /* ── Live session ─────────────────────────────────── */
+  const session = useLiveSession({ template: templateExercises });
+
+  const startMutation = useMutation({
+    mutationFn: startSession,
+    onSuccess: (data: any) => {
+      setSessionId(data?.id ?? null);
+      session.start(data?.startTime ? new Date(data.startTime).getTime() : undefined);
+    },
+    onError: () => session.start(),
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: completeSession,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['workoutHistory'] });
+      void qc.invalidateQueries({ queryKey: ['currentWorkout'] });
+    },
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: (payload: any) => saveWorkout(payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['currentWorkout'] });
+      setDraft(null);
+      haptic('success');
+      setTab('overview');
+    },
+  });
+
+  const generateMutation = useMutation({
+    mutationFn: (prompt: string) => generateWorkout(prompt, workout?.id),
+    onSuccess: (data: any) => {
+      if (data?.exercises?.length) setDraft(data.exercises);
+      haptic('success');
+    },
+  });
+
+  /* Start the session the first time the Active tab opens. */
+  useEffect(() => {
+    if (tab !== 'active' || sessionId || startMutation.isPending || session.finished) return;
+    startMutation.mutate({
+      userId,
+      workoutId: workout?.id,
+      title: workout?.title ?? 'Push Strength',
+      exercises: templateExercises,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
+  const handleFinish = useCallback(() => {
+    session.finish();
+    completeMutation.mutate({
+      sessionId: sessionId ?? 'local-session',
+      duration: session.stats.minutes,
+      caloriesBurned: session.stats.minutes * 8,
+      notes: '',
+      completedSetIds: [],
+    });
+  }, [completeMutation, session, sessionId]);
+
+  const handleSaveBuilder = useCallback(() => {
+    saveMutation.mutate({
+      userId,
+      title: workout?.title ?? 'Push Day',
+      duration: workout?.duration ?? '60',
+      parentVersionId: workout?.parentVersionId ?? workout?.id,
+      exercises: builderExercises,
+    });
+  }, [builderExercises, saveMutation, userId, workout]);
+
+  /* ── Collapsing header title ──────────────────────── */
+  const scrollY = useSharedValue(0);
+  const compactStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(scrollY.value, [10, 46], [0, 1], Extrapolation.CLAMP),
+  }));
+
+  const subtitle =
+    tab === 'active'
+      ? session.finished
+        ? 'Session complete · saved'
+        : 'Session running'
+      : 'Push · Week 6 · Day 3';
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+      <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
+
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        {/* ── Nav bar: bare glyphs, no circular chrome ──── */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 18,
+            paddingTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 0) * 0.2 + 6 : 6,
+          }}
+        >
+          <Pressable
+            onPress={() => { haptic('light'); onNavigateBack?.(); }}
+            hitSlop={10}
+            style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Icon name="chevron-left" size={22} color={C.onSurface} />
+          </Pressable>
+
+          <Animated.Text
+            numberOfLines={1}
+            style={[
+              { fontFamily: F.header, fontSize: 15.5, letterSpacing: -0.2, color: C.onSurface },
+              compactStyle,
+            ]}
+          >
+            Workout Tracker
+          </Animated.Text>
+
+          <Pressable
+            onPress={() => { haptic('light'); onNavigateToNotifications?.(); }}
+            hitSlop={10}
+            style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Icon name="notifications" size={22} color={C.onSurface} />
+            <View
+              style={{
+                position: 'absolute',
+                top: 5,
+                right: 5,
+                width: 7,
+                height: 7,
+                borderRadius: 4,
+                backgroundColor: C.primary,
+                borderWidth: 2,
+                borderColor: C.bg,
+              }}
+            />
+          </Pressable>
+        </View>
+
+        {/* ── Large title ────────────────────────────────── */}
+        <View style={{ paddingHorizontal: T.gutter, paddingTop: 8, paddingBottom: 2 }}>
+          <Text style={{ fontFamily: F.header, fontSize: 34, letterSpacing: -1.2, color: C.onSurface }}>
+            Workout Tracker
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 6 }}>
+            <View
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: 4,
+                backgroundColor: isDark ? '#A3E635' : '#5E8B00',
+              }}
+            />
+            <Text style={{ fontFamily: F.bodyBold, fontSize: 13, color: C.onSurfaceVariant }}>
+              {subtitle}
+            </Text>
+          </View>
+        </View>
+
+        <WorkoutTabs active={tab} onChange={setTab} C={C} isDark={isDark} />
+
+        <View style={{ flex: 1 }}>
+          {tab === 'overview' && (
+            <Animated.View style={{ flex: 1 }} entering={FadeIn.duration(180)}>
+              <OverviewTab
+                workout={workout}
+                exercises={templateExercises}
+                readiness={readinessData}
+                onStart={() => setTab('active')}
+                onCustomise={() => setTab('builder')}
+                onHistory={() => setTab('history')}
+                C={C}
+                isDark={isDark}
+              />
+            </Animated.View>
+          )}
+
+          {tab === 'builder' && (
+            <Animated.View style={{ flex: 1 }} entering={FadeIn.duration(180)}>
+              <BuilderTab
+                exercises={builderExercises}
+                activation={activation}
+                onChange={setDraft}
+                onSave={handleSaveBuilder}
+                onDiscard={() => { setDraft(null); setTab('overview'); }}
+                onGenerate={(p) => generateMutation.mutate(p)}
+                generating={generateMutation.isPending}
+                saving={saveMutation.isPending}
+                C={C}
+                isDark={isDark}
+              />
+            </Animated.View>
+          )}
+
+          {tab === 'active' && (
+            <Animated.View style={{ flex: 1 }} entering={FadeIn.duration(180)}>
+              <ActiveTab
+                exercises={session.exercises}
+                elapsed={session.elapsed}
+                restRemaining={session.restRemaining}
+                finished={session.finished}
+                savedSummary={`Session saved · ${Math.floor(session.elapsed / 60)}:${(session.elapsed % 60)
+                  .toString()
+                  .padStart(2, '0')} · ${session.stats.done} sets logged`}
+                onToggleSet={session.toggleSet}
+                onAddSet={session.addSet}
+                onExtendRest={session.extendRest}
+                onSkipRest={session.skipRest}
+                onFinish={handleFinish}
+                onViewHistory={() => setTab('history')}
+                C={C}
+                isDark={isDark}
+              />
+            </Animated.View>
+          )}
+
+          {tab === 'history' && (
+            <Animated.View style={{ flex: 1 }} entering={FadeIn.duration(180)}>
+              <HistoryTab
+                sessions={sessions}
+                loading={historyLoading}
+                weeklyLoad={weeklyLoadData}
+                onStartWorkout={() => setTab('overview')}
+                C={C}
+                isDark={isDark}
+              />
+            </Animated.View>
+          )}
+        </View>
+      </SafeAreaView>
+    </View>
+  );
 }

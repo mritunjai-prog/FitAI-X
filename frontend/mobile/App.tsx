@@ -142,7 +142,7 @@ function MainApp() {
         <DashboardScreen onOpenCommandPalette={() => setIsCommandOpen(true)} onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigateToWorkout={() => setCurrentScreen('Workout')} />
       )}
       
-      {hasOnboarded && !['Workout', 'Settings', 'Notifications'].includes(currentScreen) && (
+      {hasOnboarded && !['Settings', 'Notifications'].includes(currentScreen) && (
         <BottomNavigation 
           currentScreen={currentScreen as 'Dashboard' | 'Profile' | 'Coach' | 'Calendar' | 'Nutrition' | 'Analytics'} 
           onNavigate={(screen) => setCurrentScreen(screen)} 

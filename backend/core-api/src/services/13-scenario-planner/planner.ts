@@ -4,7 +4,10 @@ export interface BudgetPlan {
   weeklyCost: number;
   dailyCals: number;
   meals: MealRecipe[];
-  groceryList: Array<{ name: string; quantity: number; totalCost: number }>;
+  groceryList: Array<{ name: string; quantity: number; totalCost: number; isChecked?: boolean; note?: string; category?: string }>;
+  week: Array<{ label: string; dayOfMonth: number; cals: number; onTarget: boolean }>;
+  preferences: string[];
+  suggestions: string[];
 }
 
 /**
@@ -69,10 +72,26 @@ export function generateBudgetPlan(targetWeeklyBudget: number, targetDailyCals: 
   // Sort grocery list by cost descending
   groceryList.sort((a, b) => b.totalCost - a.totalCost);
 
+  const week = [
+    { label: 'MON', dayOfMonth: 14, cals: dailyCals - 160, onTarget: true },
+    { label: 'TUE', dayOfMonth: 15, cals: dailyCals + 10, onTarget: true },
+    { label: 'WED', dayOfMonth: 16, cals: dailyCals - 320, onTarget: false },
+    { label: 'THU', dayOfMonth: 17, cals: dailyCals - 30, onTarget: true },
+    { label: 'FRI', dayOfMonth: 18, cals: dailyCals - 370, onTarget: true },
+    { label: 'SAT', dayOfMonth: 19, cals: dailyCals + 390, onTarget: false },
+    { label: 'SUN', dayOfMonth: 20, cals: dailyCals - 450, onTarget: true },
+  ];
+
+  const preferences = ['High protein', 'Under $10/day', 'No dairy', 'Meal prep', 'Quick (<20m)', 'Vegetarian'];
+  const suggestions = ['Cheaper week', '+300 kcal', 'More variety', 'Batch cook Sunday'];
+
   return {
     weeklyCost: parseFloat(weeklyCost.toFixed(2)),
     dailyCals: Math.round(dailyCals),
     meals: selectedMeals,
-    groceryList
+    groceryList,
+    week,
+    preferences,
+    suggestions
   };
 }

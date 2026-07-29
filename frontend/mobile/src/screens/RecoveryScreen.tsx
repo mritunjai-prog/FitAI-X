@@ -107,14 +107,14 @@ export default function RecoveryScreen({ navigation, onNavigateToNotifications }
 
   const [activeTab, setActiveTab] = useState<'advice' | 'body'>('advice');
 
-  const { data: overview, isLoading: isOverviewLoading } = useQuery({ queryKey: ['rec_overview'], queryFn: fetchRecoveryOverview });
-  const { data: scoreData, isLoading: isScoreLoading } = useQuery({ queryKey: ['rec_score'], queryFn: fetchRecoveryScore });
-  const { data: sleepData, isLoading: isSleepLoading } = useQuery({ queryKey: ['rec_sleep'], queryFn: fetchSleepData });
-  const { data: hrData, isLoading: isHrLoading } = useQuery({ queryKey: ['rec_hr'], queryFn: fetchHeartRateData });
-  const { data: waterData, isLoading: isWaterLoading } = useQuery({ queryKey: ['rec_water'], queryFn: fetchWaterData });
-  const { data: stressData, isLoading: isStressLoading } = useQuery({ queryKey: ['rec_stress'], queryFn: fetchStressData });
-  const { data: timeline, isLoading: isTimelineLoading } = useQuery({ queryKey: ['rec_timeline'], queryFn: fetchRecoveryTimeline });
-  const { data: insights, isLoading: isInsightsLoading } = useQuery({ queryKey: ['rec_insights'], queryFn: fetchRecoveryInsights });
+  const { data: overview, isLoading: isOverviewLoading } = useQuery({ queryKey: ['rec_overview', user?.id], queryFn: () => fetchRecoveryOverview(user?.id) });
+  const { data: scoreData, isLoading: isScoreLoading } = useQuery({ queryKey: ['rec_score', user?.id], queryFn: () => fetchRecoveryScore(user?.id) });
+  const { data: sleepData, isLoading: isSleepLoading } = useQuery({ queryKey: ['rec_sleep', user?.id], queryFn: () => fetchSleepData(user?.id) });
+  const { data: hrData, isLoading: isHrLoading } = useQuery({ queryKey: ['rec_hr', user?.id], queryFn: () => fetchHeartRateData(user?.id) });
+  const { data: waterData, isLoading: isWaterLoading } = useQuery({ queryKey: ['rec_water', user?.id], queryFn: () => fetchWaterData(user?.id) });
+  const { data: stressData, isLoading: isStressLoading } = useQuery({ queryKey: ['rec_stress', user?.id], queryFn: () => fetchStressData(user?.id) });
+  const { data: timeline, isLoading: isTimelineLoading } = useQuery({ queryKey: ['rec_timeline', user?.id], queryFn: () => fetchRecoveryTimeline(user?.id) });
+  const { data: insights, isLoading: isInsightsLoading } = useQuery({ queryKey: ['rec_insights', user?.id], queryFn: () => fetchRecoveryInsights(user?.id) });
 
   const pulse = useSharedValue(1);
   useEffect(() => {

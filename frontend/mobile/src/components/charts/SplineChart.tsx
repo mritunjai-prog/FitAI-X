@@ -5,10 +5,28 @@ import Animated, { useSharedValue, useAnimatedProps, withSpring, withTiming, Eas
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
-export default function SplineChart({ width, height, color }: { width: number, height: number, color: string }) {
+export default function SplineChart({ width, height, color, data }: { width: number, height: number, color: string, data?: number[] }) {
   // A smooth bezier curve for energy levels
   // Starts high, dips in middle, rises a bit, then dips
-  const dPath = `M0,${height * 0.2} C${width*0.2},${height * 0.2} ${width*0.4},${height * 0.8} ${width*0.6},${height * 0.6} S${width*0.8},${height * 0.9} ${width},${height * 0.7}`;
+  let dPath = `M0,${height * 0.2} C${width*0.2},${height * 0.2} ${width*0.4},${height * 0.8} ${width*0.6},${height * 0.6} S${width*0.8},${height * 0.9} ${width},${height * 0.7}`;
+
+  if (data && data.length > 0) {
+    const min = Math.min(...data);
+    const max = Math.max(...data);
+    const pad = 2;
+    const n = data.length;
+    
+    if (n < 2 || max === min) {
+      dPath = `M0,${height/2} L${width},${height/2}`;
+    } else {
+      const points = data.map((v, i) => {
+        const x = (i / (n - 1)) * width;
+        const y = height - ((v - min) / (max - min || 1)) * (height - pad*2) - pad;
+        return `${x},${y}`;
+      });
+      dPath = `M${points[0]} L` + points.slice(1).join(" L");
+    }
+  }
   const dArea = `${dPath} L${width},${height} L0,${height} Z`;
 
   const progress = useSharedValue(0);
@@ -49,7 +67,7 @@ export default function SplineChart({ width, height, color }: { width: number, h
           d={dPath}
           fill="none"
           stroke={color}
-          strokeWidth={3}
+          strokeWidth={1.5}
           strokeLinecap="round"
           animatedProps={animatedLineProps}
         />

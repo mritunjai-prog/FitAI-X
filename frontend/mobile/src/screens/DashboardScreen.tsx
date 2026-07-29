@@ -109,7 +109,6 @@ export default function DashboardScreen({
         {/* Sticky Blurred Header (Replaces Top Nav when scrolled) */}
         <Animated.View style={[styles.stickyHeader, stickyHeaderStyle, { pointerEvents: 'none' as any }]}>
           <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
-          <Text style={styles.stickyTitle}>Dashboard</Text>
         </Animated.View>
 
         <Animated.ScrollView 

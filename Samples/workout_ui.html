@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FitAI X — Workout Hub · Card-Free Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════════════════════
+   TOKENS
+   ══════════════════════════════════════════════════════════════ */
+:root{
+  --bg:#08080A;
+  --meshA:rgba(245,196,0,.17);
+  --meshB:rgba(202,138,4,.13);
+  --meshC:rgba(253,230,138,.07);
+  --hair:rgba(255,255,255,.10);
+  --hairSoft:rgba(255,255,255,.055);
+  --hairGold:rgba(245,196,0,.28);
+  --txt:#FFFFFF;
+  --txt2:#A9A395;
+  --txt3:#6E6A60;
+  --gold:#F5C400;
+  --gold2:#FFD60A;
+  --goldDim:#CA8A04;
+  --onGold:#241B00;
+  --btnA:#F5C400; --btnB:#E0A400;
+  --green:#A3E635; --cyan:#7DD3FC; --amber:#F59E0B; --red:#F87171;
+  --track:rgba(255,255,255,.09);
+  --wash:rgba(245,196,0,.055);
+  --shadow:0 24px 60px -24px rgba(0,0,0,.9);
+  --chrome:#1a1a1c;
+}
+[data-theme="light"]{
+  --bg:#F4F3EF;
+  --meshA:rgba(245,196,0,.20);
+  --meshB:rgba(202,138,4,.10);
+  --meshC:rgba(125,211,252,.13);
+  --hair:rgba(20,18,10,.13);
+  --hairSoft:rgba(20,18,10,.07);
+  --hairGold:rgba(160,118,0,.36);
+  --txt:#15130F;
+  --txt2:#5F594C;
+  --txt3:#8E8779;
+  --gold:#8A6400;
+  --gold2:#A87C00;
+  --goldDim:#6E5000;
+  --onGold:#231A00;
+  --btnA:#FFCE1F; --btnB:#E9A200;
+  --green:#5E8B00; --cyan:#0E7490; --amber:#B26B00; --red:#C2413E;
+  --track:rgba(20,18,10,.10);
+  --wash:rgba(245,196,0,.10);
+  --shadow:0 24px 60px -28px rgba(60,50,20,.42);
+  --chrome:#d8d5cd;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  font-family:'Manrope',-apple-system,system-ui,sans-serif;
+  background:
+    radial-gradient(1200px 700px at 12% -10%, rgba(245,196,0,.10), transparent 60%),
+    radial-gradient(900px 600px at 95% 110%, rgba(202,138,4,.10), transparent 60%),
+    #0B0B0D;
+  color:#fff;padding:34px 0 70px;transition:background .4s ease;
+}
+body[data-page="light"]{
+  background:
+    radial-gradient(1200px 700px at 12% -10%, rgba(245,196,0,.24), transparent 60%),
+    radial-gradient(900px 600px at 95% 110%, rgba(125,211,252,.18), transparent 60%),
+    #EDEBE5;
+  color:#131210;
+}
+.mono{font-family:'JetBrains Mono',monospace}
+
+/* ══════════════ page chrome ══════════════ */
+.pagehead{max-width:1560px;margin:0 auto 26px;padding:0 28px;display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.kicker{font-size:11px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase;color:#F5C400;margin-bottom:8px}
+body[data-page="light"] .kicker{color:#8A6400}
+.pagehead h1{font-size:29px;font-weight:800;letter-spacing:-.8px}
+.pagehead p{font-size:13.5px;opacity:.62;margin-top:7px;max-width:690px;line-height:1.65}
+.controls{display:flex;gap:10px;align-items:center}
+.tgl{display:flex;background:rgba(128,128,128,.14);border:1px solid rgba(128,128,128,.22);padding:4px;border-radius:14px;gap:2px}
+.tgl button{border:0;background:transparent;color:inherit;font-family:inherit;font-size:12px;font-weight:700;padding:8px 15px;border-radius:10px;cursor:pointer;opacity:.55;transition:.18s}
+.tgl button.on{background:linear-gradient(135deg,#F5C400,#E0A400);color:#241B00;opacity:1}
+
+/* ══════════════ phone rail ══════════════ */
+.rail{display:flex;gap:34px;padding:12px 28px 20px;overflow-x:auto;scroll-snap-type:x proximity;max-width:1560px;margin:0 auto;align-items:flex-start}
+.rail::-webkit-scrollbar{height:8px}
+.rail::-webkit-scrollbar-thumb{background:rgba(128,128,128,.35);border-radius:10px}
+.slot{scroll-snap-align:center;flex:0 0 auto}
+.slotcap{text-align:center;margin-bottom:13px}
+.slotcap b{font-size:13px;font-weight:800}
+.slotcap span{display:block;font-size:11px;opacity:.5;margin-top:3px}
+
+.phone{position:relative;width:392px;height:826px;border-radius:54px;background:var(--chrome);padding:11px;box-shadow:var(--shadow);transition:background .4s ease}
+.screen{position:relative;width:100%;height:100%;border-radius:44px;overflow:hidden;background:var(--bg);color:var(--txt);font-size:15px;display:flex;flex-direction:column;transition:background .4s ease}
+.mesh{position:absolute;inset:-20%;pointer-events:none}
+.mesh i{position:absolute;display:block;border-radius:50%;filter:blur(62px)}
+.mesh .b1{width:58%;height:34%;left:-10%;top:1%;background:var(--meshA)}
+.mesh .b2{width:66%;height:38%;right:-16%;top:24%;background:var(--meshB)}
+.mesh .b3{width:70%;height:40%;left:-8%;bottom:2%;background:var(--meshC)}
+.mesh .b4{width:40%;height:24%;right:6%;bottom:18%;background:var(--meshA);opacity:.45}
+.grain{position:absolute;inset:0;pointer-events:none;opacity:.3;background-image:radial-gradient(rgba(255,255,255,.05) 1px,transparent 1px);background-size:3px 3px}
+[data-theme="light"] .grain{opacity:.2;background-image:radial-gradient(rgba(0,0,0,.05) 1px,transparent 1px)}
+
+/* ══════════════ status + nav ══════════════ */
+.statusbar{position:relative;z-index:5;display:flex;justify-content:space-between;align-items:center;padding:14px 30px 2px;font-size:13px;font-weight:700}
+.statusbar .right{display:flex;gap:6px;align-items:center;opacity:.9}
+.notch{position:absolute;top:9px;left:50%;transform:translateX(-50%);width:112px;height:30px;border-radius:18px;background:#000;z-index:6}
+[data-theme="light"] .notch{background:#111}
+
+.navbar{position:relative;z-index:5;padding:6px 18px 0}
+.navrow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+/* nav buttons: bare glyphs, no circle chrome */
+.nbtn{width:36px;height:36px;display:grid;place-items:center;cursor:pointer;position:relative;transition:.16s}
+.nbtn:active{transform:scale(.88)}
+.nbtn svg{width:22px;height:22px;fill:var(--txt)}
+.nbtn.badge::after{content:'';position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:4px;background:var(--gold);box-shadow:0 0 0 2px var(--bg)}
+
+.largettl{padding:8px 22px 2px}
+.largettl h1{font-size:34px;font-weight:800;letter-spacing:-1.2px;line-height:1.04}
+.largettl .sub{font-size:13px;color:var(--txt2);font-weight:600;margin-top:6px;display:flex;align-items:center;gap:7px}
+.dotpulse{width:7px;height:7px;border-radius:4px;background:var(--green);box-shadow:0 0 0 0 rgba(163,230,53,.6);animation:pulse 2s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 8px rgba(163,230,53,0)}100%{box-shadow:0 0 0 0 rgba(163,230,53,0)}}
+
+/* ══════════════ tabs — underline, no pill container ══════════════ */
+.seg{position:relative;z-index:5;display:flex;margin:16px 22px 0;gap:22px;border-bottom:1px solid var(--hairSoft)}
+.seg button{position:relative;border:0;background:transparent;font-family:inherit;cursor:pointer;padding:0 0 11px;
+  font-size:14.5px;font-weight:700;color:var(--txt3);letter-spacing:-.2px;transition:color .2s}
+.seg button.on{color:var(--txt);font-weight:800}
+.seg .ink{position:absolute;bottom:-1px;height:2.5px;border-radius:2px;background:var(--gold);
+  transition:left .32s cubic-bezier(.2,1.1,.3,1), width .32s cubic-bezier(.2,1.1,.3,1)}
+
+.body{position:relative;z-index:4;flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;padding-bottom:26px}
+.body::-webkit-scrollbar{display:none}
+
+/* ══════════════ SECTION PRIMITIVES (no containers) ══════════════ */
+.sec{padding:0 22px}
+.seclbl{display:flex;align-items:baseline;justify-content:space-between;padding:26px 22px 11px;
+  font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:var(--txt3)}
+.seclbl a{color:var(--gold);font-size:13px;font-weight:800;letter-spacing:0;text-transform:none;cursor:pointer}
+.rule{height:1px;background:var(--hair);margin:0 22px}
+.rule.full{margin:0}
+.rule.soft{background:var(--hairSoft)}
+
+/* generic full-bleed row, separated by hairline only */
+.r{display:flex;align-items:center;gap:14px;padding:14px 22px;position:relative;cursor:pointer;transition:background .15s}
+.r:active{background:var(--wash)}
+.r + .r::before{content:'';position:absolute;left:22px;right:0;top:0;height:1px;background:var(--hairSoft)}
+.r.ind + .r.ind::before{left:58px}
+.r .grow{flex:1;min-width:0}
+.r .ttl{font-size:15.5px;font-weight:700;letter-spacing:-.2px}
+.r .sub{font-size:12.5px;color:var(--txt2);font-weight:600;margin-top:3px}
+.chev{width:17px;height:17px;fill:var(--txt3);flex:0 0 auto;opacity:.7}
+
+/* numeral marker — plain type, no chip */
+.num{width:22px;flex:0 0 auto;font-family:'JetBrains Mono';font-size:13px;font-weight:700;color:var(--txt3);text-align:center}
+.num.done{color:var(--green)}
+.num svg{width:15px;height:15px;fill:var(--green)}
+
+/* column stats divided by vertical hairlines */
+.cols{display:flex;padding:0 22px}
+.cols.bordered{border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)}
+.col{flex:1;padding:15px 0;position:relative;min-width:0}
+.col + .col{padding-left:16px}
+.col + .col::before{content:'';position:absolute;left:0;top:15px;bottom:15px;width:1px;background:var(--hairSoft)}
+.col .v{font-family:'JetBrains Mono';font-size:20px;font-weight:700;letter-spacing:-.7px;display:flex;align-items:baseline;gap:3px}
+.col .v span{font-size:11px;font-weight:600;color:var(--txt2);font-family:'Manrope'}
+.col .k{font-size:9.5px;font-weight:800;letter-spacing:1.1px;color:var(--txt3);margin-top:6px;text-transform:uppercase}
+.col .v.gold{color:var(--gold)}
+.col .v.green{color:var(--green)}
+.col .v.cyan{color:var(--cyan)}
+
+/* ══════════════ hero ══════════════ */
+.hero{padding:16px 22px 0}
+.eyebrow{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:800;letter-spacing:1.6px;color:var(--gold)}
+.eyebrow svg{width:13px;height:13px;fill:var(--gold)}
+.herottl{font-size:40px;font-weight:800;letter-spacing:-1.9px;line-height:1.0;margin:14px 0 0}
+.herottl em{font-style:normal;background:linear-gradient(120deg,var(--gold2),var(--goldDim));-webkit-background-clip:text;background-clip:text;color:transparent}
+.herosub{font-size:13.5px;color:var(--txt2);font-weight:600;margin-top:9px;line-height:1.5}
+
+/* ══════════════ buttons (controls, not cards) ══════════════ */
+.cta{display:flex;gap:10px;padding:20px 22px 0;align-items:center}
+.btn{border:0;font-family:inherit;cursor:pointer;font-weight:800;font-size:14.5px;display:flex;align-items:center;
+  justify-content:center;gap:8px;padding:15px 20px;border-radius:14px;transition:transform .12s;letter-spacing:-.1px}
+.btn:active{transform:scale(.97)}
+.btn svg{width:17px;height:17px}
+.btn-fill{flex:1;background:linear-gradient(135deg,var(--btnA),var(--btnB));color:var(--onGold);box-shadow:0 14px 26px -16px rgba(245,196,0,.9)}
+.btn-fill svg{fill:var(--onGold)}
+/* text button — no border, no fill */
+.btn-text{background:transparent;color:var(--txt);padding:15px 6px;font-size:14.5px}
+.btn-text svg{fill:var(--txt)}
+.btn-line{background:transparent;border:1px solid var(--hair);color:var(--txt)}
+.btn-line svg{fill:var(--txt)}
+.btn-danger{background:transparent;color:var(--red)}
+.btn-danger svg{fill:var(--red)}
+
+/* ══════════════ sparkline column ══════════════ */
+.spark{margin-top:9px;height:22px;width:100%;display:block}
+
+/* ══════════════ AI block — type + rail only ══════════════ */
+.ai{padding:16px 22px 18px;position:relative}
+.ai::before{content:'';position:absolute;left:0;top:16px;bottom:18px;width:2.5px;background:linear-gradient(180deg,var(--gold2),transparent)}
+.aihead{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.aihead svg{width:16px;height:16px;fill:var(--gold)}
+.aihead .n{font-size:13px;font-weight:800;flex:1;letter-spacing:.2px}
+.aihead .more{font-size:12.5px;font-weight:800;color:var(--gold);display:flex;align-items:center;gap:2px;cursor:pointer}
+.aihead .more svg{width:15px;height:15px}
+.aitext{font-size:14px;line-height:1.62;color:var(--txt);opacity:.9;font-weight:500}
+.aitext b{color:var(--gold);font-weight:800}
+.aiconf{display:flex;align-items:center;gap:9px;margin-top:14px}
+.bar{flex:1;height:3px;border-radius:2px;background:var(--track);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:2px;background:linear-gradient(90deg,var(--gold),var(--cyan))}
+.aiconf span{font-size:9.5px;font-weight:800;letter-spacing:.9px;color:var(--txt3)}
+.aidetail{margin-top:16px;display:grid;gap:0}
+.aidetail .d{padding:13px 0;position:relative}
+.aidetail .d + .d::before{content:'';position:absolute;left:0;right:0;top:0;height:1px;background:var(--hairSoft)}
+.aidetail .d .t{font-size:12px;font-weight:800;letter-spacing:.3px;margin-bottom:4px}
+.aidetail .d .s{font-size:13px;color:var(--txt2);line-height:1.55;font-weight:500}
+
+/* ══════════════ exercise rows ══════════════ */
+.exname{font-size:15.5px;font-weight:700;letter-spacing:-.25px}
+.exmeta{font-family:'JetBrains Mono';font-size:11.5px;color:var(--gold);font-weight:500;margin-top:4px}
+.exmeta em{font-style:normal;color:var(--txt3)}
+.kcal{text-align:right;flex:0 0 auto}
+.kcal b{font-family:'JetBrains Mono';font-size:14px;font-weight:700;color:var(--txt2)}
+.kcal span{display:block;font-size:9px;color:var(--txt3);font-weight:800;letter-spacing:.8px;margin-top:2px}
+.tagmini{font-size:9.5px;font-weight:800;letter-spacing:.8px;color:var(--txt3);text-transform:uppercase}
+
+/* ══════════════ chips (controls) ══════════════ */
+.chips{display:flex;gap:9px;padding:2px 22px 4px;overflow-x:auto;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;padding:9px 15px;border-radius:100px;font-size:12.5px;font-weight:700;cursor:pointer;
+  background:transparent;border:1px solid var(--hair);color:var(--txt2);transition:.16s;display:flex;align-items:center;gap:6px}
+.chip svg{width:13px;height:13px;fill:currentColor}
+.chip:active{transform:scale(.95)}
+.chip.on{border-color:var(--gold);color:var(--gold);background:var(--wash)}
+
+/* ══════════════ muscle map ══════════════ */
+.maprow{display:flex;gap:18px;align-items:center;padding:4px 22px 6px}
+.mapswitch{display:flex;gap:16px;justify-content:center;margin-bottom:10px}
+.mapswitch button{border:0;background:transparent;font-family:inherit;font-size:10.5px;font-weight:800;letter-spacing:1px;
+  color:var(--txt3);padding:0 0 5px;cursor:pointer;border-bottom:2px solid transparent}
+.mapswitch button.on{color:var(--txt);border-bottom-color:var(--gold)}
+.legend{flex:1;display:grid;gap:11px}
+.lgrow{display:flex;align-items:baseline;gap:9px}
+.lgrow .nm{flex:1;font-size:12.5px;font-weight:700}
+.lgrow .pc{font-family:'JetBrains Mono';font-size:11px;color:var(--txt2);font-weight:500}
+.lgbar{height:3px;border-radius:2px;background:var(--track);overflow:hidden;margin-top:5px}
+.lgbar i{display:block;height:100%;border-radius:2px;background:linear-gradient(90deg,var(--gold),var(--goldDim))}
+
+/* ══════════════ builder editors ══════════════ */
+.bex{position:relative;padding:14px 22px}
+.bex + .bex::before{content:'';position:absolute;left:22px;right:0;top:0;height:1px;background:var(--hairSoft)}
+.bexhead{display:flex;align-items:center;gap:14px;cursor:pointer}
+.grip{width:15px;display:grid;gap:3.5px;flex:0 0 auto;opacity:.32;cursor:grab}
+.grip i{display:block;height:1.8px;border-radius:1px;background:var(--txt)}
+/* steppers: hairline-divided columns, no boxes */
+.steps{display:grid;grid-template-columns:1fr 1fr;margin-top:15px;
+  border-top:1px solid var(--hairSoft);border-bottom:1px solid var(--hairSoft)}
+.stp{padding:12px 0;text-align:center;position:relative}
+.stp:nth-child(even)::before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:1px;background:var(--hairSoft)}
+.stp:nth-child(n+3)::after{content:'';position:absolute;left:0;right:0;top:0;height:1px;background:var(--hairSoft)}
+.stp .lb{font-size:9px;font-weight:800;letter-spacing:1px;color:var(--txt3);margin-bottom:7px}
+.stpctl{display:flex;align-items:center;justify-content:center;gap:9px}
+.stp .val{font-family:'JetBrains Mono';font-size:16px;font-weight:700;min-width:54px;letter-spacing:-.5px}
+.stp .val u{text-decoration:none;font-size:9px;color:var(--txt3);font-family:'Manrope';font-weight:700}
+.pm{width:22px;height:22px;border-radius:50%;border:1px solid var(--hair);background:transparent;color:var(--txt2);
+  font-size:14px;font-weight:700;line-height:1;cursor:pointer;display:grid;place-items:center;font-family:inherit;padding:0}
+.pm:active{background:var(--gold);color:var(--onGold);border-color:var(--gold);transform:scale(.9)}
+.bexactions{display:flex;gap:24px;margin-top:14px}
+.mini{padding:0;border:0;background:transparent;font-size:12.5px;font-weight:800;color:var(--txt2);cursor:pointer;
+  font-family:inherit;display:flex;align-items:center;gap:6px}
+.mini svg{width:14px;height:14px;fill:currentColor}
+.mini.warn{color:var(--red)}
+
+/* ══════════════ AI composer — underline field ══════════════ */
+.composer{padding:6px 22px 0}
+.cinput{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--hairGold)}
+.cinput svg{width:17px;height:17px;fill:var(--gold);flex:0 0 auto}
+.cinput input{flex:1;background:transparent;border:0;outline:0;font-family:inherit;font-size:14px;color:var(--txt);font-weight:600;min-width:0}
+.cinput input::placeholder{color:var(--txt3)}
+.send{width:30px;height:30px;border-radius:50%;border:0;background:linear-gradient(135deg,var(--btnA),var(--btnB));display:grid;place-items:center;cursor:pointer;flex:0 0 auto}
+.send svg{width:14px;height:14px;fill:var(--onGold)}
+.sugg{display:flex;gap:18px;margin-top:13px;overflow-x:auto;scrollbar-width:none}
+.sugg::-webkit-scrollbar{display:none}
+.sugg span{flex:0 0 auto;font-size:12px;font-weight:700;color:var(--gold);cursor:pointer;opacity:.85}
+
+/* ══════════════ ACTIVE ══════════════ */
+.live{display:flex;align-items:center;gap:16px;padding:16px 22px;position:relative}
+.live::after{content:'';position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--hair)}
+.ring{position:relative;width:54px;height:54px;flex:0 0 auto}
+.ring svg{transform:rotate(-90deg)}
+.ring .mid{position:absolute;inset:0;display:grid;place-items:center;font-family:'JetBrains Mono';font-size:12px;font-weight:700}
+.livemeta{flex:1;min-width:0}
+.livemeta .t{font-size:9.5px;font-weight:800;letter-spacing:1.4px;color:var(--gold);display:flex;align-items:center;gap:6px}
+.livemeta .n{font-size:17px;font-weight:800;letter-spacing:-.4px;margin-top:5px}
+.livemeta .s{font-size:12px;color:var(--txt2);font-weight:600;margin-top:3px}
+.clock{text-align:right;flex:0 0 auto}
+.clock b{font-family:'JetBrains Mono';font-size:23px;font-weight:700;letter-spacing:-1.1px;display:block}
+.clock span{font-size:9px;font-weight:800;letter-spacing:1px;color:var(--txt3)}
+.livedot{width:6px;height:6px;border-radius:3px;background:var(--red);animation:pulse 1.6s infinite}
+
+/* rest: full-bleed tinted strip, zero radius */
+.rest{display:flex;align-items:center;gap:14px;padding:13px 22px;background:linear-gradient(90deg,rgba(125,211,252,.12),transparent 85%);position:relative}
+[data-theme="light"] .rest{background:linear-gradient(90deg,rgba(14,116,144,.10),transparent 85%)}
+.rest::after{content:'';position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--hairSoft)}
+.rest .lbl{flex:1}
+.rest .lbl .a{font-size:9.5px;font-weight:800;letter-spacing:1.3px;color:var(--cyan)}
+.rest .lbl .b{font-family:'JetBrains Mono';font-size:21px;font-weight:700;letter-spacing:-.9px;margin-top:3px}
+.rest button{border:0;font-family:inherit;font-size:12px;font-weight:800;padding:8px 4px;background:transparent;color:var(--cyan);cursor:pointer}
+
+/* exercise block: full-bleed, header wash when active */
+.exhead{display:flex;align-items:center;gap:14px;padding:16px 22px 13px;position:relative}
+.exhead.now{background:linear-gradient(90deg,var(--wash),transparent 80%)}
+.exhead .n{flex:1;min-width:0}
+.exhead .n b{font-size:16px;font-weight:800;letter-spacing:-.3px;display:block}
+.exhead .n span{font-size:11.5px;color:var(--txt2);font-weight:600;display:block;margin-top:3px}
+.pillstat{font-size:9.5px;font-weight:800;letter-spacing:1px;flex:0 0 auto}
+.pillstat.now{color:var(--gold)}
+.pillstat.done{color:var(--green)}
+.pillstat.next{color:var(--txt3)}
+.thead{display:flex;padding:0 22px 8px}
+.thead div{font-size:9px;font-weight:800;letter-spacing:1.2px;color:var(--txt3)}
+.setrow{display:flex;align-items:center;padding:11px 22px;position:relative;cursor:pointer;transition:background .16s}
+.setrow::before{content:'';position:absolute;left:22px;right:0;top:0;height:1px;background:var(--hairSoft)}
+.setrow.on{background:linear-gradient(90deg,rgba(163,230,53,.10),transparent 80%)}
+[data-theme="light"] .setrow.on{background:linear-gradient(90deg,rgba(94,139,0,.11),transparent 80%)}
+.c1{width:30px;font-family:'JetBrains Mono';font-size:13px;color:var(--txt3);font-weight:700}
+.c2,.c3{flex:1;text-align:center}
+.cell{font-family:'JetBrains Mono';font-size:16px;font-weight:700;letter-spacing:-.4px}
+.setrow.on .cell{color:var(--green)}
+.cell u{text-decoration:none;font-size:9.5px;color:var(--txt3);font-family:'Manrope';font-weight:700;margin-left:2px}
+.prev{display:block;font-size:9.5px;color:var(--txt3);margin-top:3px;font-family:'JetBrains Mono';opacity:.75}
+.c4{width:34px;display:flex;justify-content:flex-end}
+.tick{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--hair);display:grid;place-items:center;transition:.18s}
+.setrow.on .tick{background:var(--green);border-color:var(--green)}
+.tick svg{width:14px;height:14px;fill:var(--bg);opacity:0;transform:scale(.5);transition:.18s}
+.setrow.on .tick svg{opacity:1;transform:scale(1)}
+[data-theme="light"] .setrow.on .tick svg{fill:#fff}
+.addset{display:flex;align-items:center;gap:7px;padding:12px 22px;font-size:12.5px;font-weight:800;color:var(--gold);cursor:pointer;position:relative}
+.addset::before{content:'';position:absolute;left:22px;right:0;top:0;height:1px;background:var(--hairSoft)}
+.addset svg{width:13px;height:13px;fill:var(--gold)}
+
+/* ══════════════ dock ══════════════ */
+.dock{position:absolute;left:0;right:0;bottom:0;z-index:8;padding:16px 22px 26px;
+  background:linear-gradient(to top,var(--bg) 62%,transparent)}
+.dock.solid{background:var(--bg);padding-top:0}
+.dock.solid::before{content:'';position:absolute;left:0;right:0;top:-34px;height:34px;
+  background:linear-gradient(to top,var(--bg),transparent)}
+.dockrow{display:flex;gap:10px;align-items:center}
+.dockhint{text-align:center;font-size:9.5px;font-weight:700;letter-spacing:.7px;color:var(--txt3);margin-top:10px}
+
+/* ══════════════ HISTORY ══════════════ */
+.bars{display:flex;align-items:flex-end;gap:9px;height:70px;padding:0 22px}
+.barcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:7px;height:100%;justify-content:flex-end}
+.barcol i{width:100%;border-radius:3px;background:linear-gradient(180deg,var(--gold),var(--goldDim));display:block}
+.barcol.off i{background:var(--track)}
+.barcol u{text-decoration:none;font-size:9.5px;font-weight:800;color:var(--txt3)}
+.wcMeta{display:flex;justify-content:space-between;align-items:baseline;padding:0 22px 12px}
+.wcMeta b{font-family:'JetBrains Mono';font-size:19px;font-weight:700;letter-spacing:-.7px}
+.wcMeta b span{font-size:11px;color:var(--txt2);font-family:'Manrope';font-weight:600}
+.wcMeta em{font-style:normal;font-size:11.5px;font-weight:800;color:var(--green)}
+
+/* timeline: rail + full-bleed entries, hairline separated */
+.tlmonth{font-size:10.5px;font-weight:800;letter-spacing:1.5px;color:var(--txt3);padding:24px 22px 10px}
+.sess{display:flex;gap:15px;padding:16px 22px;position:relative;cursor:pointer}
+.sess::before{content:'';position:absolute;left:22px;right:0;top:0;height:1px;background:var(--hairSoft)}
+.tlline{position:absolute;left:27px;top:0;bottom:-1px;width:1.5px;background:var(--hair);z-index:0;display:block}
+.sess.first .tlline{top:22px}
+.sess.last .tlline{bottom:auto;height:22px}
+.node{width:11px;flex:0 0 auto;display:flex;justify-content:center;padding-top:6px;position:relative;z-index:1}
+.node i{width:9px;height:9px;border-radius:5px;background:var(--gold);box-shadow:0 0 0 4px var(--bg)}
+.node i.green{background:var(--green)}
+.sbody{flex:1;min-width:0}
+.shead{display:flex;align-items:flex-start;gap:10px}
+.shead .n b{font-size:15.5px;font-weight:800;letter-spacing:-.25px;display:flex;align-items:center;flex-wrap:wrap}
+.shead .n span{font-size:11.5px;color:var(--txt2);font-weight:600;display:flex;gap:6px;align-items:center;margin-top:4px}
+.shead .n span svg{width:11px;height:11px;fill:var(--txt3)}
+.dur{margin-left:auto;text-align:right;flex:0 0 auto}
+.dur b{font-family:'JetBrains Mono';font-size:16px;font-weight:700;color:var(--gold)}
+.dur span{font-size:9px;color:var(--txt3);font-weight:800;letter-spacing:.8px;display:block;margin-top:2px}
+.sstats{display:flex;margin:13px 0 11px;border-top:1px solid var(--hairSoft);border-bottom:1px solid var(--hairSoft)}
+.sstat{flex:1;padding:9px 0;position:relative}
+.sstat + .sstat{padding-left:12px}
+.sstat + .sstat::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:1px;background:var(--hairSoft)}
+.sstat b{font-family:'JetBrains Mono';font-size:13.5px;font-weight:700;display:block;letter-spacing:-.4px}
+.sstat span{font-size:8.5px;font-weight:800;letter-spacing:.9px;color:var(--txt3);display:block;margin-top:3px}
+.sex{display:flex;justify-content:space-between;align-items:center;padding:5px 0;font-size:12.5px;font-weight:600}
+.sex .l{color:var(--txt);display:flex;align-items:center}
+.sex .l em{font-style:normal;color:var(--txt3);font-family:'JetBrains Mono';font-size:11px;margin-right:8px}
+.sex .r{font-family:'JetBrains Mono';font-size:11.5px;color:var(--txt2)}
+.prbadge{display:inline-block;flex:0 0 auto;font-size:8.5px;font-weight:800;letter-spacing:.8px;line-height:1.35;
+  color:var(--onGold);background:linear-gradient(135deg,var(--btnA),var(--btnB));padding:2px 6px;border-radius:4px;margin-left:8px}
+
+/* ══════════════ filter panel (flattened) ══════════════ */
+.filtpanel{animation:fadein .18s ease;overflow:hidden}
+@keyframes fadein{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+.filtrow{display:flex;align-items:center;gap:12px;padding:13px 22px;cursor:pointer;position:relative;
+  font-size:14.5px;font-weight:700;color:var(--txt);transition:background .15s}
+.filtrow:active{background:var(--wash)}
+.filtrow + .filtrow::before{content:'';position:absolute;left:22px;right:0;top:0;height:1px;background:var(--hairSoft)}
+.filtrow.on{color:var(--gold)}
+.filtrow .ct{margin-left:auto;font-family:'JetBrains Mono';font-size:11.5px;color:var(--txt3);font-weight:500}
+.filtrow .tk{width:17px;flex:0 0 auto}
+.filtrow .tk svg{width:17px;height:17px;fill:var(--gold)}
+.filtcap{display:flex;align-items:center;gap:3px;color:var(--gold);font-size:13px;font-weight:800;cursor:pointer}
+.filtcap svg{width:15px;height:15px;fill:var(--gold)}
+
+/* ══════════════ empty state (flattened) ══════════════ */
+.empty{padding:66px 36px 40px;text-align:center}
+.empty .ic{width:60px;height:60px;margin:0 auto 20px;display:grid;place-items:center;opacity:.3}
+.empty .ic svg{width:52px;height:52px;fill:var(--txt3)}
+.empty b{font-size:17.5px;font-weight:800;display:block;margin-bottom:9px;letter-spacing:-.3px}
+.empty p{font-size:13.5px;color:var(--txt2);line-height:1.65;font-weight:500;max-width:252px;margin:0 auto}
+.empty .act{margin-top:24px;display:flex;justify-content:center}
+
+/* ══════════════ hold-to-confirm ══════════════ */
+.holdbtn{position:relative;overflow:hidden;flex:1}
+.holdfill{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(255,255,255,.42);
+  border-radius:0;transition:width 0s linear;pointer-events:none}
+[data-theme="light"] .holdfill{background:rgba(255,255,255,.6)}
+.holdbtn.holding .holdfill{width:100%;transition:width 1s linear}
+.holdlbl{position:relative;z-index:1;display:flex;align-items:center;gap:8px}
+.holdbtn.armed{filter:brightness(1.08)}
+
+/* ══════════════ saved confirmation ══════════════ */
+.savedbar{display:flex;align-items:center;gap:10px;padding:13px 22px;font-size:13px;font-weight:700;color:var(--green);
+  background:linear-gradient(90deg,rgba(163,230,53,.15),transparent 82%);animation:fadein .25s ease}
+[data-theme="light"] .savedbar{background:linear-gradient(90deg,rgba(94,139,0,.14),transparent 82%)}
+.savedbar svg{width:16px;height:16px;fill:var(--green);flex:0 0 auto}
+
+.flink{text-align:center;padding:24px 0 6px;font-size:13px;font-weight:800;color:var(--gold);cursor:pointer}
+.homebar{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:var(--txt);opacity:.28;z-index:9}
+
+.notesheet{max-width:1560px;margin:34px auto 0;padding:0 28px}
+.notes{border-radius:22px;padding:24px 26px;background:rgba(128,128,128,.10);border:1px solid rgba(128,128,128,.2)}
+.notes h3{font-size:14px;font-weight:800;margin-bottom:14px}
+.notes ul{list-style:none;display:grid;gap:9px}
+.notes li{font-size:13px;line-height:1.6;opacity:.75;padding-left:18px;position:relative}
+.notes li::before{content:'▸';position:absolute;left:0;color:#F5C400;font-weight:800}
+.notes li b{opacity:1;font-weight:800}
+.notes code{font-family:'JetBrains Mono';font-size:12px}
+</style>
+</head>
+<body data-page="dark">
+
+<div class="pagehead">
+  <div>
+    <div class="kicker">FitAI X · Workout Hub — Card-Free v3</div>
+    <h1>Workout Hub — Zero Cards</h1>
+    <p>Every container removed. No rounded surfaces, no borders, no glass boxes, no nesting. Content sits directly on the mesh gradient and hierarchy is carried purely by type scale, spacing, hairline rules and the gold accent — the way Apple's own Fitness, Health and Settings screens are built.</p>
+  </div>
+  <div class="controls">
+    <div class="tgl" id="themeTgl">
+      <button data-t="dark" class="on">Dark</button>
+      <button data-t="light">Light</button>
+    </div>
+  </div>
+</div>
+
+<div class="rail" id="rail"></div>
+
+<div class="notesheet">
+  <div class="notes">
+    <h3>What "no cards" changed</h3>
+    <ul>
+      <li><b>Removed entirely</b> — <code>GlassCard</code>, grouped list containers, tinted tiles, bordered stat boxes, the segmented pill track, circular nav button chrome and every <code>borderRadius + borderWidth + backgroundColor</code> surface.</li>
+      <li><b>Tabs</b> — sliding gold underline on a hairline baseline instead of a pill inside a bordered track.</li>
+      <li><b>Nav buttons</b> — bare 22px glyphs, no 40px circles.</li>
+      <li><b>Stats</b> — columns divided by vertical hairlines, bounded by a top/bottom rule; no tiles.</li>
+      <li><b>AI coach</b> — a 2.5px gradient rail plus type. No fill, no border, no radius.</li>
+      <li><b>Builder steppers</b> — 2×2 hairline-divided grid; only the ± hit targets keep a shape, because they're controls.</li>
+      <li><b>Active</b> — state shown by a full-bleed gradient wash that fades to transparent at 80%, so there's no visible edge; completed sets tint the whole row width.</li>
+      <li><b>History</b> — continuous timeline rail through full-bleed entries separated by hairlines; no session cards.</li>
+      <li><b>Kept as shapes</b> — buttons, chips, the ± steppers and the tick circle. Those are interactive controls, not containers, and flattening them would break affordance.</li>
+    </ul>
+
+    <h3 style="margin-top:26px">Review round 2 — three asks resolved</h3>
+    <ul>
+      <li><b>1 · History filter is real.</b> Tap <em>Filter</em> on the History tab. Four flattened rows (All time / Past week / Past month / PR sessions only) with live counts and a gold check on the active one. Selection actually narrows the dataset — PR shows 2 sessions, Past week shows 3 — and the summary columns + range label recompute. A fifth row toggles the empty state for preview.</li>
+      <li><b>2 · Hold-to-end now matches its copy.</b> <em>Finish Workout</em> is a genuine 1-second press-and-hold: a white progress sweep fills the button, the label switches to “Keep holding…”, and the hint reads “RELEASE TO CANCEL”. Releasing early aborts with no state change — an accidental tap can no longer end a live session. Completing the hold swaps the dock to a green “Session saved” confirmation plus a <em>View in History</em> action, and the header sub-status becomes “Session complete · saved”.</li>
+      <li><b>3 · Empty state built.</b> Flattened treatment — muted 52px dumbbell glyph at 30% opacity, title, two-line explainer, single gold CTA. Two distinct copies: true first-run (“No sessions yet”) vs. a filter returning nothing (“Nothing in this range”), which offers to widen the range instead of starting a workout.</li>
+    </ul>
+
+    <h3 style="margin-top:26px">Consistency decision — propagate to Dashboard &amp; Profile</h3>
+    <ul>
+      <li><b>Recommendation: propagate both. 👍</b> The flattened nav glyphs and underline tabs should replace the circular <code>glassInset</code> buttons and pill nav app-wide, not stay Workout-only. Three screens sharing a header treatment while a fourth diverges reads as an unfinished migration, not an intentional accent — and the header is the most-seen element in the app.</li>
+      <li><b>Sequencing</b> — ship Workout Hub first as the reference implementation, then port the header (glyph buttons + large title + underline tabs) to Dashboard and Profile as a follow-up. Do not ship all three simultaneously; you want one screen proving the pattern in real use first.</li>
+      <li><b>What does NOT propagate</b> — Dashboard's bento grid is genuinely card-appropriate (independent, tappable, reorderable data tiles), and Profile's <code>TiltCard</code> hero earns its surface. Flatten the <em>chrome</em> (headers, tabs, buttons), keep those two content patterns.</li>
+      <li><b>Cost</b> — roughly one file each. Header is self-contained in both; no data-layer changes.</li>
+    </ul>
+
+    <h3 style="margin-top:26px">Handoff notes for <code>WorkoutScreen.tsx</code></h3>
+    <ul>
+      <li><b>Do not port the SVG helpers in this file.</b> <code>ringSVG</code>, <code>sparkline</code>, <code>bodyMap</code> and the inline <code>ICON_PATHS</code> here exist only because the browser has no access to your RN components. Map back to the real primitives: rings → <code>ActivityRings</code>, bars → <code>BarChart</code>, sparklines → <code>SplineChart</code>, icons → the existing shared <code>Icon</code>/<code>ICON_PATHS</code>. Treating this HTML as literal code would create a fourth divergent chart implementation.</li>
+      <li><b><code>TiltCard</code> extraction is now moot for this screen</b> — almost nothing here uses a blurred panel. Skip it. <b><code>GradientText</code> is still worth sharing</b> — the hero's gradient “Strength” and the AI Coach accent both need it.</li>
+      <li><b>Hold gesture</b> → <code>Pressable</code> with <code>onPressIn</code>/<code>onPressOut</code> driving a <code>useSharedValue</code> width via <code>withTiming(1, {duration:1000})</code>, cancelled on <code>onPressOut</code>; fire <code>completeSession</code> in a <code>runOnJS</code> callback. Add <code>Haptics.notificationAsync(Success)</code> on completion.</li>
+      <li><b>Filter state</b> is local UI state — filter <code>fetchWorkoutHistory</code>'s result client-side, or pass a range param if the endpoint supports it.</li>
+      <li><b>Hairlines</b> → <code>StyleSheet.hairlineWidth</code>, never <code>1</code>, or they render heavy on 3x devices.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+/* ═══════════ ICONS ═══════════ */
+const I = {
+  chevL:'M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z',
+  chevR:'M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z',
+  down:'M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z',
+  up:'M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6 1.41 1.41z',
+  spark:'M19 4h-2V2h-2v2h-2v2h2v2h2V6h2V4zM10.83 8.35l-2.33-6.14c-.16-.41-.75-.41-.91 0L5.26 8.35 1.55 9.77c-.45.17-.45.8 0 .97l3.71 1.42 2.33 6.14c.16.41.75.41.91 0l2.33-6.14 3.71-1.42c.45-.17.45-.8 0-.97l-3.71-1.42zM19 14h-2v-2h-2v2h-2v2h2v2h2v-2h2v-2z',
+  play:'M8 5v14l11-7z',
+  check:'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
+  timer:'M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61l1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42A8.962 8.962 0 0012 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z',
+  bolt:'M7 2v11h3v9l7-12h-4l4-8z',
+  trend:'M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z',
+  heart:'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z',
+  bell:'M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5S10.5 3.17 10.5 4v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z',
+  cal:'M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z',
+  plus:'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z',
+  swap:'M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z',
+  trash:'M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z',
+  send:'M2.01 21L23 12 2.01 3 2 10l15 2-15 2z',
+  clock:'M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z',
+  stop:'M6 6h12v12H6z',
+  filter:'M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z',
+  dumb:'M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 5.57 4.14 4.14 2.71 2.71 4.14l1.43 1.43L2 7.71l1.43 1.43L2 10.57 3.43 12 7 8.43 15.57 17 12 20.57 13.43 22l1.43-1.43L16.29 22l2.14-2.14 1.43 1.43 1.43-1.43-1.43-1.43L22 16.29z',
+  more:'M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z'
+};
+const svg = (p, cls='') => `<svg viewBox="0 0 24 24" class="${cls}"><path d="${I[p]}"/></svg>`;
+
+/* ═══════════ DATA ═══════════ */
+const BASE_EX = [
+  {id:'e1', name:'Barbell Bench Press',   muscle:'Chest',     sets:4, reps:8,  weight:80, rest:90, prev:'80×8'},
+  {id:'e2', name:'Incline Dumbbell Press',muscle:'Chest',     sets:3, reps:10, weight:30, rest:75, prev:'28×10'},
+  {id:'e3', name:'Overhead Press',        muscle:'Shoulders', sets:3, reps:10, weight:45, rest:90, prev:'45×9'},
+  {id:'e4', name:'Lateral Raises',        muscle:'Shoulders', sets:4, reps:15, weight:12, rest:45, prev:'12×15'},
+  {id:'e5', name:'Cable Triceps Pushdown',muscle:'Triceps',   sets:3, reps:12, weight:25, rest:60, prev:'22×12'}
+];
+const ACTIVATION = [
+  {m:'Chest', v:.92}, {m:'Front Delts', v:.74}, {m:'Triceps', v:.61}, {m:'Side Delts', v:.48}, {m:'Core', v:.22}
+];
+const HISTORY = [
+  {month:'JULY 2026', items:[
+    {id:'h1', iso:'2026-07-27', title:'Push Strength · A', date:'Mon, 27 Jul', dur:52, vol:'8.4', sets:16, kcal:418, pr:true,
+      ex:[['Barbell Bench Press','4×8','82 kg',true],['Overhead Press','3×10','45 kg',false],['Lateral Raises','4×15','12 kg',false]]},
+    {id:'h2', iso:'2026-07-25', title:'Pull Hypertrophy', date:'Sat, 25 Jul', dur:47, vol:'7.1', sets:15, kcal:376, pr:false,
+      ex:[['Weighted Pull-Up','4×6','+15 kg',false],['Barbell Row','4×8','70 kg',false],['Face Pull','3×15','20 kg',false]]},
+    {id:'h3', iso:'2026-07-23', title:'Leg Power', date:'Thu, 23 Jul', dur:61, vol:'12.8', sets:18, kcal:522, pr:true,
+      ex:[['Back Squat','5×5','120 kg',true],['Romanian Deadlift','4×8','90 kg',false],['Leg Press','3×12','180 kg',false]]}
+  ]},
+  {month:'JUNE 2026', items:[
+    {id:'h4', iso:'2026-06-29', title:'Push Strength · B', date:'Sun, 29 Jun', dur:44, vol:'6.9', sets:14, kcal:352, pr:false,
+      ex:[['Incline Bench','4×8','65 kg',false],['Dips','3×12','BW',false],['Cable Fly','3×15','18 kg',false]]}
+  ]}
+];
+const TABS = [['overview','Overview'],['builder','Builder'],['active','Active'],['history','History']];
+
+/* ═══════════ HELPERS ═══════════ */
+function ringSVG(pct, size=54, sw=3.5, color='var(--gold)'){
+  const r=(size-sw)/2, c=2*Math.PI*r, off=c-(pct/100)*c;
+  return `<svg width="${size}" height="${size}">
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--track)" stroke-width="${sw}"/>
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="${color}" stroke-width="${sw}"
+      stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}"/></svg>`;
+}
+function sparkline(points, color){
+  const w=70,h=22,max=Math.max(...points),min=Math.min(...points);
+  const d=points.map((p,i)=>`${i===0?'M':'L'}${(i/(points.length-1)*w).toFixed(1)},${(h-((p-min)/((max-min)||1))*(h-4)-2).toFixed(1)}`).join(' ');
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <path d="${d}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".8"/></svg>`;
+}
+function bodyMap(view, targets){
+  const on=k=>targets.includes(k);
+  const f=k=>on(k)?'var(--gold)':'none';
+  const s=k=>on(k)?'var(--gold)':'var(--txt3)';
+  const o=k=>on(k)?'.26':'1';
+  const w=k=>on(k)?1.7:1;
+  if(view==='front'){
+    return `<svg width="112" height="176" viewBox="0 0 140 200">
+      <ellipse cx="70" cy="18" rx="15" ry="17" fill="none" stroke="var(--txt3)" stroke-width="1"/>
+      <rect x="63" y="34" width="14" height="10" fill="none" stroke="var(--txt3)" stroke-width=".9"/>
+      <path d="M30,58 Q50,47 70,47 Q90,47 110,58" fill="${f('Side Delts')}" fill-opacity="${o('Side Delts')}" stroke="${s('Side Delts')}" stroke-width="${w('Side Delts')}"/>
+      <path d="M38,58 L34,100 Q70,110 106,100 L102,58 Z" fill="${f('Chest')}" fill-opacity="${o('Chest')}" stroke="${s('Chest')}" stroke-width="${w('Chest')}"/>
+      <path d="M40,104 L38,124 Q70,132 102,124 L100,104 Z" fill="${f('Core')}" fill-opacity="${o('Core')}" stroke="${s('Core')}" stroke-width="${w('Core')}"/>
+      <path d="M38,58 L20,94 L16,126" fill="none" stroke="${s('Front Delts')}" stroke-width="${w('Front Delts')}" stroke-linecap="round"/>
+      <path d="M102,58 L120,94 L124,126" fill="none" stroke="${s('Front Delts')}" stroke-width="${w('Front Delts')}" stroke-linecap="round"/>
+      <path d="M55,130 L50,164 L48,192" fill="none" stroke="var(--txt3)" stroke-width="1" stroke-linecap="round"/>
+      <path d="M85,130 L90,164 L92,192" fill="none" stroke="var(--txt3)" stroke-width="1" stroke-linecap="round"/>
+      <circle cx="50" cy="164" r="3.2" fill="none" stroke="var(--txt3)" stroke-width=".9"/>
+      <circle cx="90" cy="164" r="3.2" fill="none" stroke="var(--txt3)" stroke-width=".9"/></svg>`;
+  }
+  return `<svg width="112" height="176" viewBox="0 0 140 200">
+    <ellipse cx="70" cy="18" rx="15" ry="17" fill="none" stroke="var(--txt3)" stroke-width="1"/>
+    <path d="M30,58 Q50,47 70,47 Q90,47 110,58" fill="${f('Side Delts')}" fill-opacity="${o('Side Delts')}" stroke="${s('Side Delts')}" stroke-width="${w('Side Delts')}"/>
+    <path d="M38,58 L36,102 Q70,112 104,102 L102,58 Z" fill="none" stroke="var(--txt3)" stroke-width="1"/>
+    <path d="M40,58 L24,92 L18,124" fill="none" stroke="${s('Triceps')}" stroke-width="${w('Triceps')}" stroke-linecap="round"/>
+    <path d="M100,58 L116,92 L122,124" fill="none" stroke="${s('Triceps')}" stroke-width="${w('Triceps')}" stroke-linecap="round"/>
+    <path d="M42,116 L38,132 Q70,140 102,132 L98,116 Z" fill="none" stroke="var(--txt3)" stroke-width="1"/>
+    <path d="M55,138 L50,168 L48,192" fill="none" stroke="var(--txt3)" stroke-width="1" stroke-linecap="round"/>
+    <path d="M85,138 L90,168 L92,192" fill="none" stroke="var(--txt3)" stroke-width="1" stroke-linecap="round"/></svg>`;
+}
+
+/* ═══════════ SHELL ═══════════ */
+function shell(st, inner, dock=''){
+  const idx = TABS.findIndex(t=>t[0]===st.tab);
+  return `
+  <div class="mesh"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i></div>
+  <div class="grain"></div>
+  <div class="notch"></div>
+  <div class="statusbar"><span class="mono">9:41</span>
+    <span class="right">
+      <svg width="17" height="11" viewBox="0 0 26 13" style="opacity:.85">
+        <rect x=".6" y=".6" width="21" height="11.8" rx="3.4" fill="none" stroke="currentColor" stroke-opacity=".38"/>
+        <rect x="2.2" y="2.2" width="15" height="8.6" rx="2" fill="currentColor"/>
+        <path d="M23.4 4.4v4.2c1-.3 1.6-1.1 1.6-2.1s-.6-1.8-1.6-2.1z" fill="currentColor" fill-opacity=".45"/>
+      </svg>
+      <span class="mono" style="font-size:11.5px">87%</span></span></div>
+
+  <div class="navbar"><div class="navrow">
+    <div class="nbtn" data-a="none">${svg('chevL')}</div>
+    <div class="nbtn badge" data-a="none">${svg('bell')}</div>
+  </div></div>
+
+  <div class="largettl">
+    <h1>Workout</h1>
+    <div class="sub"><span class="dotpulse" style="${st.tab==='active'&&st.finished?'animation:none':''}"></span> ${st.tab==='active'?(st.finished?'Session complete · saved':'Session running · 18:24'):'Push · Week 6 · Day 3'}</div>
+  </div>
+
+  <div class="seg" data-idx="${idx}">
+    ${TABS.map(([k,l])=>`<button data-a="tab" data-v="${k}" class="${k===st.tab?'on':''}">${l}</button>`).join('')}
+    <span class="ink"></span>
+  </div>
+
+  <div class="body">${inner}</div>
+  ${dock}
+  <div class="homebar"></div>`;
+}
+
+/* ═══════════ OVERVIEW ═══════════ */
+function overview(st){
+  const ex = st.ex, totalSets = ex.reduce((a,b)=>a+b.sets,0);
+  return `
+  <div class="hero">
+    <div class="eyebrow">${svg('spark')} TODAY'S OPTIMISED PLAN</div>
+    <h2 class="herottl">Push<br><em>Strength</em></h2>
+    <div class="herosub">Chest · Shoulders · Triceps &nbsp;•&nbsp; Progressive overload block</div>
+  </div>
+
+  <div class="cols bordered" style="margin-top:20px">
+    <div class="col"><div class="v">45<span>min</span></div><div class="k">Duration</div></div>
+    <div class="col"><div class="v">${ex.length}<span>/ ${totalSets} sets</span></div><div class="k">Exercises</div></div>
+    <div class="col"><div class="v gold">420<span>kcal</span></div><div class="k">Est. burn</div></div>
+  </div>
+
+  <div class="cta">
+    <button class="btn btn-fill" data-a="tab" data-v="active">${svg('play')} Start Session</button>
+    <button class="btn btn-text" data-a="tab" data-v="builder">Customise</button>
+  </div>
+
+  <div class="seclbl">Readiness</div>
+  <div class="cols">
+    <div class="col"><div class="v green">92<span>%</span></div><div class="k">Recovery</div>${sparkline([60,68,64,75,80,86,92],'var(--green)')}</div>
+    <div class="col"><div class="v cyan">7:45<span>hrs</span></div><div class="k">Sleep</div>${sparkline([6.2,7.1,6.4,7.8,7.2,7.6,7.75],'var(--cyan)')}</div>
+    <div class="col"><div class="v gold">High</div><div class="k">Readiness</div>${sparkline([40,52,48,66,72,70,84],'var(--gold)')}</div>
+  </div>
+
+  <div class="rule" style="margin-top:18px"></div>
+  <div class="ai">
+    <div class="aihead">${svg('spark')}<div class="n">AI COACH</div>
+      <div class="more" data-a="ai">${st.ai?'Less':'Details'} ${svg(st.ai?'up':'down')}</div></div>
+    <div class="aitext">Chest is <b>fully recovered</b> (92%). Pushing volume raised <b>+8%</b> and bench load <b>+2.5 kg</b> versus your last logged session.</div>
+    <div class="aiconf"><div class="bar"><i style="width:88%"></i></div><span>88% CONFIDENCE</span></div>
+    ${st.ai?`<div class="aidetail">
+      <div class="d"><div class="t">Progressive Overload</div><div class="s">Bench Press 80 → 82.5 kg. You cleared 4×8 at RPE 7.5 last Monday.</div></div>
+      <div class="d"><div class="t">Recovery Adjustment</div><div class="s">Lateral raise volume trimmed 1 set — side delts logged 3 sessions in 7 days.</div></div>
+      <div class="d"><div class="t">Injury Memory</div><div class="s">Left shoulder flagged Apr '26 — overhead press capped at 45 kg, tempo 3-1-1.</div></div>
+    </div>`:''}
+  </div>
+  <div class="rule"></div>
+
+  <div class="seclbl">Today's Exercises <a data-a="tab" data-v="builder">Edit</a></div>
+  ${ex.map((e,i)=>`
+    <div class="r ind">
+      <div class="num">${i+1}</div>
+      <div class="grow">
+        <div class="exname">${e.name}</div>
+        <div class="exmeta">${e.sets}×${e.reps} <em>·</em> ${e.weight} kg <em>·</em> rest ${e.rest}s</div>
+      </div>
+      <div class="kcal"><b>~${Math.round(e.sets*e.reps*0.8)}</b><span>KCAL</span></div>
+      ${svg('chevR','chev')}
+    </div>`).join('')}
+
+  <div class="seclbl">Plan</div>
+  <div class="r"><div class="grow"><div class="ttl">Warm-up protocol</div><div class="sub">Band pull-aparts · Scap push-ups · 6 min</div></div>${svg('chevR','chev')}</div>
+  <div class="r"><div class="grow"><div class="ttl">Superset pairing</div><div class="sub">Lateral raise ⇄ Triceps pushdown</div></div><span class="tagmini" style="color:var(--gold)">ON</span></div>
+  <div class="r" data-a="tab" data-v="history"><div class="grow"><div class="ttl">Compare to last Push day</div><div class="sub">27 Jul · 52 min · 8.4 t volume</div></div>${svg('chevR','chev')}</div>
+
+  <div class="flink" data-a="tab" data-v="history">View all past sessions</div>
+  <div style="height:16px"></div>`;
+}
+
+/* ═══════════ BUILDER ═══════════ */
+function builder(st){
+  const targets = ACTIVATION.filter(a=>a.v>.4).map(a=>a.m);
+  const chips = ['Home','20 min','Injury friendly','Bands only','No overhead','Superset'];
+  return `
+  <div class="seclbl">Muscle Activation</div>
+  <div class="maprow">
+    <div style="flex:0 0 auto;text-align:center">
+      <div class="mapswitch">
+        <button class="${st.view==='front'?'on':''}" data-a="view" data-v="front">FRONT</button>
+        <button class="${st.view==='back'?'on':''}" data-a="view" data-v="back">BACK</button>
+      </div>
+      ${bodyMap(st.view, targets)}
+    </div>
+    <div class="legend">
+      ${ACTIVATION.map(a=>`<div>
+        <div class="lgrow"><span class="nm">${a.m}</span><span class="pc">${Math.round(a.v*100)}%</span></div>
+        <div class="lgbar"><i style="width:${a.v*100}%"></i></div></div>`).join('')}
+    </div>
+  </div>
+
+  <div class="seclbl">Constraints</div>
+  <div class="chips">
+    ${chips.map(c=>`<div class="chip ${st.chips.includes(c)?'on':''}" data-a="chip" data-v="${c}">${st.chips.includes(c)?svg('check'):''}${c}</div>`).join('')}
+  </div>
+
+  <div class="seclbl">Ask Coach</div>
+  <div class="composer">
+    <div class="cinput">${svg('spark')}
+      <input placeholder="“swap bench for a dumbbell variant”"/>
+      <button class="send">${svg('send')}</button>
+    </div>
+    <div class="sugg"><span>Make it 30 min</span><span>Shoulder-safe swap</span><span>Add finisher</span><span>More intensity</span></div>
+  </div>
+
+  <div class="seclbl">Exercises · ${st.ex.length} <a data-a="none">Add</a></div>
+  ${st.ex.map(e=>`
+    <div class="bex">
+      <div class="bexhead" data-a="expand" data-v="${e.id}">
+        <div class="grip"><i></i><i></i><i></i></div>
+        <div style="flex:1;min-width:0">
+          <div class="exname">${e.name}</div>
+          <div class="exmeta"><em>${e.muscle}</em> · ${e.sets}×${e.reps} · ${e.weight} kg</div>
+        </div>
+        ${svg(st.open===e.id?'up':'down','chev')}
+      </div>
+      ${st.open===e.id?`
+      <div class="steps">
+        ${[['SETS','sets',e.sets,''],['REPS','reps',e.reps,''],['WEIGHT','weight',e.weight,'kg'],['REST','rest',e.rest,'s']].map(([lb,key,val,u])=>`
+          <div class="stp">
+            <div class="lb">${lb}</div>
+            <div class="stpctl">
+              <button class="pm" data-a="step" data-v="${e.id}:${key}:-1">−</button>
+              <div class="val">${val}${u?`<u>${u}</u>`:''}</div>
+              <button class="pm" data-a="step" data-v="${e.id}:${key}:1">+</button>
+            </div>
+          </div>`).join('')}
+      </div>
+      <div class="bexactions">
+        <button class="mini">${svg('swap')} Swap</button>
+        <button class="mini">${svg('play')} Form video</button>
+        <button class="mini warn">${svg('trash')} Remove</button>
+      </div>`:''}
+    </div>`).join('')}
+
+  <div class="seclbl">Session Estimate</div>
+  <div class="cols bordered">
+    <div class="col"><div class="v">${st.ex.reduce((a,b)=>a+b.sets,0)}</div><div class="k">Total sets</div></div>
+    <div class="col"><div class="v">${(st.ex.reduce((a,b)=>a+b.sets*b.reps*b.weight,0)/1000).toFixed(1)}<span>t</span></div><div class="k">Volume</div></div>
+    <div class="col"><div class="v gold">${Math.round(st.ex.reduce((a,b)=>a+b.sets*(b.rest+35),0)/60)}<span>min</span></div><div class="k">Duration</div></div>
+  </div>
+  <div style="height:150px"></div>`;
+}
+function builderDock(){
+  return `<div class="dock"><div class="dockrow">
+    <button class="btn btn-text" style="flex:0 0 auto;color:var(--txt2)">Discard</button>
+    <button class="btn btn-fill">${svg('check')} Save &amp; Lock Workout</button>
+  </div><div class="dockhint">CHANGES SYNC TO YOUR AI COACH INSTANTLY</div></div>`;
+}
+
+/* ═══════════ ACTIVE ═══════════ */
+function active(st){
+  const ex = st.ex.slice(0,4);
+  let total=0, done=0;
+  ex.forEach((e,i)=>{ total+=e.sets; for(let s=0;s<e.sets;s++) if(st.done[`${i}-${s}`]) done++; });
+  const pct = total?Math.round(done/total*100):0;
+  const curIdx = ex.findIndex((e,i)=>{ for(let s=0;s<e.sets;s++) if(!st.done[`${i}-${s}`]) return true; return false; });
+
+  return `
+  <div class="live">
+    <div class="ring">${ringSVG(pct)}<div class="mid">${pct}%</div></div>
+    <div class="livemeta">
+      <div class="t"><span class="livedot"></span> LIVE SESSION</div>
+      <div class="n">Push Strength</div>
+      <div class="s">${done} of ${total} sets · ${(done*0.42).toFixed(1)} t moved</div>
+    </div>
+    <div class="clock"><b>18:24</b><span>ELAPSED</span></div>
+  </div>
+
+  <div class="rest">
+    <div class="ring" style="width:34px;height:34px">${ringSVG(64,34,3,'var(--cyan)')}</div>
+    <div class="lbl"><div class="a">REST · NEXT SET 3</div><div class="b">00:38</div></div>
+    <button>+15s</button><button>Skip</button>
+  </div>
+
+  ${ex.map((e,i)=>{
+    const dn = Array.from({length:e.sets}).every((_,s)=>st.done[`${i}-${s}`]);
+    const state = dn?'done':(i===curIdx?'now':'next');
+    const label = dn?'DONE':(i===curIdx?'NOW':'UP NEXT');
+    return `
+    <div class="exhead ${state==='now'?'now':''}">
+      <div class="num ${dn?'done':''}">${dn?svg('check'):i+1}</div>
+      <div class="n"><b>${e.name}</b><span>${e.muscle} · rest ${e.rest}s · prev ${e.prev}</span></div>
+      <span class="pillstat ${state}">${label}</span>
+    </div>
+    <div class="thead"><div class="c1">SET</div><div class="c2">WEIGHT</div><div class="c3">REPS</div><div class="c4"></div></div>
+    ${Array.from({length:e.sets}).map((_,s)=>{
+      const on = !!st.done[`${i}-${s}`];
+      return `<div class="setrow ${on?'on':''}" data-a="set" data-v="${i}-${s}">
+        <div class="c1">${s+1}</div>
+        <div class="c2"><span class="cell">${e.weight}<u>KG</u></span><span class="prev">${e.prev.split('×')[0]}</span></div>
+        <div class="c3"><span class="cell">${e.reps}</span><span class="prev">${e.prev.split('×')[1]}</span></div>
+        <div class="c4"><span class="tick">${svg('check')}</span></div>
+      </div>`;
+    }).join('')}
+    <div class="addset">${svg('plus')} Add set</div>`;
+  }).join('')}
+  <div style="height:150px"></div>`;
+}
+function activeDock(st){
+  if(st.finished){
+    return `<div class="dock solid">
+      <div class="savedbar">${svg('check')} Session saved · 18:24 · 6 sets logged</div>
+      <div class="dockrow" style="margin-top:10px">
+        <button class="btn btn-fill" data-a="tab" data-v="history">${svg('cal')} View in History</button>
+      </div></div>`;
+  }
+  return `<div class="dock"><div class="dockrow">
+    <button class="btn btn-text" style="flex:0 0 auto;padding:15px 10px">${svg('timer')}</button>
+    <button class="btn btn-text" style="flex:0 0 auto;padding:15px 10px">${svg('more')}</button>
+    <button class="btn btn-fill holdbtn ${st.holding?'holding armed':''}" data-hold="1">
+      <span class="holdfill"></span>
+      <span class="holdlbl">${svg('stop')} ${st.holding?'Keep holding…':'Finish Workout'}</span>
+    </button>
+  </div><div class="dockhint">${st.holding?'RELEASE TO CANCEL':'PRESS &amp; HOLD TO END · AUTO-SAVES TO HISTORY'}</div></div>`;
+}
+
+/* ═══════════ HISTORY ═══════════ */
+const FILTERS = [['all','All time',18],['week','Past week',3],['month','Past month',9],['pr','PR sessions only',2]];
+
+/* filter actually narrows the dataset */
+function applyFilter(key){
+  const cutoff = {week:'2026-07-23', month:'2026-07-01', all:'1970-01-01', pr:'1970-01-01'}[key];
+  return HISTORY.map(g=>({
+    month:g.month,
+    items:g.items.filter(s => key==='pr' ? s.pr : s.iso >= cutoff)
+  })).filter(g=>g.items.length);
+}
+const SUMS = {
+  all:  {n:18,vol:'142',hrs:'14',streak:6},
+  week: {n:3, vol:'31.2',hrs:'2.6',streak:6},
+  month:{n:9, vol:'78.4',hrs:'7.1',streak:6},
+  pr:   {n:2, vol:'21.2',hrs:'1.9',streak:6}
+};
+
+function history(st){
+  const week = [{d:'M',v:.55},{d:'T',v:0},{d:'W',v:.82},{d:'T',v:.34},{d:'F',v:0},{d:'S',v:.68},{d:'S',v:.96}];
+  const groups = st.empty ? [] : applyFilter(st.filter);
+  const active = FILTERS.find(f=>f[0]===st.filter);
+  const sum = SUMS[st.filter];
+
+  const head = `
+  <div class="seclbl">${active[1]}
+    <span class="filtcap" data-a="filt">${svg('filter')} Filter ${svg(st.filtOpen?'up':'down')}</span></div>
+  ${st.filtOpen?`<div class="filtpanel">
+    ${FILTERS.map(([k,l,n])=>`
+      <div class="filtrow ${st.filter===k?'on':''}" data-a="setfilt" data-v="${k}">
+        <span class="tk">${st.filter===k?svg('check'):''}</span>${l}
+        <span class="ct">${n}</span></div>`).join('')}
+    <div class="filtrow" data-a="empty" style="color:var(--txt2)">
+      <span class="tk">${st.empty?svg('check'):''}</span>Preview empty state</div>
+  </div><div class="rule soft"></div>`:''}`;
+
+  if(!groups.length){
+    return head + `
+    <div class="empty">
+      <div class="ic">${svg('dumb')}</div>
+      <b>${st.empty?'No sessions yet':'Nothing in this range'}</b>
+      <p>${st.empty
+        ? 'Finish a workout and it lands here — volume, PRs and every set you logged.'
+        : `No ${active[1].toLowerCase()} sessions found. Try widening the range.`}</p>
+      <div class="act">
+        <button class="btn btn-fill" style="flex:0 0 auto;padding:14px 26px" data-a="tab" data-v="overview">
+          ${svg('play')} ${st.empty?'Start your first workout':'Back to today'}</button>
+      </div>
+    </div>`;
+  }
+
+  return head + `
+  <div class="cols bordered">
+    <div class="col"><div class="v">${sum.n}</div><div class="k">Sessions</div></div>
+    <div class="col"><div class="v">${sum.vol}<span>t</span></div><div class="k">Volume</div></div>
+    <div class="col"><div class="v">${sum.hrs}<span>hrs</span></div><div class="k">Time</div></div>
+    <div class="col"><div class="v gold">${sum.streak}</div><div class="k">Streak</div></div>
+  </div>
+
+  <div class="seclbl">Weekly Load</div>
+  <div class="wcMeta"><b>31.2<span> t this week</span></b><em>▲ 12%</em></div>
+  <div class="bars">
+    ${week.map(w=>`<div class="barcol ${w.v?'':'off'}"><i style="height:${Math.max(w.v*100,5)}%"></i><u>${w.d}</u></div>`).join('')}
+  </div>
+
+  ${groups.map(g=>`
+    <div class="tlmonth">${g.month}</div>
+    ${g.items.map(s=>{
+      const first = g.items[0].id===s.id, last = g.items[g.items.length-1].id===s.id;
+      return `
+      <div class="sess ${first?'first':''} ${last?'last':''}">
+        <span class="tlline"></span>
+        <div class="node"><i class="${s.pr?'':'green'}"></i></div>
+        <div class="sbody">
+          <div class="shead">
+            <div class="n"><b>${s.title}${s.pr?'<span class="prbadge">PR</span>':''}</b>
+              <span>${svg('cal')} ${s.date}</span></div>
+            <div class="dur"><b>${s.dur}</b><span>MIN</span></div>
+          </div>
+          <div class="sstats">
+            <div class="sstat"><b>${s.vol} t</b><span>VOLUME</span></div>
+            <div class="sstat"><b>${s.sets}</b><span>SETS</span></div>
+            <div class="sstat"><b>${s.kcal}</b><span>KCAL</span></div>
+          </div>
+          ${s.ex.map(([n,r,w,pr])=>`
+            <div class="sex"><span class="l"><em>${r}</em>${n}${pr?'<span class="prbadge">PR</span>':''}</span><span class="r">${w}</span></div>`).join('')}
+        </div>
+      </div>`;
+    }).join('')}`).join('')}
+  <div style="height:24px"></div>`;
+}
+
+/* ═══════════ MOUNT ═══════════ */
+const CAPS = {
+  overview:['Overview','Hero · readiness · AI rail · plain rows'],
+  builder :['Builder','Map · chips · hairline steppers'],
+  active  :['Active','Live strip · wash states · set rows'],
+  history :['History','Columns · bars · timeline rail']
+};
+const states = {};
+TABS.forEach(([k])=>{
+  states[k] = {tab:k, ai:k==='overview', view:'front', chips:['Injury friendly'], open:'e1',
+               ex:JSON.parse(JSON.stringify(BASE_EX)), done:{'0-0':1,'0-1':1,'1-0':1},
+               filter:'all', filtOpen:false, empty:false, holding:false, finished:false};
+});
+
+function placeInk(phone){
+  const seg = phone.querySelector('.seg'); if(!seg) return;
+  const btns = seg.querySelectorAll('button'); const ink = seg.querySelector('.ink');
+  const idx = +seg.dataset.idx; const b = btns[idx]; if(!b||!ink) return;
+  ink.style.left = b.offsetLeft + 'px';
+  ink.style.width = b.offsetWidth + 'px';
+}
+function render(key){
+  const st = states[key];
+  const phone = document.querySelector(`.phone[data-key="${key}"]`);
+  const el = phone.querySelector('.screen');
+  let inner='', dock='';
+  if(st.tab==='overview'){ inner=overview(st); }
+  else if(st.tab==='builder'){ inner=builder(st); dock=builderDock(); }
+  else if(st.tab==='active'){ inner=active(st); dock=activeDock(st); }
+  else { inner=history(st); }
+  el.innerHTML = shell(st, inner, dock);
+  requestAnimationFrame(()=>{
+    placeInk(phone);
+    // kick the hold fill transition after the node exists at width 0
+    if(st.holding){
+      const b = phone.querySelector('.holdbtn');
+      if(b){ b.classList.remove('holding'); void b.offsetWidth; b.classList.add('holding'); }
+    }
+  });
+}
+
+const rail = document.getElementById('rail');
+rail.innerHTML = TABS.map(([k])=>`
+  <div class="slot">
+    <div class="slotcap"><b>${CAPS[k][0]}</b><span>${CAPS[k][1]}</span></div>
+    <div class="phone" data-key="${k}" data-theme="dark"><div class="screen"></div></div>
+  </div>`).join('');
+TABS.forEach(([k])=>render(k));
+window.addEventListener('load', ()=>document.querySelectorAll('.phone').forEach(placeInk));
+
+rail.addEventListener('click', e=>{
+  const t = e.target.closest('[data-a]'); if(!t) return;
+  const phone = t.closest('.phone'); const key = phone.dataset.key; const st = states[key];
+  const a = t.dataset.a, v = t.dataset.v;
+  if(a==='tab'){ st.tab = v; }
+  else if(a==='ai'){ st.ai = !st.ai; }
+  else if(a==='view'){ st.view = v; }
+  else if(a==='chip'){ st.chips.includes(v)? st.chips.splice(st.chips.indexOf(v),1) : st.chips.push(v); }
+  else if(a==='expand'){ st.open = st.open===v ? null : v; }
+  else if(a==='step'){
+    const [id,field,dir] = v.split(':'); const ex = st.ex.find(x=>x.id===id);
+    const by = field==='weight'?2.5:(field==='rest'?15:1);
+    ex[field] = Math.max(field==='weight'?0:1, ex[field] + (+dir)*by);
+  }
+  else if(a==='set'){ st.done[v] ? delete st.done[v] : st.done[v]=1; }
+  else if(a==='filt'){ st.filtOpen = !st.filtOpen; }
+  else if(a==='setfilt'){ st.filter = v; st.empty = false; st.filtOpen = false; }
+  else if(a==='empty'){ st.empty = !st.empty; if(st.empty) st.filter='all'; st.filtOpen = false; }
+  else return;
+  const sc = phone.querySelector('.body').scrollTop;
+  render(key);
+  phone.querySelector('.body').scrollTop = sc;
+});
+
+/* ── hold-to-confirm: 1s press, release early cancels ── */
+let holdTimer=null, holdKey=null;
+function startHold(e){
+  const btn = e.target.closest('[data-hold]'); if(!btn) return;
+  const phone = btn.closest('.phone'); holdKey = phone.dataset.key;
+  const st = states[holdKey]; if(st.finished) return;
+  e.preventDefault();
+  st.holding = true; render(holdKey);
+  holdTimer = setTimeout(()=>{
+    const s = states[holdKey];
+    s.holding = false; s.finished = true;
+    holdTimer = null; render(holdKey);
+  }, 1000);
+}
+function endHold(){
+  if(holdTimer){ clearTimeout(holdTimer); holdTimer=null; }
+  if(holdKey && states[holdKey] && states[holdKey].holding){
+    states[holdKey].holding = false; render(holdKey);
+  }
+  holdKey = null;
+}
+rail.addEventListener('pointerdown', startHold);
+window.addEventListener('pointerup', endHold);
+window.addEventListener('pointercancel', endHold);
+
+document.getElementById('themeTgl').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  document.querySelectorAll('#themeTgl button').forEach(x=>x.classList.toggle('on', x===b));
+  document.body.dataset.page = b.dataset.t;
+  document.querySelectorAll('.phone').forEach(p=>p.dataset.theme = b.dataset.t);
+});
+</script>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a22a095f3a4feca8',t:'MTc4NTMwNjIyNA=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>

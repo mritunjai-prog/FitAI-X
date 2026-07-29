@@ -20,17 +20,24 @@ export default function BottomNavigation({ currentScreen, onNavigate, onOpenActi
   const isCoachScreen = currentScreen === 'Coach';
   const styles = React.useMemo(() => getStyles(C, isDark, isCoachScreen), [C, isDark, isCoachScreen]);
   // 5 tabs conceptually: 0=Dashboard, 1=Calendar, 2=FAB, 3=Coach, 4=Profile
-  const activeIndex = currentScreen === 'Dashboard' ? 0 : currentScreen === 'Calendar' ? 1 : currentScreen === 'Coach' ? 3 : 4;
+  const activeIndex = currentScreen === 'Dashboard' ? 0 : currentScreen === 'Calendar' ? 1 : currentScreen === 'Coach' ? 3 : currentScreen === 'Profile' ? 4 : -1;
   const tabWidth = SCREEN_WIDTH / 5;
 
-  const pillPos = useSharedValue((activeIndex * tabWidth) + (tabWidth / 2) - 24);
+  const pillPos = useSharedValue(activeIndex !== -1 ? (activeIndex * tabWidth) + (tabWidth / 2) - 24 : -100);
+  const pillOpacity = useSharedValue(activeIndex !== -1 ? 1 : 0);
 
   useEffect(() => {
-    pillPos.value = withSpring((activeIndex * tabWidth) + (tabWidth / 2) - 24, { damping: 15, stiffness: 150 });
-  }, [activeIndex]);
+    if (activeIndex !== -1) {
+      pillPos.value = withSpring((activeIndex * tabWidth) + (tabWidth / 2) - 24, { damping: 15, stiffness: 150 });
+      pillOpacity.value = withTiming(1, { duration: 150 });
+    } else {
+      pillOpacity.value = withTiming(0, { duration: 150 });
+    }
+  }, [activeIndex, tabWidth]);
 
   const pillStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: pillPos.value }]
+    transform: [{ translateX: pillPos.value }],
+    opacity: pillOpacity.value,
   }));
 
   const rippleScale = useSharedValue(1);
