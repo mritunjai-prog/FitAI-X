@@ -371,14 +371,19 @@ function ForecastCurve({ points, color, width: w, height: h = 96, isDark }: {
   points: number[]; color: string; width: number; height?: number; isDark: boolean;
 }) {
   const T = makeTokens(isDark);
-  if (points.length < 2) return null;
+  // Filter out any NaN values — SVG can't render them
+  const clean = points.filter(p => Number.isFinite(p) && p !== null);
+  if (clean.length < 2) return null;
   const MIN = 0, MAX = 100;
-  const X = (i: number) => (i / (points.length - 1)) * w;
-  const Y = (v: number) => h - ((v - MIN) / (MAX - MIN)) * (h - 16) - 8;
-  let d = `M${X(0)},${Y(points[0])}`;
-  for (let i = 1; i < points.length; i++) {
-    const x0 = X(i - 1), y0 = Y(points[i - 1]);
-    const x1 = X(i), y1 = Y(points[i]);
+  const X = (i: number) => (i / (clean.length - 1)) * w;
+  const Y = (v: number) => {
+    const y = h - ((v - MIN) / (MAX - MIN)) * (h - 16) - 8;
+    return Number.isFinite(y) ? y : h / 2;
+  };
+  let d = `M${X(0)},${Y(clean[0])}`;
+  for (let i = 1; i < clean.length; i++) {
+    const x0 = X(i - 1), y0 = Y(clean[i - 1]);
+    const x1 = X(i), y1 = Y(clean[i]);
     const mid = (x0 + x1) / 2;
     d += `C${mid},${y0} ${mid},${y1} ${x1},${y1}`;
   }
@@ -393,7 +398,7 @@ function ForecastCurve({ points, color, width: w, height: h = 96, isDark }: {
       <Path d={`M0,${Y(100)} L${w},${Y(100)}`} stroke={T.hairSoft} strokeWidth={1} strokeDasharray="3 4" />
       <Path d={`${d} L${w},${h} L0,${h} Z`} fill="url(#fcFill)" />
       <Path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" />
-      <Circle cx={X(0)} cy={Y(points[0])} r={4} fill={color} />
+      <Circle cx={X(0)} cy={Y(clean[0])} r={4} fill={color} />
     </Svg>
   );
 }
@@ -1340,14 +1345,14 @@ function adaptVitals(raw: { hr?: any; water?: any; stress?: any; sleep?: any }):
 }
 
 function adaptTimeline(raw: any): TimelinePoint[] {
-  if (Array.isArray(raw)) return raw.map((p: any) => ({ label: p.label, value: p.value, isNow: p.isNow }));
-  if (Array.isArray(raw?.points)) return raw.points.map((p: any) => ({ label: p.label, value: p.value, isNow: p.isNow }));
+  if (Array.isArray(raw)) return raw.map((p: any) => ({ label: p.label, value: Number.isFinite(p.value) ? p.value : undefined, isNow: p.isNow }));
+  if (Array.isArray(raw?.points)) return raw.points.map((p: any) => ({ label: p.label, value: Number.isFinite(p.value) ? p.value : undefined, isNow: p.isNow }));
   if (raw && typeof raw === 'object') {
     const pts: TimelinePoint[] = [];
-    if (has(raw.today)) pts.push({ label: 'Now', value: raw.today, isNow: true });
-    if (has(raw.tomorrow)) pts.push({ label: 'Tomorrow', value: raw.tomorrow });
-    if (has(raw.next2Days)) pts.push({ label: '2 days', value: raw.next2Days });
-    if (has(raw.fullRecovery)) pts.push({ label: 'Full', value: raw.fullRecovery });
+    // Only push numeric values — string values like "Today" for fullRecovery are ignored
+    if (has(raw.today) && Number.isFinite(raw.today)) pts.push({ label: 'Now', value: raw.today, isNow: true });
+    if (has(raw.tomorrow) && Number.isFinite(raw.tomorrow)) pts.push({ label: 'Tomorrow', value: raw.tomorrow });
+    if (has(raw.next2Days) && Number.isFinite(raw.next2Days)) pts.push({ label: '2 days', value: raw.next2Days });
     return pts;
   }
   return [];

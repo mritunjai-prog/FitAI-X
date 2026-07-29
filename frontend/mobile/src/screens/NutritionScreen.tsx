@@ -619,7 +619,6 @@ function NutritionTabs({
         );
       })}
       <Animated.View
-        pointerEvents="none"
         style={[
           {
             position: 'absolute',
@@ -628,6 +627,7 @@ function NutritionTabs({
             height: 2.5,
             borderRadius: 2,
             backgroundColor: C.primary,
+            pointerEvents: 'none' as any,
           },
           inkStyle,
         ]}
@@ -1064,7 +1064,6 @@ function TodayTab({
       <View style={{ position: 'relative' }}>
         {/* continuous rail behind the nodes */}
         <View
-          pointerEvents="none"
           style={{
             position: 'absolute',
             left: T.gutter + 44 + 14 + 5,
@@ -1072,6 +1071,7 @@ function TodayTab({
             bottom: 34,
             width: 1.5,
             backgroundColor: T.hair,
+            pointerEvents: 'none' as any,
           }}
         />
         {meals.map((m, i) => {
