@@ -1422,19 +1422,26 @@ function OverviewTab({
             )}
           </Text>
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 14 }}>
+          {/* Dynamic confidence bar from readiness data */}
+          {(() => {
+            const readyVal = readiness?.[0]?.value ? parseFloat(readiness[0].value) / 100 : 0.85;
+            const readyPct = Math.round(Math.min(Math.max(readyVal, 0), 1) * 100);
+            return (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginTop: 14 }}>
             <View style={{ flex: 1, height: 3, borderRadius: 2, backgroundColor: T.track, overflow: 'hidden' }}>
               <LinearGradient
                 colors={[C.primary, A.cyan]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
-                style={{ height: '100%', width: '88%', borderRadius: 2 }}
+                style={{ height: '100%', width: `${readyPct}%`, borderRadius: 2 }}
               />
             </View>
             <Text style={{ fontFamily: F.header, fontSize: 9.5, letterSpacing: 0.9, color: C.onSurfaceVariant }}>
-              {readiness?.[0]?.value ?? '88'}% READY
+              {readyPct}% READY
             </Text>
-          </View>
+            </View>
+            );
+          })()}
 
           {aiOpen && (
             <Animated.View entering={FadeIn.duration(180)} exiting={FadeOut.duration(140)} style={{ marginTop: 16 }}>
@@ -2953,6 +2960,38 @@ function deriveActivation(exercises: WorkoutExercise[]): MuscleActivation[] {
     .slice(0, 5);
 }
 
+/**
+ * Maps an API workout response to the frontend Workout type.
+ * The API returns muscleGroup and restTime, but the frontend expects muscle and rest.
+ */
+function mapApiWorkout(apiWorkout: any): Workout | null {
+  if (!apiWorkout) return null;
+  return {
+    id: apiWorkout.id,
+    title: apiWorkout.title,
+    duration: apiWorkout.duration,
+    targetMuscles: apiWorkout.targetMuscles,
+    aiExplanation: apiWorkout.aiExplanation,
+    versionNumber: apiWorkout.versionNumber,
+    parentVersionId: apiWorkout.parentVersionId,
+    isCurrent: apiWorkout.isCurrent,
+    exercises: (apiWorkout.exercises || []).map(mapApiExercise),
+  };
+}
+
+function mapApiExercise(ex: any): WorkoutExercise {
+  return {
+    id: ex.id,
+    name: ex.name,
+    muscle: ex.muscleGroup || ex.muscle || undefined, // API returns muscleGroup
+    sets: ex.sets,
+    reps: ex.reps,
+    weight: typeof ex.weight === 'string' ? parseFloat(ex.weight) || 0 : (ex.weight || 0), // API returns weight as string
+    rest: ex.restTime || ex.rest || 60, // API returns restTime
+    prev: ex.prev,
+  };
+}
+
 /** Map an API session payload into the shape the timeline renders. */
 function computePRsAndMapHistory(rawHistory: any[]): HistorySession[] {
   // Sort oldest to newest for calculating PRs
@@ -3056,7 +3095,7 @@ export default function WorkoutScreen({
   /* ── Queries ──────────────────────────────────────── */
   const { data: workout } = useQuery<Workout | null>({
     queryKey: ['currentWorkout', userId],
-    queryFn: async () => (await fetchCurrentWorkout(userId)) as any as Workout,
+    queryFn: async () => mapApiWorkout(await fetchCurrentWorkout(userId)),
   });
 
   const { data: historyRaw, isLoading: historyLoading } = useQuery({
@@ -3106,7 +3145,18 @@ export default function WorkoutScreen({
   const generateMutation = useMutation({
     mutationFn: (prompt: string) => generateWorkout(prompt, workout?.id),
     onSuccess: (data: any) => {
-      if (data?.exercises?.length) setDraft(data.exercises);
+      if (data?.exercises?.length) {
+        // Map API exercise format (muscleGroup) to frontend (muscle)
+        setDraft(data.exercises.map((ex: any, idx: number) => ({
+          id: ex.id || `gen-${idx}-${Date.now()}`,
+          name: ex.name,
+          muscle: ex.muscleGroup || ex.muscle,
+          sets: ex.sets,
+          reps: ex.reps,
+          weight: typeof ex.weight === 'string' ? parseFloat(ex.weight) || 0 : (ex.weight || 0),
+          rest: ex.restTime || ex.rest || 60,
+        })));
+      }
       haptic('success');
     },
   });
