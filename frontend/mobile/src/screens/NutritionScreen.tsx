@@ -203,7 +203,7 @@ function haptic(style: HapticStyle = 'light'): void {
   }
 }
 
-const money = (n: number) => `$${n.toFixed(2)}`;
+const money = (n: number) => `₹${n.toFixed(2)}`;
 
 /* ──────────────────────────────────────────────────────────────────────────
    PRIMITIVES — flattened building blocks, none of these draw a card
@@ -1311,7 +1311,9 @@ function TodayTab({
                       </Pressable>
                     }
                   />
-                  {mealPlan.today.map((m: any, i: number) => (
+                  {mealPlan.today.map((m: any, i: number) => {
+                    const timeLabel = (mealPlan.mealTimeSlots && mealPlan.mealTimeSlots[m.type]) || `${m.type}`;
+                    return (
                     <View key={m.id || `t${i}`} style={{ paddingHorizontal: T.gutter, paddingVertical: 12 }}>
                       {i > 0 && <View style={{ position: 'absolute', left: T.gutter, right: 0, top: 0, height: T.hairline, backgroundColor: T.hairSoft }} />}
                       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
@@ -1323,7 +1325,8 @@ function TodayTab({
                             <Text style={{ fontFamily: F.header, fontSize: 15, letterSpacing: -0.2, color: C.onSurface, flex: 1 }}>{m.name}</Text>
                             <Text style={{ fontFamily: F.num, fontSize: 14, color: C.onSurface }}>{m.cals || m.calories}<Text style={{ fontFamily: F.bodyMed, fontSize: 9, color: C.onSurfaceVariant }}> kcal</Text></Text>
                           </View>
-                          <View style={{ flexDirection: 'row', gap: 14, marginTop: 6 }}>
+                          <Text style={{ fontFamily: F.bodyMed, fontSize: 9, color: C.primary, marginTop: 2, letterSpacing: 0.5 }}>{timeLabel}</Text>
+                          <View style={{ flexDirection: 'row', gap: 14, marginTop: 4 }}>
                             <Text style={{ fontFamily: F.num, fontSize: 11, color: A.protein }}>P {m.protein || 0}g</Text>
                             <Text style={{ fontFamily: F.num, fontSize: 11, color: A.carbs }}>C {m.carbs || 0}g</Text>
                             <Text style={{ fontFamily: F.num, fontSize: 11, color: A.fat }}>F {m.fat || m.fats || 0}g</Text>
@@ -1331,13 +1334,13 @@ function TodayTab({
                           </View>
                           {m.ingredients && (
                             <Text numberOfLines={1} style={{ fontFamily: F.body, fontSize: 10, color: C.onSurfaceVariant, marginTop: 4 }}>
-                              {(typeof m.ingredients === 'string' ? JSON.parse(m.ingredients) : m.ingredients).slice(0, 3).join(' · ')}
+                              {(typeof m.ingredients === 'string' ? JSON.parse(m.ingredients) : m.ingredients).slice(0, 4).join(' · ')}
                             </Text>
                           )}
                         </View>
                       </View>
                     </View>
-                  ))}
+                  );})}
                 </>
               )}
 
@@ -1354,7 +1357,9 @@ function TodayTab({
                       </Pressable>
                     }
                   />
-                  {mealPlan.tomorrow.map((m: any, i: number) => (
+                  {mealPlan.tomorrow.map((m: any, i: number) => {
+                    const timeLabel = (mealPlan.mealTimeSlots && mealPlan.mealTimeSlots[m.type]) || `${m.type}`;
+                    return (
                     <View key={m.id || `tm${i}`} style={{ paddingHorizontal: T.gutter, paddingVertical: 12 }}>
                       {i > 0 && <View style={{ position: 'absolute', left: T.gutter, right: 0, top: 0, height: T.hairline, backgroundColor: T.hairSoft }} />}
                       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
@@ -1366,7 +1371,8 @@ function TodayTab({
                             <Text style={{ fontFamily: F.header, fontSize: 15, letterSpacing: -0.2, color: C.onSurface, flex: 1 }}>{m.name}</Text>
                             <Text style={{ fontFamily: F.num, fontSize: 14, color: C.onSurface }}>{m.cals || m.calories}<Text style={{ fontFamily: F.bodyMed, fontSize: 9, color: C.onSurfaceVariant }}> kcal</Text></Text>
                           </View>
-                          <View style={{ flexDirection: 'row', gap: 14, marginTop: 6 }}>
+                          <Text style={{ fontFamily: F.bodyMed, fontSize: 9, color: C.primary, marginTop: 2, letterSpacing: 0.5 }}>{timeLabel}</Text>
+                          <View style={{ flexDirection: 'row', gap: 14, marginTop: 4 }}>
                             <Text style={{ fontFamily: F.num, fontSize: 11, color: A.protein }}>P {m.protein || 0}g</Text>
                             <Text style={{ fontFamily: F.num, fontSize: 11, color: A.carbs }}>C {m.carbs || 0}g</Text>
                             <Text style={{ fontFamily: F.num, fontSize: 11, color: A.fat }}>F {m.fat || m.fats || 0}g</Text>
@@ -1374,13 +1380,13 @@ function TodayTab({
                           </View>
                           {m.ingredients && (
                             <Text numberOfLines={1} style={{ fontFamily: F.body, fontSize: 10, color: C.onSurfaceVariant, marginTop: 4 }}>
-                              {(typeof m.ingredients === 'string' ? JSON.parse(m.ingredients) : m.ingredients).slice(0, 3).join(' · ')}
+                              {(typeof m.ingredients === 'string' ? JSON.parse(m.ingredients) : m.ingredients).slice(0, 4).join(' · ')}
                             </Text>
                           )}
                         </View>
                       </View>
                     </View>
-                  ))}
+                  );})}
                 </>
               )}
 
@@ -2267,23 +2273,8 @@ function InsightsTab({
    FALLBACK DATA — used only until the API resolves
    ────────────────────────────────────────────────────────────────────────── */
 
-const FALLBACK_MEALS: Meal[] = [
-  { id: 'm1', time: '7:30', meridiem: 'AM', type: 'Breakfast', name: 'Greek Yogurt Bowl · Berries & Granola', cals: 420, protein: 32, carbs: 48, fat: 11, cost: 2.4, state: 'done' },
-  { id: 'm2', time: '10:30', meridiem: 'AM', type: 'Snack', name: 'Whey Shake & Banana', cals: 280, protein: 28, carbs: 34, fat: 3, cost: 1.15, state: 'done' },
-  { id: 'm3', time: '1:00', meridiem: 'PM', type: 'Lunch', name: 'Grilled Chicken, Rice & Broccoli', cals: 610, protein: 52, carbs: 64, fat: 14, cost: 3.2, state: 'now' },
-  { id: 'm4', time: '4:30', meridiem: 'PM', type: 'Snack', name: 'Cottage Cheese & Almonds', cals: 240, protein: 24, carbs: 9, fat: 12, cost: 1.35, state: 'pending' },
-  { id: 'm5', time: '7:30', meridiem: 'PM', type: 'Dinner', name: 'Salmon, Sweet Potato & Asparagus', cals: 580, protein: 44, carbs: 46, fat: 22, cost: 4.6, state: 'pending' },
-];
-
-const FALLBACK_WEEK: DayPlan[] = [
-  { label: 'MON', dayOfMonth: 14, cals: 2340, onTarget: true },
-  { label: 'TUE', dayOfMonth: 15, cals: 2510, onTarget: true },
-  { label: 'WED', dayOfMonth: 16, cals: 2180, onTarget: false },
-  { label: 'THU', dayOfMonth: 17, cals: 2470, onTarget: true },
-  { label: 'FRI', dayOfMonth: 18, cals: 2130, onTarget: true },
-  { label: 'SAT', dayOfMonth: 19, cals: 2890, onTarget: false },
-  { label: 'SUN', dayOfMonth: 20, cals: 2050, onTarget: true },
-];
+const FALLBACK_MEALS: Meal[] = [];
+const FALLBACK_WEEK: DayPlan[] = [];
 
 const DEFAULT_TARGETS: MacroTargets = { calories: 2500, protein: 200, carbs: 250, fat: 90 };
 
@@ -2446,13 +2437,24 @@ export default function NutritionScreen({
   const regenAllMutation = useMutation({
     mutationFn: async () => {
       if (!user?.id) throw new Error('No user id');
-      await regenerateMealPlan(user.id, 'today');
-      await regenerateMealPlan(user.id, 'tomorrow');
+      const results = await Promise.allSettled([
+        regenerateMealPlan(user.id, 'today'),
+        regenerateMealPlan(user.id, 'tomorrow'),
+      ]);
+      const failures = results.filter(r => r.status === 'rejected');
+      if (failures.length > 0) {
+        console.warn('[RegenAll] Some days failed:', failures);
+      }
+      return results;
     },
     onSuccess: () => {
       haptic('success');
-      void qc.invalidateQueries({ queryKey: ['mealPlan'] });
+      setTimeout(() => qc.invalidateQueries({ queryKey: ['mealPlan'] }), 500);
     },
+    onError: (err) => {
+      console.warn('[RegenAll] Error:', err);
+      haptic('medium');
+    }
   });
 
   /* ── Derived data ────────────────────────────────── */
@@ -2674,14 +2676,9 @@ export default function NutritionScreen({
                 dashboardData={dashboardData}
                 targets={targets}
                 macroSplit={{ protein: 32, carbs: 44, fat: 24 }}
-                adherence={{ logged: 33, total: 35 }}
-                spend={{ week: weeklyCost, day: weeklyCost / 7, meal: weeklyCost / 35 }}
-                topProtein={[
-                  { name: 'Chicken breast', grams: 412, share: 0.34 },
-                  { name: 'Greek yogurt', grams: 248, share: 0.2 },
-                  { name: 'Whey protein', grams: 196, share: 0.16 },
-                  { name: 'Salmon', grams: 154, share: 0.13 },
-                ]}
+                adherence={{ logged: 0, total: 0 }}
+                spend={{ week: 0, day: 0, meal: 0 }}
+                topProtein={[]}
                 C={C}
                 isDark={isDark}
               />

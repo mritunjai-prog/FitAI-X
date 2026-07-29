@@ -341,26 +341,9 @@ router.get('/grocery', async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
     
-    // Auto-generate a generic list if user has none, to avoid hardcoded meat
+    // Return empty if user has no lists — no hardcoded fallback items
     if (lists.length === 0) {
-      const newList = await prisma.groceryList.create({
-        data: {
-          userId,
-          name: "Weekly Groceries",
-          items: {
-            create: [
-              { name: "Oats", quantity: "1 container", cost: 4.50 },
-              { name: "Brown Rice", quantity: "1 bag", cost: 3.50 },
-              { name: "Broccoli", quantity: "2 heads", cost: 4.00 },
-              { name: "Spinach", quantity: "1 bag", cost: 3.00 },
-              { name: "Almond Milk", quantity: "1 carton", cost: 3.99 },
-              { name: "Mixed Berries", quantity: "1 bag", cost: 5.00 },
-            ]
-          }
-        },
-        include: { items: true }
-      });
-      lists = [newList];
+      return res.json([]);
     }
     
     res.json(lists);
