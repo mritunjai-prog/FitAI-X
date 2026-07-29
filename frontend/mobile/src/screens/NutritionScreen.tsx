@@ -1751,7 +1751,7 @@ function PlanTab({
             </View>
           );
         })}
-        <SectionLabel text="Week Total"        <SectionLabel text="Week Total" C={C} />
+        <SectionLabel text="Week Total" C={C} />
         <StatColumns
           C={C}
           isDark={isDark}
