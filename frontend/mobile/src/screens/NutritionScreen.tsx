@@ -1718,7 +1718,7 @@ function PlanTab({
           const dayM = meals
             .filter(m => ['Breakfast','Lunch','Dinner'].includes(m.type))
             .filter((m, i, arr) => arr.findIndex(x => x.type === m.type && (!x.date || !m.date || new Date(x.date).getDate() === new Date(m.date).getDate())) === i)
-            .filter(m => !m.date || new Date(m.date).getDate() === w.dayOfMonth);
+            .filter(m => m.date && new Date(m.date).getTime() >= new Date(new Date().toDateString()).getTime() && new Date(m.date).getDate() === w.dayOfMonth);
           return (
             <View key={w.label}>
               <View style={{ paddingHorizontal: T.gutter, paddingTop: 20, paddingBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>

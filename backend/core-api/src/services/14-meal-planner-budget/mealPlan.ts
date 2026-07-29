@@ -484,54 +484,37 @@ router.get('/meal-plan', async (req, res) => {
 
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const todayEnd = new Date(todayStart.getTime() + 86400000);
-    const tomorrowStart = new Date(todayStart.getTime() + 86400000);
-    const tomorrowEnd = new Date(tomorrowStart.getTime() + 86400000);
-
-    const [todayMeals, tomorrowMeals] = await Promise.all([
-      prisma.meal.findMany({
-        where: { userId, date: { gte: todayStart, lt: todayEnd }, deletedAt: null },
+    
+    // Generate meals for 7 days (today + next 6)
+    const days = ['today', 'day2', 'day3', 'day4', 'day5', 'day6', 'day7'];
+    const results: any = { targets, dietType, mealTimeSlots: MEAL_TIME_SLOTS };
+    
+    for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+      const dayStart = new Date(todayStart.getTime() + dayOffset * 86400000);
+      const dayEnd = new Date(dayStart.getTime() + 86400000);
+      const key = days[dayOffset];
+      
+      let dayMeals = await prisma.meal.findMany({
+        where: { userId, date: { gte: dayStart, lt: dayEnd }, deletedAt: null },
         orderBy: [{ type: 'asc' }]
-      }),
-      prisma.meal.findMany({
-        where: { userId, date: { gte: tomorrowStart, lt: tomorrowEnd }, deletedAt: null },
-        orderBy: [{ type: 'asc' }]
-      })
-    ]);
-
-    const results: any = { today: [], tomorrow: [], targets };
-
-    if (todayMeals.length === 0) {
-      try {
-        results.today = await generateAndSaveMeals(userId, user, pref, targets, dietType, todayStart, 'today');
-      } catch (e: any) {
-        console.error('[MealPlan] AI generation for today failed:', e.message);
+      });
+      
+      if (dayMeals.length === 0) {
+        try {
+          const dayLabel = dayOffset === 0 ? 'today' : dayOffset === 1 ? 'tomorrow' : `day ${dayOffset + 1}`;
+          dayMeals = await generateAndSaveMeals(userId, user, pref, targets, dietType, dayStart, dayLabel);
+        } catch (e: any) {
+          console.error(`[MealPlan] Generation for day ${dayOffset} failed:`, e.message);
+        }
       }
-    } else {
-      results.today = todayMeals;
+      
+      results[key] = dayMeals;
     }
 
-    if (tomorrowMeals.length === 0) {
-      try {
-        results.tomorrow = await generateAndSaveMeals(userId, user, pref, targets, dietType, tomorrowStart, 'tomorrow');
-      } catch (e: any) {
-        console.error('[MealPlan] AI generation for tomorrow failed:', e.message);
-      }
-    } else {
-      results.tomorrow = tomorrowMeals;
-    }
+    // Time-filter today's meals
+    results.today = filterRelevantMeals(results.today || []);
 
-    const relevantToday = filterRelevantMeals(results.today);
-
-    res.json({
-      today: relevantToday,
-      tomorrow: results.tomorrow,
-      targets,
-      timeSlot: getCurrentTimeSlot(),
-      dietType,
-      mealTimeSlots: MEAL_TIME_SLOTS,
-      totalMeals: results.today.length + results.tomorrow.length,
-    });
+    res.json(results);
   } catch (e: any) {
     console.error('[MealPlan] Error:', e.message);
     res.status(500).json({ error: e.message });
