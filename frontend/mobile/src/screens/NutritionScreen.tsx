@@ -1352,6 +1352,11 @@ function TodayTab({
                             </Text>
                           )}
                           <View style={{ flexDirection: 'row', gap: 20, marginTop: 8 }}>
+                            <Pressable onPress={() => { haptic(done ? 'light' : 'success'); onToggleMeal(m.id); }} hitSlop={6}
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <Icon name={loggedOverride[m.id] ? 'check-circle' : 'check'} size={12} color={loggedOverride[m.id] ? C.success : C.primary} />
+                              <Text style={{ fontFamily: F.header, fontSize: 10.5, color: loggedOverride[m.id] ? C.success : C.primary }}>{loggedOverride[m.id] ? 'Logged' : 'Log it'}</Text>
+                            </Pressable>
                             <Pressable onPress={() => { haptic('medium'); onRegenerate(m.id); }} hitSlop={6}
                               style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                               <Icon name="refresh" size={12} color={C.primary} />
@@ -1410,6 +1415,11 @@ function TodayTab({
                             </Text>
                           )}
                           <View style={{ flexDirection: 'row', gap: 20, marginTop: 8 }}>
+                            <Pressable onPress={() => { haptic(loggedOverride[m.id] ? 'light' : 'success'); onToggleMeal(m.id); }} hitSlop={6}
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <Icon name={loggedOverride[m.id] ? 'check-circle' : 'check'} size={12} color={loggedOverride[m.id] ? C.success : C.primary} />
+                              <Text style={{ fontFamily: F.header, fontSize: 10.5, color: loggedOverride[m.id] ? C.success : C.primary }}>{loggedOverride[m.id] ? 'Logged' : 'Log it'}</Text>
+                            </Pressable>
                             <Pressable onPress={() => { haptic('medium'); onRegenerate(m.id); }} hitSlop={6}
                               style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                               <Icon name="refresh" size={12} color={C.primary} />
