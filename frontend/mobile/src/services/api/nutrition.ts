@@ -1,7 +1,7 @@
 import { apiClient } from './client';
 
-export const fetchBudgetPlan = async (budget: number, cals: number) => {
-  const { data } = await apiClient.get(`/nutrition/budget-plan?budget=${budget}&cals=${cals}`);
+export const fetchBudgetPlan = async (budget: number, cals: number, diet?: string) => {
+  const { data } = await apiClient.get(`/nutrition/budget-plan?budget=${budget}&cals=${cals}${diet ? `&diet=${encodeURIComponent(diet)}` : ''}`);
   return data;
 };
 

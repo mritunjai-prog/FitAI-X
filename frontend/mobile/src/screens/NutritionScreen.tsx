@@ -2375,8 +2375,8 @@ export default function NutritionScreen({
   });
 
   const { data: budgetData } = useQuery({
-    queryKey: ['budgetPlan'],
-    queryFn: () => fetchBudgetPlan(75, 2500),
+    queryKey: ['budgetPlan', user?.id],
+    queryFn: () => fetchBudgetPlan(75, 2500, user?.diet || undefined),
   });
 
   /* ── Mutations ───────────────────────────────────── */

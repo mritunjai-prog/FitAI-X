@@ -149,52 +149,134 @@ function calculateTargets(user: any): { calories: number; protein: number; carbs
   return { calories: tdee, protein, carbs, fat };
 }
 
-/** Generate meals via AI and save to DB */
+/** Generate meals via AI and save to DB — with fallback if AI fails */
 async function generateAndSaveMeals(userId: string, user: any, pref: any, targets: any, dietType: string, targetDate: Date, dayLabel: string): Promise<any[]> {
   const prompt = buildMealPrompt(user, pref, targets, dayLabel);
   
-  const aiResult = await callAI({
-    system: 'You are an AI nutritionist. Return ONLY valid JSON. No markdown, no backticks, no explanations.',
-    prompt,
-    temperature: 0.7,
-  });
+  try {
+    const aiResult = await callAI({
+      system: 'You are an AI nutritionist. Return ONLY valid JSON. No markdown, no backticks, no explanations.',
+      prompt,
+      temperature: 0.7,
+    });
 
-  if (!aiResult.ok || !aiResult.text) {
-    throw new Error('AI generation failed: ' + (aiResult.error || 'unknown error'));
+    if (aiResult.ok && aiResult.text) {
+      let text = aiResult.text.replace(/```json/g, '').replace(/```/g, '').trim();
+      const firstBrace = text.indexOf('{');
+      const lastBrace = text.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) text = text.slice(firstBrace, lastBrace + 1);
+      const parsed = JSON.parse(text);
+
+      const meals: any[] = [];
+      if (parsed.meals && Array.isArray(parsed.meals)) {
+        for (const m of parsed.meals) {
+          const meal = await prisma.meal.create({
+            data: {
+              userId,
+              type: m.type,
+              name: m.name,
+              cals: Math.round(m.calories || m.cals || 0),
+              protein: m.protein || 0,
+              carbs: m.carbs || 0,
+              fats: m.fat || m.fats || 0,
+              cost: 0,
+              date: targetDate,
+              ingredients: JSON.stringify(m.ingredients || []),
+              preparation: m.preparation || '',
+              servingSize: m.servingSize || '',
+              prepTime: m.prepTime || 15,
+              nutritionPrefUsed: dietType,
+              status: 'generated',
+            }
+          });
+          meals.push(meal);
+        }
+        if (meals.length > 0) return meals;
+      }
+    }
+  } catch (e: any) {
+    console.warn('[MealPlan] AI generation failed, using fallback meals:', e.message);
   }
 
-  let text = aiResult.text.replace(/```json/g, '').replace(/```/g, '').trim();
-  const firstBrace = text.indexOf('{');
-  const lastBrace = text.lastIndexOf('}');
-  if (firstBrace !== -1 && lastBrace > firstBrace) text = text.slice(firstBrace, lastBrace + 1);
-  const parsed = JSON.parse(text);
-
+  // Fallback meals if AI fails
+  const fallbackMeals = getFallbackMeals(dietType, targets, dayLabel);
   const meals: any[] = [];
-  if (parsed.meals && Array.isArray(parsed.meals)) {
-    for (const m of parsed.meals) {
-      const meal = await prisma.meal.create({
-        data: {
-          userId,
-          type: m.type,
-          name: m.name,
-          cals: Math.round(m.calories || m.cals || 0),
-          protein: m.protein || 0,
-          carbs: m.carbs || 0,
-          fats: m.fat || m.fats || 0,
-          cost: 0,
-          date: targetDate,
-          ingredients: JSON.stringify(m.ingredients || []),
-          preparation: m.preparation || '',
-          servingSize: m.servingSize || '',
-          prepTime: m.prepTime || 15,
-          nutritionPrefUsed: dietType,
-          status: 'generated',
-        }
-      });
-      meals.push(meal);
-    }
+  for (const m of fallbackMeals) {
+    const meal = await prisma.meal.create({
+      data: {
+        userId,
+        type: m.type,
+        name: m.name,
+        cals: m.calories || m.cals || 400,
+        protein: m.protein || 20,
+        carbs: m.carbs || 40,
+        fats: m.fat || m.fats || 15,
+        cost: 0,
+        date: targetDate,
+        ingredients: JSON.stringify(m.ingredients || []),
+        preparation: m.preparation || 'Simple preparation',
+        servingSize: m.servingSize || '1 plate',
+        prepTime: m.prepTime || 20,
+        nutritionPrefUsed: dietType,
+        status: 'generated',
+      }
+    });
+    meals.push(meal);
   }
   return meals;
+}
+
+/** Fallback meals when AI is unavailable */
+function getFallbackMeals(dietType: string, targets: any, dayLabel: string) {
+  const base = [
+    {
+      type: 'Breakfast',
+      name: 'Masala Oats with Vegetables',
+      calories: Math.round(targets.calories * 0.25),
+      protein: Math.round(targets.protein * 0.2),
+      carbs: Math.round(targets.carbs * 0.25),
+      fat: Math.round(targets.fat * 0.2),
+      servingSize: '1 bowl',
+      prepTime: 15,
+      ingredients: ['Oats - 50g', 'Mixed vegetables - 100g', 'Mustard seeds - 1 tsp', 'Curry leaves', 'Salt to taste'],
+      preparation: '1. Heat oil in a pan. Add mustard seeds and curry leaves. 2. Add chopped vegetables and sauté. 3. Add oats and water, cook for 5 mins. Serve hot.',
+    },
+    {
+      type: 'Lunch',
+      name: 'Dal Rice with Salad',
+      calories: Math.round(targets.calories * 0.35),
+      protein: Math.round(targets.protein * 0.35),
+      carbs: Math.round(targets.carbs * 0.35),
+      fat: Math.round(targets.fat * 0.3),
+      servingSize: '1 plate',
+      prepTime: 30,
+      ingredients: ['Rice - 1 cup', 'Moong dal - 1/2 cup', 'Tomato - 1', 'Onion - 1', 'Cucumber - 1/2'],
+      preparation: '1. Cook dal with turmeric and salt. 2. Cook rice separately. 3. Mix dal with tadka of garlic and cumin. 4. Serve with rice and fresh salad.',
+    },
+    {
+      type: 'Dinner',
+      name: 'Chapati with Mixed Veg Curry',
+      calories: Math.round(targets.calories * 0.3),
+      protein: Math.round(targets.protein * 0.3),
+      carbs: Math.round(targets.carbs * 0.3),
+      fat: Math.round(targets.fat * 0.35),
+      servingSize: '2 chapatis + 1 bowl curry',
+      prepTime: 25,
+      ingredients: ['Whole wheat flour - 200g', 'Mixed vegetables - 200g', 'Onion - 1', 'Tomato - 1', 'Spices - as needed'],
+      preparation: '1. Knead dough and roll chapatis. 2. Cook on tawa. 3. For curry, sauté onions, add tomatoes and spices. 4. Add vegetables and cook till done.',
+    },
+  ];
+
+  // If vegan, remove dairy references
+  if (dietType?.toLowerCase() === 'vegan') {
+    return base.map(m => ({
+      ...m,
+      name: m.name.replace('Dal Rice', 'Veg Biryani'),
+      ingredients: m.ingredients.filter(i => !i.includes('curd') && !i.includes('ghee')),
+    }));
+  }
+
+  return base;
 }
 
 // ─── GET /api/v1/nutrition/meal-plan ──────────────────────────────────────

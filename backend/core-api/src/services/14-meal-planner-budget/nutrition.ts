@@ -80,7 +80,8 @@ router.get('/budget-plan', async (req, res) => {
     const budget = budgetStr ? parseFloat(budgetStr) : 75;
     const calsStr = req.query.cals as string;
     const cals = calsStr ? parseInt(calsStr) : 2500;
-    const plan = generateBudgetPlan(budget, cals);
+    const diet = req.query.diet as string;
+    const plan = generateBudgetPlan(budget, cals, diet);
     res.json(plan);
   } catch (error) {
     console.error(error);
