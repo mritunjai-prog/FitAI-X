@@ -1452,8 +1452,8 @@ function PlanTab({
   const [chips, setChips] = useState<string[]>(['High protein']);
   const [prompt, setPrompt] = useState('');
 
-  const day = week[selectedDay];
-  const dayCost = meals.reduce((a, m) => a + m.cost, 0);
+  const day = week[selectedDay] || { label: 'MON', dayOfMonth: new Date().getDate(), cals: 2000, onTarget: true };
+  const dayCost = meals?.reduce((a, m) => a + (m?.cost || 0), 0) || 0;
 
   return (
     <KeyboardAvoidingView
@@ -2299,19 +2299,20 @@ function groupGrocery(list: any[]): GroceryCategory[] {
 /** Map an API meal payload onto the shape this screen renders. */
 function toMeal(raw: any, index: number): Meal {
   const active = raw?.versions?.find((v: any) => v.isCurrent) ?? raw;
-  const slots: Array<[string, string, string]> = [
-    ['7:30', 'AM', 'Breakfast'],
-    ['10:30', 'AM', 'Snack'],
-    ['1:00', 'PM', 'Lunch'],
-    ['4:30', 'PM', 'Snack'],
-    ['7:30', 'PM', 'Dinner'],
-  ];
-  const slot = slots[index % slots.length];
+  // Derive time/meridiem from the meal type instead of hardcoded slots
+  const type = raw?.type || (index === 0 ? 'Breakfast' : index === 1 ? 'Lunch' : index === 2 ? 'Dinner' : 'Snack');
+  const timeMap: Record<string, [string, string]> = {
+    'Breakfast': ['7:30', 'AM'],
+    'Lunch': ['1:00', 'PM'],
+    'Dinner': ['7:30', 'PM'],
+    'Snack': ['10:30', 'AM'],
+  };
+  const [time, meridiem] = timeMap[type] || ['12:00', 'PM'];
   return {
     id: raw?.id ?? `meal-${index}`,
-    time: raw?.time ?? slot[0],
-    meridiem: raw?.meridiem ?? slot[1],
-    type: raw?.type ?? slot[2],
+    time: raw?.time ?? time,
+    meridiem: raw?.meridiem ?? meridiem,
+    type: type,
     name: active?.name ?? 'Meal',
     cals: Number(active?.cals ?? 0),
     protein: Number(active?.protein ?? 0),
