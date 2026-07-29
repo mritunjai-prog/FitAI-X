@@ -41,7 +41,7 @@ function Skeleton({ w, h, r = 8 }: { w: number | string; h: number; r?: number }
     );
   }, []);
   const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
-  return <Animated.View style={[{ width: w as any, height: h, borderRadius: r, backgroundColor: C.surfaceVariant }, style]} />;
+  return <Animated.View style={[{ width: w as any, height: h, borderRadius: r, backgroundColor: C.onSurfaceVariant }, style]} />;
 }
 
 function Num({ v, suffix = '', style }: { v: number | string; suffix?: string; style?: any }) {

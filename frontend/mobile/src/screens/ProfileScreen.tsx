@@ -1056,7 +1056,7 @@ export default function ProfileScreen({
                     />
                   ) : (
                     <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-                      <Icon name="data-usage" size={48} color={C.outlineVariant} />
+                      <Icon name="insights" size={48} color={C.outlineVariant} />
                       <Text style={{ fontFamily: 'Inter_500Medium', color: C.onSurfaceVariant, marginTop: 12 }}>No muscle balance data available yet.</Text>
                     </View>
                   )}

@@ -1129,6 +1129,7 @@ function TodayTab({
                     height: 10,
                     borderRadius: 5,
                     backgroundColor: nodeColor,
+                    // @ts-ignore
                     boxShadow: '0 0 0 2px ' + C.bg,
                     borderWidth: 4,
                     borderColor: C.bg,
@@ -2431,7 +2432,7 @@ export default function NutritionScreen({
 
   const { data: budgetData } = useQuery({
     queryKey: ['budgetPlan', user?.id],
-    queryFn: () => fetchBudgetPlan(75, 2500, user?.diet || undefined),
+    queryFn: () => fetchBudgetPlan(75, 2500, (user as any)?.diet || undefined),
   });
 
   /* ── Mutations ───────────────────────────────────── */
@@ -2707,7 +2708,7 @@ export default function NutritionScreen({
                 suggestions={budgetData?.suggestions ?? []}
                 onSelectDay={setSelectedDay}
                 onGenerate={(prompt) => {
-                  if (user?.id) generatePlanMutation.mutate({ userId: user.id, prompt });
+                  if (user?.id) generatePlanMutation.mutate();
                 }}
                 generating={generatePlanMutation.isPending}
                 C={C}
@@ -2734,7 +2735,6 @@ export default function NutritionScreen({
             <Animated.View style={{ flex: 1 }} entering={FadeIn.duration(180)}>
               <InsightsTab
                 week={budgetData?.week ?? []}
-                dashboardData={dashboardData}
                 targets={targets}
                 macroSplit={{ protein: 32, carbs: 44, fat: 24 }}
                 adherence={{ logged: 0, total: 0 }}
