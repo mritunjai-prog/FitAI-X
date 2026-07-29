@@ -15,6 +15,7 @@ export interface BudgetPlan {
  * Generates a 7-day meal plan optimized for the target weekly budget.
  */
 export function generateBudgetPlan(targetWeeklyBudget: number, targetDailyCals: number, dietType?: string): BudgetPlan {
+  const istOffset = 5.5 * 60 * 60 * 1000;
   try {
     // Filter meals by diet preference
     const filteredMeals = filterMealsByDiet(MEAL_GRAPH, dietType);
@@ -67,7 +68,7 @@ export function generateBudgetPlan(targetWeeklyBudget: number, targetDailyCals: 
 
     groceryList.sort((a, b) => b.totalCost - a.totalCost);
 
-    const today = new Date();
+    const today = new Date(Date.now() + istOffset);
     const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
     
     const week = Array.from({ length: 7 }).map((_, i) => {
@@ -108,7 +109,7 @@ export function generateBudgetPlan(targetWeeklyBudget: number, targetDailyCals: 
       meals: [],
       groceryList: [],
       week: Array.from({ length: 7 }).map((_, i) => {
-        const d = new Date();
+        const d = new Date(Date.now() + istOffset);
         d.setDate(d.getDate() + i);
         return { label: ['SUN','MON','TUE','WED','THU','FRI','SAT'][d.getDay()], dayOfMonth: d.getDate(), cals: targetDailyCals, onTarget: true };
       }),
