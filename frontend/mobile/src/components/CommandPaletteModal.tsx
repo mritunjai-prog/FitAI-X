@@ -89,9 +89,9 @@ export default function CommandPaletteModal({ isVisible, onClose, onNavigate }: 
       {/* Deepened background blur to mask the busy dashboard */}
       <BlurView intensity={50} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
       
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.centerContainer, { pointerEvents: 'box-none' as any }]}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[styles.centerContainer, { pointerEvents: 'box-none' }]}>
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <Animated.View entering={FadeIn.duration(250)} exiting={FadeOut.duration(200)} style={styles.modal} pointerEvents="auto">
+        <Animated.View entering={FadeIn.duration(250)} exiting={FadeOut.duration(200)} style={[styles.modal, { pointerEvents: 'auto' }]}>
           <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={styles.modalBlur}>
             
             {/* Search Input */}

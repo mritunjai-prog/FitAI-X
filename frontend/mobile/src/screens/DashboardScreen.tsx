@@ -107,8 +107,8 @@ export default function DashboardScreen({
 
       <SafeAreaView style={{ flex: 1 }}>
         {/* Sticky Blurred Header (Replaces Top Nav when scrolled) */}
-        <Animated.View style={[styles.stickyHeader, stickyHeaderStyle, { pointerEvents: 'none' }]}>
-          <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
+        <Animated.View style={[styles.stickyHeader, stickyHeaderStyle]}>
+          <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={[StyleSheet.absoluteFill, { pointerEvents: 'none' }]} />
         </Animated.View>
 
         <Animated.ScrollView 
