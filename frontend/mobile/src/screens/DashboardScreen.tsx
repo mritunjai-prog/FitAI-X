@@ -41,7 +41,7 @@ export default function DashboardScreen({
   const { data: feed = [] } = useQuery({ queryKey: ['feed'], queryFn: fetchFeed });
   const { data: activeUsers = [] } = useQuery({ queryKey: ['activeUsers'], queryFn: fetchActiveUsers });
   const { data: vitals } = useQuery({ queryKey: ['vitals'], queryFn: fetchVitals, refetchInterval: 3000 });
-  const { data: history } = useQuery({ queryKey: ['workoutHistory'], queryFn: () => fetchWorkoutHistory() });
+  const { data: history } = useQuery({ queryKey: ['workoutHistory'], queryFn: () => fetchWorkoutHistory(user?.id || '') });
 
   const recentWorkout = history?.[0];
 

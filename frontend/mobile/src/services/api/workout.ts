@@ -18,7 +18,7 @@ export interface Workout {
   isCurrent?: boolean;
 }
 
-export const fetchCurrentWorkout = async (userId: string = 'demo-user-id'): Promise<Workout | null> => {
+export const fetchCurrentWorkout = async (userId: string): Promise<Workout | null> => {
   try {
     const { data } = await apiClient.get(`/workouts/current?userId=${userId}`);
     return data;
@@ -55,7 +55,7 @@ export const completeSession = async (sessionData: any) => {
   return data;
 };
 
-export const fetchWorkoutHistory = async (userId: string = 'demo-user-id') => {
+export const fetchWorkoutHistory = async (userId: string) => {
   const { data } = await apiClient.get(`/workouts/history?userId=${userId}`);
   return data;
 };
