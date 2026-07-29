@@ -194,7 +194,7 @@ function MainApp() {
   };
 
   return (
-    <Animated.View key={!hasOnboarded ? 'Onboarding' : currentScreen} entering={FadeIn.duration(400)} style={{ flex: 1 }}>
+    <Animated.View key={!hasOnboarded ? 'Onboarding' : currentScreen} entering={FadeIn.duration(400)} style={{ flex: 1, backgroundColor: isDark ? '#050505' : '#F5F5F7' }}>
       {renderScreen()}
       
       {hasOnboarded && !['Settings', 'Notifications', 'Recovery'].includes(currentScreen) && (
