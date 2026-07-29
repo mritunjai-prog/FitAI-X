@@ -1499,6 +1499,7 @@ function PlanTab({
   const A = makeAccents(isDark);
   const [chips, setChips] = useState<string[]>(['High protein']);
   const [prompt, setPrompt] = useState('');
+  const [expandedMeal, setExpandedMeal] = useState<string | null>(null);
 
   const day = week[selectedDay] || { label: 'MON', dayOfMonth: new Date().getDate(), cals: 2000, onTarget: true };
   const dayCost = meals?.reduce((a, m) => a + (m?.cost || 0), 0) || 0;
@@ -1713,8 +1714,11 @@ function PlanTab({
         </View>
 
         <SectionLabel text={`${day.label} · Meals`} C={C} action="Add" onAction={() => undefined} />
-        {meals.map((m, i) => (
-          <Row key={m.id} isDark={isDark} first={i === 0} indented onPress={() => undefined}>
+        {meals.filter(m => ['Breakfast','Lunch','Dinner'].includes(m.type)).map((m, i) => {
+          const isExpanded = expandedMeal === m.id;
+          return (
+          <View key={m.id}>
+          <Row key={m.id} isDark={isDark} first={i === 0} indented onPress={() => setExpandedMeal(isExpanded ? null : m.id)}>
             <View style={{ width: 32, alignItems: 'center' }}>
               <Text style={{ fontFamily: F.num, fontSize: 11.5, color: C.onSurfaceVariant }}>
                 {m.time}
@@ -1732,18 +1736,24 @@ function PlanTab({
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={{ fontFamily: F.header, fontSize: 15.5, letterSpacing: -0.2, color: C.onSurface }}>
-                {m.name}
+                {m.type}: {m.name}
               </Text>
               <Text style={{ fontFamily: F.num, fontSize: 12, color: C.primary, marginTop: 3 }}>
                 {m.cals} kcal
                 <Text style={{ color: C.onSurfaceVariant }}> · </Text>
                 {m.protein}p {m.carbs}c {m.fat}f
-                <Text style={{ color: C.onSurfaceVariant }}> · </Text>
-                {money(m.cost)}
               </Text>
             </View>
-            <Icon name="chevron-right" size={17} color={C.onSurfaceVariant} />
+            <Icon name={isExpanded ? 'expand-less' : 'chevron-right'} size={17} color={C.onSurfaceVariant} />
           </Row>
+          {isExpanded && (
+            <View style={{ paddingHorizontal: T.gutter + 32, paddingBottom: 14 }}>
+              <Text style={{ fontFamily: F.body, fontSize: 12, color: C.onSurfaceVariant, lineHeight: 18 }}>
+                Protein: {m.protein}g | Carbs: {m.carbs}g | Fat: {m.fat}g | Cost: {money(m.cost || 0)}
+              </Text>
+            </View>
+          )}
+          </View>
         ))}
 
         <SectionLabel text="Week Total" C={C} />
@@ -2508,11 +2518,17 @@ export default function NutritionScreen({
 
   /* ── Derived data ────────────────────────────────── */
   const meals: Meal[] = useMemo(() => {
-    if (Array.isArray(userMeals) && userMeals.length) return userMeals.map(toMeal);
-    if (Array.isArray(budgetData?.meals) && budgetData.meals.length) {
-      return budgetData.meals.map(toMeal);
-    }
-    return [];
+    let raw: any[] = [];
+    if (Array.isArray(userMeals) && userMeals.length) raw = userMeals;
+    else if (Array.isArray(budgetData?.meals) && budgetData.meals.length) raw = budgetData.meals;
+    const seen = new Set<string>();
+    const deduped = raw.filter((m: any) => {
+      const id = m.id || m.name;
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    return deduped.map(toMeal);
   }, [userMeals, budgetData]);
 
   const targets: MacroTargets = useMemo(
