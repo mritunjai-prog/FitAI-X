@@ -200,4 +200,58 @@ router.get('/', async (req, res) => {
   }
 })
 
-export default router
+// PUT /api/v1/profile — update user settings/preferences
+router.put('/', async (req, res) => {
+  try {
+    const { userId, prefs, goals } = req.body;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+
+    const updateData: any = {};
+    if (goals !== undefined) updateData.goal = Array.isArray(goals) ? goals.join(',') : goals;
+    
+    if (prefs) {
+      // Store preferences as JSON in medicalConditions or a dedicated field
+      // For now we store on user record
+      if (prefs.adaptive !== undefined) updateData.adaptiveProgression = prefs.adaptive;
+      if (prefs.voice !== undefined) updateData.voiceFeedback = prefs.voice;
+      if (prefs.aggressive !== undefined) updateData.aggressiveProgression = prefs.aggressive;
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      await prisma.user.update({
+        where: { id: userId },
+        data: updateData,
+      });
+    }
+
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/v1/profile/export
+router.get('/export', async (req, res) => {
+  try {
+    const userId = req.query.userId as string;
+    if (!userId) return res.status(400).json({ error: 'Missing userId' });
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const sessions = await prisma.workoutSession.count({ where: { userId, status: 'COMPLETED' } });
+
+    res.json({
+      user: {
+        name: user?.name, email: user?.email, goal: user?.goal,
+        weight: user?.weight, height: user?.height, age: user?.age,
+      },
+      stats: {
+        totalSessions: sessions,
+        currentStreak: user?.currentStreak || 0,
+        xpTotal: user?.xpTotal || 0,
+      },
+      exportedAt: new Date().toISOString(),
+    });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});

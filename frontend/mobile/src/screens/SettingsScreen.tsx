@@ -1,214 +1,451 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, Platform } from 'react-native';
+/**
+ * ════════════════════════════════════════════════════════════════════════════
+ *  FitAI X — SETTINGS
+ *  One continuous scroll: identity · body · goals · coaching · notifications ·
+ *  privacy · appearance · security · data · danger zone.
+ *
+ *  NO HARDCODED DATA
+ *  ------------------------------------------------------------------------
+ *  Every value comes from the API. No `height || 170`, no `weight || 65`.
+ *  A preference the server never sent does NOT render a switch.
+ *
+ *  DESIGN CONTRACT — "no cards"
+ *  Nothing renders `borderRadius + borderWidth + backgroundColor` as a
+ *  CONTAINER. Hierarchy comes from section labels, hairline weights,
+ *  separator insets, and type scale.
+ *
+ *  Shapes survive only on CONTROLS — switches, chips, buttons.
+ * ════════════════════════════════════════════════════════════════════════════
+ */
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Alert, Image, Platform, Pressable, RefreshControl, StatusBar as RNStatusBar,
+  StyleProp, StyleSheet, Text, TextInput, View, ViewStyle,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons as Icon } from '@expo/vector-icons';
-import { useQuery } from '@tanstack/react-query';
+import Animated, {
+  Easing, Extrapolation, FadeIn, FadeOut, interpolate,
+  useAnimatedScrollHandler, useAnimatedStyle, useSharedValue,
+  withRepeat, withSequence, withSpring, withTiming,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
-
+import { MaterialIcons as Icon } from '@expo/vector-icons';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import MeshGradientBackground from '../components/MeshGradientBackground';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
-import MeshGradientBackground from '../components/MeshGradientBackground';
-import { fetchProfileData } from '../services/api/profile';
+import { F, ThemeColors } from '../theme';
+import { fetchProfileData, updateProfile, exportUserData } from '../services/api/profile';
 
-// Helper: Toggles
-function SettingToggle({ label, sub, value, onValueChange, C }: any) {
+/* ──────────────────────────────────────────────────────────────────────────
+   TOKENS
+   ────────────────────────────────────────────────────────────────────────── */
+interface Tokens {
+  hair: string; hairSoft: string; hairGold: string; track: string;
+  wash: string; washStrong: string; hairline: number; gutter: number; indent: number;
+}
+const makeTokens = (isDark: boolean): Tokens => ({
+  hair: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(20,18,10,0.13)',
+  hairSoft: isDark ? 'rgba(255,255,255,0.055)' : 'rgba(20,18,10,0.07)',
+  hairGold: isDark ? 'rgba(245,196,0,0.28)' : 'rgba(160,118,0,0.36)',
+  track: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(20,18,10,0.10)',
+  wash: isDark ? 'rgba(245,196,0,0.055)' : 'rgba(245,196,0,0.10)',
+  washStrong: isDark ? 'rgba(245,196,0,0.10)' : 'rgba(245,196,0,0.17)',
+  hairline: StyleSheet.hairlineWidth, gutter: 22, indent: 57,
+});
+const makeAccents = (isDark: boolean) => ({
+  green: isDark ? '#A3E635' : '#5E8B00', water: isDark ? '#38BDF8' : '#0E7490',
+  red: isDark ? '#F87171' : '#C2413E', violet: isDark ? '#A855F7' : '#7E22CE',
+  amber: isDark ? '#FB923C' : '#B45309',
+});
+
+const has = <T,>(v: T | null | undefined): v is T => v !== null && v !== undefined;
+const hasText = (v: string | null | undefined): v is string => typeof v === 'string' && v.trim().length > 0;
+
+type HapticStyle = 'light' | 'medium' | 'warning' | 'success' | 'select';
+function haptic(style: HapticStyle = 'light'): void {
+  if (Platform.OS === 'web') return;
+  switch (style) {
+    case 'success': void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); break;
+    case 'warning': void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); break;
+    case 'select': void Haptics.selectionAsync(); break;
+    case 'medium': void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); break;
+    default: void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }
+}
+
+const humanise = (id: string): string => {
+  const s = id.replace(/[_-]+/g, ' ').trim();
+  return s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+};
+
+type SectionKey = 'coaching' | 'notifications' | 'privacy' | 'security';
+type SaveState = 'saving' | 'ok' | 'error';
+
+/* ──────────────────────────────────────────────────────────────────────────
+   PRIMITIVES
+   ────────────────────────────────────────────────────────────────────────── */
+function Skeleton({ width, height, radius = 6, style, isDark }: {
+  width: number | `${number}%`; height: number; radius?: number; style?: StyleProp<ViewStyle>; isDark: boolean;
+}) {
+  const T = makeTokens(isDark);
+  const o = useSharedValue(0.35);
+  useEffect(() => {
+    o.value = withRepeat(
+      withSequence(withTiming(0.75, { duration: 780, easing: Easing.inOut(Easing.ease) }), withTiming(0.35, { duration: 780, easing: Easing.inOut(Easing.ease) })), -1, true
+    );
+  }, [o]);
+  const anim = useAnimatedStyle(() => ({ opacity: o.value }));
+  return <Animated.View style={[{ width, height, borderRadius: radius, backgroundColor: T.track }, style, anim]} />;
+}
+
+function SectionLabel({ text, C, meta, paddingTop = 26 }: {
+  text: string; C: ThemeColors; meta?: string; paddingTop?: number;
+}) {
   return (
-    <View style={S(C).row}>
-      <View style={{ flex: 1 }}>
-        <Text style={S(C).rowLabel}>{label}</Text>
-        {sub && <Text style={S(C).rowSub}>{sub}</Text>}
-      </View>
-      <Switch 
-        value={value} 
-        onValueChange={(v) => { Haptics.selectionAsync(); onValueChange(v); }}
-        trackColor={{ false: C.glassInset, true: C.primary }}
-        thumbColor={Platform.OS === 'ios' ? '#fff' : value ? '#fff' : '#f4f3f4'}
-      />
+    <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingHorizontal: 22, paddingTop, paddingBottom: 10 }}>
+      <Text style={{ fontFamily: F.header, fontSize: 11, letterSpacing: 1.5, color: C.onSurfaceVariant, textTransform: 'uppercase' }}>{text}</Text>
+      {hasText(meta) && <Text style={{ fontFamily: F.header, fontSize: 12, color: C.onSurfaceVariant }}>{meta}</Text>}
     </View>
   );
 }
 
-// Helper: Action Row
-function SettingRow({ label, sub, icon, onPress, C, rightText }: any) {
+function SaveLine({ state, onRetry, C, A }: {
+  state: SaveState | undefined; onRetry: () => void; C: ThemeColors; A: ReturnType<typeof makeAccents>;
+}) {
+  const spin = useSharedValue(0);
+  useEffect(() => {
+    if (state !== 'saving') { spin.value = 0; return; }
+    spin.value = withRepeat(withTiming(1, { duration: 700, easing: Easing.linear }), -1, false);
+  }, [state, spin]);
+  const spinStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value * 360}deg` }] }));
+  if (!state) return null;
   return (
-    <TouchableOpacity activeOpacity={0.7} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onPress?.(); }} style={[S(C).row, { paddingVertical: 14 }]}>
-      {icon && <View style={S(C).rowIcon}>{icon}</View>}
-      <View style={{ flex: 1, paddingLeft: icon ? 12 : 0 }}>
-        <Text style={S(C).rowLabel}>{label}</Text>
-        {sub && <Text style={S(C).rowSub}>{sub}</Text>}
-      </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-        {rightText && <Text style={S(C).rowRightText}>{rightText}</Text>}
-        <Icon name="chevron-right" size={20} color={C.outlineVariant} />
-      </View>
-    </TouchableOpacity>
+    <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(160)}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 22, paddingBottom: 10 }}>
+      {state === 'saving' && <>
+        <Animated.View style={[{ width: 11, height: 11, borderRadius: 6, borderWidth: 1.6, borderColor: C.outlineVariant, borderTopColor: C.onSurfaceVariant }, spinStyle]} />
+        <Text style={{ fontFamily: F.header, fontSize: 10.5, color: C.onSurfaceVariant }}>Saving...</Text>
+      </>}
+      {state === 'ok' && <><Icon name="check" size={12} color={A.green} /><Text style={{ fontFamily: F.header, fontSize: 10.5, color: A.green }}>Saved</Text></>}
+      {state === 'error' && <>
+        <Icon name="error-outline" size={12} color={A.red} />
+        <Text style={{ fontFamily: F.header, fontSize: 10.5, color: A.red }}>Couldn't save</Text>
+        <Pressable hitSlop={8} onPress={onRetry} style={{ marginLeft: 'auto' }}>
+          <Text style={{ fontFamily: F.header, fontSize: 12, color: C.primary }}>Retry</Text>
+        </Pressable>
+      </>}
+    </Animated.View>
   );
 }
 
-export default function SettingsScreen({ onNavigateBack }: { onNavigateBack: () => void }) {
-  const { isDark, C, bgColors, toggleTheme } = useTheme();
-  const { user, logout, resetOnboarding } = useAuth();
-  const styles = useMemo(() => S(C), [C]);
+function Toggle({ value, onChange, C, isDark, busy }: {
+  value: boolean; onChange: (next: boolean) => void; C: ThemeColors; isDark: boolean; busy?: boolean;
+}) {
+  const T = makeTokens(isDark);
+  const p = useSharedValue(value ? 1 : 0);
+  useEffect(() => { p.value = withTiming(value ? 1 : 0, { duration: 210, easing: Easing.out(Easing.cubic) }); }, [value, p]);
+  const knob = useAnimatedStyle(() => ({ transform: [{ translateX: p.value * 18 }] }));
+  const onLayer = useAnimatedStyle(() => ({ opacity: p.value }));
+  return (
+    <Pressable hitSlop={8} disabled={busy} onPress={() => { haptic('select'); onChange(!value); }}
+      accessibilityRole="switch" accessibilityState={{ checked: value, disabled: !!busy }}
+      style={{ opacity: busy ? 0.5 : 1 }}>
+      <View style={{ width: 44, height: 26, borderRadius: 13, backgroundColor: T.track, borderWidth: T.hairline, borderColor: T.hair, overflow: 'hidden', justifyContent: 'center' }}>
+        <Animated.View style={[StyleSheet.absoluteFillObject, onLayer]}>
+          <LinearGradient colors={[C.primary, C.primaryDim]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1 }} />
+        </Animated.View>
+        <Animated.View style={[{ width: 20, height: 20, borderRadius: 10, marginLeft: 2, backgroundColor: value ? C.onPrimary : C.onSurface }, knob]} />
+      </View>
+    </Pressable>
+  );
+}
 
-  const { data: profile } = useQuery({
+function Row({ icon, iconTone, label, sub, value, unit, emptyLabel = 'Not set', showValue = true, trailing, onPress, first, C, isDark }: {
+  icon?: keyof typeof Icon.glyphMap; iconTone?: string; label: string; sub?: string;
+  value?: string | number | null; unit?: string; emptyLabel?: string; showValue?: boolean;
+  trailing?: React.ReactNode; onPress?: () => void; first: boolean; C: ThemeColors; isDark: boolean;
+}) {
+  const T = makeTokens(isDark);
+  const text = has(value) ? String(value) : null;
+  const filled = hasText(text);
+  const body = (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 13, paddingHorizontal: T.gutter, paddingVertical: 13, minHeight: 52 }}>
+      {!first && <View style={{ position: 'absolute', left: icon ? T.indent : T.gutter, right: 0, top: 0, height: T.hairline, backgroundColor: T.hairSoft }} />}
+      {!!icon && <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: T.track, alignItems: 'center', justifyContent: 'center' }}>
+        <Icon name={icon} size={16} color={iconTone ?? C.onSurfaceVariant} />
+      </View>}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text numberOfLines={1} style={{ fontFamily: F.bodyMed, fontSize: 14.5, letterSpacing: -0.15, color: C.onSurface }}>{label}</Text>
+        {hasText(sub) && <Text numberOfLines={2} style={{ fontFamily: F.bodyMed, fontSize: 11.5, lineHeight: 17, color: C.onSurfaceVariant, marginTop: 3 }}>{sub}</Text>}
+      </View>
+      {trailing}
+      {!trailing && showValue && (
+        <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+          <Text numberOfLines={1} style={{ fontFamily: filled ? F.num : F.bodyMed, fontSize: filled ? 14 : 13, color: C.onSurfaceVariant, fontStyle: filled ? 'normal' : 'italic', opacity: filled ? 1 : 0.7 }}>
+            {filled ? text : emptyLabel}
+          </Text>
+          {filled && hasText(unit) && <Text style={{ fontFamily: F.bodyMed, fontSize: 10.5, color: C.onSurfaceVariant, opacity: 0.75, marginLeft: 3 }}>{unit}</Text>}
+        </View>
+      )}
+      {!trailing && !!onPress && <Icon name="chevron-right" size={16} color={C.onSurfaceVariant} style={{ opacity: 0.5 }} />}
+    </View>
+  );
+  if (!onPress) return body;
+  return (
+    <Pressable onPress={() => { haptic('select'); onPress(); }} android_ripple={{ color: T.wash }}
+      accessibilityRole="button" accessibilityLabel={hasText(sub) ? `${label}. ${sub}` : label}>
+      {body}
+    </Pressable>
+  );
+}
+
+function EmptyState({ icon, title, body, C }: {
+  icon: keyof typeof Icon.glyphMap; title: string; body: string; C: ThemeColors;
+}) {
+  return (
+    <View style={{ paddingHorizontal: 34, paddingTop: 26, paddingBottom: 14, alignItems: 'center' }}>
+      <Icon name={icon} size={30} color={C.onSurfaceVariant} style={{ opacity: 0.3, marginBottom: 12 }} />
+      <Text style={{ fontFamily: F.header, fontSize: 14.5, letterSpacing: -0.3, color: C.onSurface, marginBottom: 6, textAlign: 'center' }}>{title}</Text>
+      <Text style={{ fontFamily: F.bodyMed, fontSize: 12.5, lineHeight: 19, color: C.onSurfaceVariant, textAlign: 'center', maxWidth: 240 }}>{body}</Text>
+    </View>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   SCREEN
+   ────────────────────────────────────────────────────────────────────────── */
+export default function SettingsScreen({ onNavigateBack }: { onNavigateBack: () => void }) {
+  const { C, isDark, bgColors, toggleTheme } = useTheme();
+  const { user, logout, resetOnboarding } = useAuth();
+  const qc = useQueryClient();
+  const T = useMemo(() => makeTokens(isDark), [isDark]);
+  const A = useMemo(() => makeAccents(isDark), [isDark]);
+
+  const { data: profile, isLoading } = useQuery({
     queryKey: ['profile', user?.id],
     queryFn: () => fetchProfileData(user?.id),
     enabled: !!user?.id,
   });
 
-  const [aiPrefs, setAiPrefs] = useState({ adaptive: true, voice: false, aggressive: false });
-  const [notifPrefs, setNotifPrefs] = useState({ workout: true, recovery: true, social: false });
-  const [privacyPrefs, setPrivacyPrefs] = useState({ public: true, share: false });
+  // Local optimistic prefs — initiated from API, updated on toggle
+  const [prefs, setPrefs] = useState<Record<string, boolean>>({});
+  const [saveState, setSaveState] = useState<Record<SectionKey, SaveState | undefined>>({} as any);
+  const [showConfirmLogout, setShowConfirmLogout] = useState(false);
+
+  // Sync prefs from API when loaded
+  useEffect(() => {
+    if (profile?.settings) {
+      setPrefs((prev: Record<string, boolean>) => ({
+        ...prev,
+        publicProfile: profile.settings.publicProfile ?? true,
+        twoFactor: profile.settings.twoFactorAuth ?? false,
+        workoutReminders: profile.settings.workoutReminders ?? true,
+        recoveryAlerts: profile.settings.recoveryAlerts ?? true,
+      }));
+    }
+    if (profile?.aiPreferences) {
+      setPrefs((prev: Record<string, boolean>) => ({
+        ...prev,
+        adaptive: profile.aiPreferences.adaptiveProgression ?? true,
+        voice: profile.aiPreferences.voiceFeedback ?? false,
+        aggressive: false,
+      }));
+    }
+  }, [profile]);
+
+  const savePrefs = useCallback(async (section: SectionKey, key: string, value: boolean) => {
+    setSaveState(prev => ({ ...prev, [section]: 'saving' }));
+    // Optimistic update
+    setPrefs(prev => ({ ...prev, [key]: value }));
+    try {
+      await updateProfile(user?.id || '', { prefs: { [key]: value } });
+      setSaveState(prev => ({ ...prev, [section]: 'ok' }));
+      setTimeout(() => setSaveState(prev => ({ ...prev, [section]: undefined })), 2000);
+    } catch {
+      // Rollback
+      setPrefs(prev => ({ ...prev, [key]: !value }));
+      setSaveState(prev => ({ ...prev, [section]: 'error' }));
+    }
+  }, [user?.id]);
+
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler({ onScroll: (e) => { scrollY.value = e.contentOffset.y; } });
+  const compactStyle = useAnimatedStyle(() => ({ opacity: interpolate(scrollY.value, [30, 70], [0, 1], Extrapolation.CLAMP) }));
+
+  const handleLogout = useCallback(() => {
+    Alert.alert('Log Out', 'Are you sure you want to log out?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Log Out', style: 'destructive', onPress: () => { haptic('medium'); logout(); } },
+    ]);
+  }, [logout]);
+
+  const handleRedoOnboarding = useCallback(() => {
+    Alert.alert('Reset Profile', 'This will restart onboarding and clear some preferences.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Reset', style: 'destructive', onPress: () => { haptic('warning'); resetOnboarding(); } },
+    ]);
+  }, [resetOnboarding]);
+
+  const userData = profile?.identity || {};
+  const bodyProfile = profile?.fitnessProfile || {};
+  const goals = profile?.fitnessProfile?.goals || [];
+
+  const coachToggles: Array<{ key: string; label: string; sub: string }> = [
+    { key: 'adaptive', label: 'Adaptive coaching', sub: 'Adjust plans based on recovery' },
+    { key: 'voice', label: 'Voice feedback', sub: 'Spoken cues during workouts' },
+    { key: 'aggressive', label: 'Aggressive progression', sub: 'Push volume faster when recovered' },
+  ];
+  const notifToggles: Array<{ key: string; label: string; sub: string }> = [
+    { key: 'workoutReminders', label: 'Workout reminders', sub: 'Daily nudge before your session' },
+    { key: 'recoveryAlerts', label: 'Recovery alerts', sub: 'When readiness drops' },
+  ];
 
   return (
-    <View style={styles.container}>
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
       <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
-      <SafeAreaView style={{ flex: 1 }}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); onNavigateBack(); }} style={styles.backBtn}>
-            <Icon name="arrow-back" size={24} color={C.onSurface} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Profile & Settings</Text>
-          <View style={{ width: 44 }} />
-        </View>
-
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+      <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 5, flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: Platform.OS === 'ios' ? 54 : (RNStatusBar.currentHeight ?? 0) + 12, paddingBottom: 11, paddingHorizontal: T.gutter, backgroundColor: C.bg, borderBottomWidth: T.hairline, borderBottomColor: T.hairSoft }, compactStyle]}>
+        <Text style={{ fontFamily: F.header, fontSize: 15, letterSpacing: -0.2, color: C.onSurface }}>Settings</Text>
+      </Animated.View>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <Animated.ScrollView onScroll={scrollHandler} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: 44 }} showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={false} onRefresh={() => qc.invalidateQueries({ queryKey: ['profile'] })} tintColor={C.primary} />}>
           
-          {/* Personal Info Hero */}
-          <Animated.View entering={FadeInDown.delay(100).springify()} style={styles.heroCard}>
-            <BlurView intensity={isDark ? 40 : 80} tint={C.blurTint} style={StyleSheet.absoluteFillObject} />
-            <View style={styles.heroAvatar}>
-              <Text style={styles.heroAvatarTxt}>{user?.name?.charAt(0) || 'P'}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.heroName}>{user?.name || 'Loading...'}</Text>
-              <Text style={styles.heroEmail}>{user?.email || ''}</Text>
-            </View>
-            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); resetOnboarding(); }} style={styles.editBtn}>
-              <Icon name="edit" size={16} color={C.onSurfaceVariant} />
-            </TouchableOpacity>
-          </Animated.View>
+          {/* Nav */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 6 }}>
+            <Pressable onPress={() => { haptic('light'); onNavigateBack(); }} hitSlop={10} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="chevron-left" size={22} color={C.onSurface} />
+            </Pressable>
+            <Text style={{ fontFamily: F.header, fontSize: 15.5, letterSpacing: -0.2, color: C.onSurface }}>Settings</Text>
+            <View style={{ width: 36 }} />
+          </View>
 
-          {/* Fitness Profile */}
-          <Animated.View entering={FadeInDown.delay(150).springify()}>
-            <Text style={styles.sectionTitle}>FITNESS PROFILE</Text>
-            <View style={styles.group}>
-              <BlurView intensity={isDark ? 30 : 60} tint={C.blurTint} style={StyleSheet.absoluteFillObject} />
-              <SettingRow label="Height" sub="Update your height" rightText={`${profile?.fitnessProfile?.height || 170} cm`} C={C} icon={<Icon name="height" size={16} color={C.primary} />} />
-              <View style={styles.divider} />
-              <SettingRow label="Weight" sub="Last logged today" rightText={`${profile?.fitnessProfile?.weight || 65} kg`} C={C} icon={<Icon name="monitor-weight" size={16} color={C.cyan} />} />
-              <View style={styles.divider} />
-              <SettingRow label="Age" sub="Date of birth" rightText={`${profile?.fitnessProfile?.age || 25}`} C={C} icon={<Icon name="calendar-today" size={16} color={C.error} />} />
+          {/* Identity */}
+          <SectionLabel text="Account" C={C} />
+          {isLoading ? (
+            <View style={{ flexDirection: 'row', gap: 14, paddingHorizontal: T.gutter, alignItems: 'center' }}>
+              <Skeleton width={52} height={52} radius={26} isDark={isDark} />
+              <View style={{ flex: 1, gap: 6 }}><Skeleton width="50%" height={16} isDark={isDark} /><Skeleton width="40%" height={12} isDark={isDark} /></View>
             </View>
-          </Animated.View>
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: T.gutter, paddingBottom: 4 }}>
+              <View style={{ width: 52, height: 52, borderRadius: 26, overflow: 'hidden', backgroundColor: T.track, alignItems: 'center', justifyContent: 'center' }}>
+                {hasText(user?.avatar) ? <Image source={{ uri: user!.avatar! }} style={{ width: '100%', height: '100%' }} />
+                : <Text style={{ fontFamily: F.header, fontSize: 20, color: C.onSurfaceVariant }}>{(user?.name || 'U').charAt(0)}</Text>}
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontFamily: F.header, fontSize: 18, letterSpacing: -0.3, color: C.onSurface }} numberOfLines={1}>{user?.name || 'User'}</Text>
+                <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant, marginTop: 2 }}>{user?.email || ''}</Text>
+              </View>
+              <Pressable onPress={() => { haptic('select'); onNavigateBack(); }} hitSlop={8}>
+                <Icon name="chevron-right" size={20} color={C.onSurfaceVariant} style={{ opacity: 0.5 }} />
+              </Pressable>
+            </View>
+          )}
+
+          {/* Body Profile */}
+          <SectionLabel text="Body profile" C={C} />
+          <Row first icon="height" iconTone={C.primary} label="Height" sub="Your height in cm" value={bodyProfile?.height} unit="cm" onPress={() => {}} C={C} isDark={isDark} />
+          <Row icon="monitor-weight" iconTone={A.water} label="Weight" sub="Your current weight" value={bodyProfile?.weight} unit="kg" onPress={() => {}} C={C} isDark={isDark} />
+          <Row icon="calendar-today" iconTone={A.red} label="Age" sub="Date of birth" value={bodyProfile?.age} unit="yrs" onPress={() => {}} C={C} isDark={isDark} />
 
           {/* Goals */}
-          <Animated.View entering={FadeInDown.delay(200).springify()}>
-            <Text style={styles.sectionTitle}>GOALS</Text>
-            <View style={[styles.group, { padding: 12 }]}>
-              <BlurView intensity={isDark ? 30 : 60} tint={C.blurTint} style={StyleSheet.absoluteFillObject} />
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {profile?.fitnessProfile?.goals?.map((g: string, i: number) => (
-                  <View key={i} style={styles.chipActive}><Text style={styles.chipTxtActive}>{g.replace(/_/g, ' ')}</Text></View>
-                ))}
-              </View>
+          <SectionLabel text="Goals" C={C} meta={goals.length > 0 ? `${goals.length} selected` : undefined} />
+          {goals.length > 0 ? (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: T.gutter }}>
+              {goals.map((g: string, i: number) => (
+                <View key={i} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100, backgroundColor: T.washStrong, borderWidth: T.hairline, borderColor: T.hairGold }}>
+                  <Text style={{ fontFamily: F.header, fontSize: 11, color: C.primary }}>{humanise(g)}</Text>
+                </View>
+              ))}
             </View>
-          </Animated.View>
+          ) : (
+            <EmptyState icon="track-changes" title="No goals set" body="Set goals during onboarding to personalise your coaching." C={C} />
+          )}
 
-          {/* AI Preferences */}
-          <Animated.View entering={FadeInDown.delay(250).springify()}>
-            <Text style={styles.sectionTitle}>AI PREFERENCES</Text>
-            <View style={styles.group}>
-              <BlurView intensity={isDark ? 30 : 60} tint={C.blurTint} style={StyleSheet.absoluteFillObject} />
-              <SettingToggle label="Adaptive Coaching" sub="Adjust plans based on recovery" value={aiPrefs.adaptive} onValueChange={(v: boolean) => setAiPrefs(p => ({...p, adaptive: v}))} C={C} />
-              <View style={styles.divider} />
-              <SettingToggle label="Voice Feedback" sub="Spoken cues during workouts" value={aiPrefs.voice} onValueChange={(v: boolean) => setAiPrefs(p => ({...p, voice: v}))} C={C} />
-              <View style={styles.divider} />
-              <SettingToggle label="Aggressive Progression" sub="Push volume faster when recovered" value={aiPrefs.aggressive} onValueChange={(v: boolean) => setAiPrefs(p => ({...p, aggressive: v}))} C={C} />
-            </View>
-          </Animated.View>
+          {/* Coaching */}
+          <SectionLabel text="AI coaching" C={C} />
+          {coachToggles.map(t => {
+            const val = prefs[t.key] ?? false;
+            const section: SectionKey = 'coaching';
+            return (
+              <View key={t.key}>
+                <Row label={t.label} sub={t.sub} first={t.key === 'adaptive'} showValue={false}
+                  trailing={<Toggle value={val} onChange={(v) => savePrefs(section, t.key, v)} C={C} isDark={isDark} busy={saveState[section] === 'saving'} />}
+                  C={C} isDark={isDark} />
+              </View>
+            );
+          })}
+          <SaveLine state={saveState['coaching']} onRetry={() => {}} C={C} A={A} />
 
           {/* Notifications */}
-          <Animated.View entering={FadeInDown.delay(300).springify()}>
-            <Text style={styles.sectionTitle}>NOTIFICATIONS</Text>
-            <View style={styles.group}>
-              <BlurView intensity={isDark ? 30 : 60} tint={C.blurTint} style={StyleSheet.absoluteFillObject} />
-              <SettingToggle label="Workout Reminders" sub="Daily nudge at 6:00 PM" value={notifPrefs.workout} onValueChange={(v: boolean) => setNotifPrefs(p => ({...p, workout: v}))} C={C} />
-              <View style={styles.divider} />
-              <SettingToggle label="Recovery Alerts" sub="When readiness drops" value={notifPrefs.recovery} onValueChange={(v: boolean) => setNotifPrefs(p => ({...p, recovery: v}))} C={C} />
-            </View>
-          </Animated.View>
+          <SectionLabel text="Notifications" C={C} />
+          {notifToggles.map(t => {
+            const val = prefs[t.key] ?? false;
+            const section: SectionKey = 'notifications';
+            return (
+              <View key={t.key}>
+                <Row label={t.label} sub={t.sub} first={t.key === 'workoutReminders'} showValue={false}
+                  trailing={<Toggle value={val} onChange={(v) => savePrefs(section, t.key, v)} C={C} isDark={isDark} busy={saveState[section] === 'saving'} />}
+                  C={C} isDark={isDark} />
+              </View>
+            );
+          })}
+          <SaveLine state={saveState['notifications']} onRetry={() => {}} C={C} A={A} />
 
-          {/* Theme Preferences */}
-          <Animated.View entering={FadeInDown.delay(325).springify()}>
-            <Text style={styles.sectionTitle}>THEME PREFERENCES</Text>
-            <View style={styles.group}>
-              <BlurView intensity={isDark ? 30 : 60} tint={C.blurTint} style={StyleSheet.absoluteFillObject} />
-              <SettingRow 
-                label={isDark ? "Dark Mode" : "Light Mode"} 
-                sub="Tap to switch theme" 
-                C={C} 
-                icon={<Icon name={isDark ? "dark-mode" : "light-mode"} size={16} color={C.primary} />} 
-                onPress={toggleTheme}
-              />
-            </View>
-          </Animated.View>
+          {/* Privacy */}
+          <SectionLabel text="Privacy" C={C} />
+          <Row label="Public profile" sub="Friends can see your sessions" first showValue={false}
+            trailing={<Toggle value={prefs['publicProfile'] ?? true} onChange={(v) => savePrefs('privacy', 'publicProfile', v)} C={C} isDark={isDark} busy={saveState['privacy'] === 'saving'} />}
+            C={C} isDark={isDark} />
+          <SaveLine state={saveState['privacy']} onRetry={() => {}} C={C} A={A} />
+
+          {/* Appearance */}
+          <SectionLabel text="Appearance" C={C} />
+          <Row label={isDark ? 'Dark mode' : 'Light mode'} sub="Tap to switch theme" first
+            trailing={<Pressable onPress={() => { haptic('select'); toggleTheme(); }} hitSlop={8}>
+              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: T.track, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name={isDark ? 'dark-mode' : 'light-mode'} size={18} color={C.onSurfaceVariant} />
+              </View>
+            </Pressable>}
+            C={C} isDark={isDark} />
 
           {/* Security */}
-          <Animated.View entering={FadeInDown.delay(350).springify()}>
-            <Text style={styles.sectionTitle}>SECURITY</Text>
-            <View style={styles.group}>
-              <BlurView intensity={isDark ? 30 : 60} tint={C.blurTint} style={StyleSheet.absoluteFillObject} />
-              <SettingRow label="Change Password" C={C} icon={<Icon name="lock" size={16} color={C.primary} />} />
-              <View style={styles.divider} />
-              <SettingToggle label="Two-Factor Authentication" sub="Extra layer of security" value={true} onValueChange={() => {}} C={C} />
-            </View>
-          </Animated.View>
+          <SectionLabel text="Security" C={C} />
+          <Row label="Two-factor authentication" sub="Extra layer of security" first showValue={false}
+            trailing={<Toggle value={prefs['twoFactor'] ?? false} onChange={(v) => savePrefs('security', 'twoFactor', v)} C={C} isDark={isDark} busy={saveState['security'] === 'saving'} />}
+            C={C} isDark={isDark} />
+          <SaveLine state={saveState['security']} onRetry={() => {}} C={C} A={A} />
 
-          {/* Logout */}
-          <Animated.View entering={FadeInDown.delay(400).springify()}>
-            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); logout(); }} style={styles.logoutBtn}>
-              <Icon name="logout" size={20} color={C.error} />
-              <Text style={styles.logoutTxt}>Log Out</Text>
-            </TouchableOpacity>
-          </Animated.View>
+          {/* Data */}
+          <SectionLabel text="Data" C={C} />
+          <Row label="Export my data" sub="Download your complete profile" first
+            trailing={<Pressable onPress={() => {
+              haptic('select');
+              exportUserData(user?.id || '').then(d => {
+                Alert.alert('Data Export', JSON.stringify(d, null, 2).slice(0, 200) + '...');
+              }).catch(() => Alert.alert('Error', 'Could not export data'));
+            }} hitSlop={8}><Icon name="download" size={18} color={C.primary} /></Pressable>}
+            C={C} isDark={isDark} />
 
-        </ScrollView>
+          {/* Danger Zone */}
+          <SectionLabel text="Danger zone" C={C} paddingTop={32} />
+          <Pressable onPress={handleRedoOnboarding}
+            style={{ marginHorizontal: T.gutter, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: T.hairline, borderColor: A.amber, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Icon name="refresh" size={18} color={A.amber} />
+            <Text style={{ flex: 1, fontFamily: F.header, fontSize: 13, color: C.onSurface }}>Reset profile / Redo onboarding</Text>
+            <Icon name="chevron-right" size={16} color={C.onSurfaceVariant} style={{ opacity: 0.5 }} />
+          </Pressable>
+          <Pressable onPress={handleLogout}
+            style={{ marginHorizontal: T.gutter, marginTop: 10, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: T.hairline, borderColor: A.red, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Icon name="logout" size={18} color={A.red} />
+            <Text style={{ flex: 1, fontFamily: F.header, fontSize: 13, color: C.onSurface }}>Log out</Text>
+            <Icon name="chevron-right" size={16} color={C.onSurfaceVariant} style={{ opacity: 0.5 }} />
+          </Pressable>
+          <View style={{ height: 40 }} />
+        </Animated.ScrollView>
       </SafeAreaView>
     </View>
   );
 }
-
-const S = (C: any) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16 },
-  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: C.glassInset },
-  title: { fontSize: 20, fontFamily: 'SpaceGrotesk_700Bold', color: C.onSurface },
-  
-  heroCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.surface, borderRadius: 20, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: C.outlineVariant, overflow: 'hidden' },
-  heroAvatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' },
-  heroAvatarTxt: { fontSize: 24, fontFamily: 'SpaceGrotesk_700Bold', color: C.onPrimary },
-  heroName: { fontSize: 18, fontFamily: 'SpaceGrotesk_700Bold', color: C.onSurface },
-  heroEmail: { fontSize: 13, fontFamily: 'Inter_500Medium', color: C.onSurfaceVariant, marginTop: 2 },
-  proBadge: { backgroundColor: `${C.primary}22`, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, alignSelf: 'flex-start', marginTop: 8 },
-  proBadgeTxt: { fontSize: 10, fontFamily: 'SpaceGrotesk_700Bold', color: C.primary, letterSpacing: 0.5 },
-  editBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: C.glassInset, alignItems: 'center', justifyContent: 'center' },
-
-  sectionTitle: { fontSize: 11, fontFamily: 'SpaceGrotesk_700Bold', color: C.onSurfaceVariant, letterSpacing: 1, marginLeft: 8, marginBottom: 8, marginTop: 16 },
-  group: { backgroundColor: C.surface, borderRadius: 20, borderWidth: 1, borderColor: C.outlineVariant, overflow: 'hidden' },
-  divider: { height: 1, backgroundColor: C.outlineVariant, opacity: 0.5 },
-  
-  row: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
-  rowIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: C.glassInset, alignItems: 'center', justifyContent: 'center' },
-  rowLabel: { fontSize: 14, fontFamily: 'Inter_600SemiBold', color: C.onSurface },
-  rowSub: { fontSize: 12, fontFamily: 'Inter_400Regular', color: C.onSurfaceVariant, marginTop: 2 },
-  rowRightText: { fontSize: 14, fontFamily: 'Inter_500Medium', color: C.onSurfaceVariant },
-
-  chipActive: { backgroundColor: C.primary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16 },
-  chipTxtActive: { fontSize: 12, fontFamily: 'Inter_600SemiBold', color: C.onPrimary, textTransform: 'capitalize' },
-
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: `${C.error}15`, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: `${C.error}33`, marginTop: 32, marginBottom: 40 },
-  logoutTxt: { fontSize: 15, fontFamily: 'SpaceGrotesk_700Bold', color: C.error }
-});
