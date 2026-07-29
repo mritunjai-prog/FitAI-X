@@ -133,7 +133,7 @@ function MainApp() {
       ) : currentScreen === 'Analytics' ? (
         <AnalyticsScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigateBack={() => setCurrentScreen('Dashboard')} />
       ) : currentScreen === 'Recovery' ? (
-        <RecoveryScreen navigation={{ goBack: () => setCurrentScreen('Dashboard') }} onNavigateToNotifications={() => setCurrentScreen('Notifications')} />
+        <RecoveryScreen navigation={{ goBack: () => setCurrentScreen('Dashboard') }} onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigate={(screen) => setCurrentScreen(screen)} />
       ) : currentScreen === 'Settings' ? (
         <SettingsScreen onNavigateBack={() => setCurrentScreen('Profile')} />
       ) : currentScreen === 'Notifications' ? (
@@ -142,7 +142,7 @@ function MainApp() {
         <DashboardScreen onOpenCommandPalette={() => setIsCommandOpen(true)} onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigateToWorkout={() => setCurrentScreen('Workout')} />
       )}
       
-      {hasOnboarded && !['Settings', 'Notifications'].includes(currentScreen) && (
+      {hasOnboarded && !['Settings', 'Notifications', 'Recovery'].includes(currentScreen) && (
         <BottomNavigation 
           currentScreen={currentScreen as 'Dashboard' | 'Profile' | 'Coach' | 'Calendar' | 'Nutrition' | 'Analytics'} 
           onNavigate={(screen) => setCurrentScreen(screen)} 
