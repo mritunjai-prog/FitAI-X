@@ -23,6 +23,8 @@ import versionRoutes from './services/02-workout-version-control/index'
 import analyticsRoutes from './services/09-analytics/analytics'
 import recoveryRoutes from './services/10-recovery/recovery'
 import notificationRoutes from './services/notifications/index'
+import workoutCompleteRoutes from './services/workout-completion'
+import xpRoutes from './services/xp/xpRoutes'
 import path from 'path'
 
 // Event Driven Architecture & Jobs
@@ -67,6 +69,8 @@ app.use('/api/v1/version-control', versionRoutes)
 app.use('/api/v1/analytics', analyticsRoutes)
 app.use('/api/v1/recovery', recoveryRoutes)
 app.use('/api/v1/notifications', notificationRoutes)
+app.use('/api/v1/workouts', workoutCompleteRoutes)
+app.use('/api/v1/xp', xpRoutes)
 
 // Health Check
 app.get('/health', (req, res) => {

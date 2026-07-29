@@ -21,7 +21,12 @@ export async function buildUserContext(userId: string) {
     currentWorkout,
     sessions,
     nutritionToday,
-    recoveryFlags
+    recoveryFlags,
+    vitals,
+    waterLogs,
+    calendarEvents,
+    mealPlans,
+    prRecords
   ] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId } }),
     prisma.nutritionPreference.findUnique({ where: { userId } }),
@@ -45,6 +50,31 @@ export async function buildUserContext(userId: string) {
     }),
     prisma.recoveryFlag.findMany({
       where: { userId, expiresAt: { gt: new Date() } }
+    }),
+    prisma.vitals.findUnique({ where: { userId } }),
+    prisma.waterLog.findMany({
+      where: {
+        userId,
+        loggedAt: { gte: new Date(new Date().setHours(0,0,0,0)) }
+      }
+    }),
+    prisma.calendarEvent.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { dayIndex: 'asc' },
+      take: 14,
+    }),
+    prisma.meal.findMany({
+      where: {
+        userId,
+        deletedAt: null,
+        date: { gte: new Date(new Date().setHours(0,0,0,0)) }
+      },
+      orderBy: { createdAt: 'asc' }
+    }),
+    prisma.workoutPR.findMany({
+      where: { userId },
+      orderBy: { dateAchieved: 'desc' },
+      take: 10,
     })
   ]);
 
@@ -55,37 +85,113 @@ export async function buildUserContext(userId: string) {
   const todayCarbs = nutritionToday.reduce((sum, log) => sum + (log.carbs || 0), 0);
   const todayFat = nutritionToday.reduce((sum, log) => sum + (log.fats || 0), 0);
 
+  const totalWater = waterLogs.reduce((sum, log) => sum + log.amountMl, 0);
+  const recoveryScore = vitals ? Math.round(vitals.recoveryCor * 100) : null;
+  const bodyBattery = vitals ? Math.round(vitals.bodyBattery * 100) : null;
+
   return {
     profile: {
       name: user.name,
+      email: user.email,
       goal: user.goal,
       experience: user.experience,
+      gender: user.gender,
       diet: nutritionPref?.dietType || user.diet,
-      allergies: nutritionPref?.allergies,
+      allergies: nutritionPref?.allergies || user.allergies,
       dislikedFoods: nutritionPref?.dislikedFoods,
+      favoriteFoods: nutritionPref?.favoriteFoods,
+      cookingSkill: nutritionPref?.cookingSkill,
       weight: user.weight,
       height: user.height,
       age: user.age,
-      injuries: user.currentInjuries || user.pastInjuries
+      injuries: user.currentInjuries || user.pastInjuries,
+      medicalConditions: user.medicalConditions,
+      physicalLimitations: user.physicalLimitations,
+      medications: user.medications,
+      equipment: user.equipment,
     },
-    streak: {
-      current: user.currentStreak,
-      xpTotal: user.xpTotal,
-      lastReason: user.lastStreakReason
+    stats: {
+      streak: user.currentStreak || 0,
+      longestStreak: user.longestStreak || 0,
+      xpTotal: user.xpTotal || 0,
+      xpLevel: Math.floor((user.xpTotal || 0) / 500) + 1,
+      totalWorkouts: sessions.length,
     },
+    vitals: vitals ? {
+      bpm: vitals.bpm,
+      hrv: vitals.hrv,
+      recoveryCor: vitals.recoveryCor,
+      recoveryUpr: vitals.recoveryUpr,
+      bodyBattery: vitals.bodyBattery,
+      waterProgress: vitals.waterProgress,
+      recoveryScore,
+      bodyBatteryPct: bodyBattery,
+    } : null,
     currentWorkout: currentWorkout ? {
       id: currentWorkout.id,
       title: currentWorkout.title,
-      exercises: currentWorkout.exercises.map(e => ({ id: e.id, name: e.name, muscleGroup: e.muscleGroup, status: e.status }))
+      description: currentWorkout.description,
+      goal: currentWorkout.goal,
+      difficulty: currentWorkout.difficulty,
+      exercises: currentWorkout.exercises.map(e => ({
+        id: e.id, name: e.name, sets: e.sets, reps: e.reps,
+        weight: e.weight, muscleGroup: e.muscleGroup, restTime: e.restTime,
+        notes: e.notes, status: e.status
+      }))
     } : null,
     weeklyHistory: sessions.map(s => ({
       date: s.createdAt.toISOString().split('T')[0],
+      title: s.title,
       duration: s.duration,
       status: s.status,
-      exercises: s.exercises.length
+      caloriesBurned: s.caloriesBurned,
+      exercises: s.exercises.length,
+      volume: s.exercises.reduce((vol, ex) =>
+        vol + ex.sets.reduce((sVol, set) => sVol + ((set.weight || 0) * (set.reps || 0)), 0), 0
+      ),
     })),
-    nutritionToday: { calories: todayCals, protein: todayProtein, carbs: todayCarbs, fat: todayFat },
-    recoveryFlags: recoveryFlags.map(f => ({ muscleGroup: f.muscleGroup, riskLevel: f.riskLevel, mitigation: f.mitigation }))
+    nutritionToday: {
+      calories: todayCals,
+      protein: todayProtein,
+      carbs: todayCarbs,
+      fat: todayFat,
+      waterMl: totalWater,
+    },
+    nutritionPreference: nutritionPref ? {
+      dietType: nutritionPref.dietType,
+      allergies: nutritionPref.allergies,
+      dislikedFoods: nutritionPref.dislikedFoods,
+      favoriteFoods: nutritionPref.favoriteFoods,
+      budget: nutritionPref.budget,
+      cookingSkill: nutritionPref.cookingSkill,
+    } : null,
+    mealPlans: mealPlans.map(m => ({
+      type: m.type,
+      name: m.name,
+      cals: m.cals,
+      protein: m.protein,
+      carbs: m.carbs,
+      fats: m.fats,
+    })),
+    recoveryFlags: recoveryFlags.map(f => ({
+      muscleGroup: f.muscleGroup,
+      riskLevel: f.riskLevel,
+      mitigation: f.mitigation,
+      expiresAt: f.expiresAt,
+    })),
+    calendar: calendarEvents.map(e => ({
+      dayIndex: e.dayIndex,
+      title: e.title,
+      type: e.type,
+      intensity: e.intensity,
+    })),
+    personalRecords: prRecords.map(p => ({
+      exercise: p.exerciseName,
+      weight: p.weight,
+      reps: p.reps,
+      date: p.dateAchieved,
+    })),
+    weeklyWorkoutCount: sessions.filter(s => s.status === 'COMPLETED' || s.status === 'IN_PROGRESS').length,
   };
 }
 
