@@ -1,10 +1,10 @@
 import prisma from '../../db';
-import { generateText, generateObject } from 'ai';
+import { generateText } from 'ai';
 import { createGroq } from '@ai-sdk/groq';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 
-const provider = process.env.AI_PROVIDER || 'google'; // 'groq' or 'google'
-const modelName = process.env.AI_MODEL || (provider === 'google' ? 'gemini-1.5-pro-latest' : 'llama-3.3-70b-versatile');
+const provider = process.env.AI_PROVIDER || 'groq'; // 'groq' or 'google'
+const modelName = process.env.AI_MODEL || (provider === 'google' ? 'gemini-1.5-flash-latest' : 'llama-3.3-70b-versatile');
 
 const groq = createGroq({ apiKey: process.env.GROQ_API_KEY || '' });
 const google = createGoogleGenerativeAI({ apiKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY || '' });
@@ -89,20 +89,45 @@ export async function buildUserContext(userId: string) {
   };
 }
 
+/**
+ * AI Service — calls LLM with text or structured JSON output.
+ * Uses generateText under the hood for maximum model compatibility
+ * (avoids json_schema mode which many models don't support).
+ */
 export async function callAI({ system, prompt, schema, tools, maxSteps = 1, messages = [] }: any) {
   try {
     const input = messages.length > 0 ? { messages } : { prompt };
 
     if (schema) {
-      // Structured JSON output
-      const result = await generateObject({
+      // Use Zod 4's built-in toJSONSchema() method
+      let schemaDescription = '{\n  "type": "object"\n}';
+      try {
+        if (typeof schema.toJSONSchema === 'function') {
+          schemaDescription = JSON.stringify(schema.toJSONSchema(), null, 2);
+        }
+      } catch (e) {
+        console.warn('[AI] Schema serialization failed, using generic', e);
+      }
+      const jsonSystem = `${system || ''}\n\nIMPORTANT: You MUST respond with ONLY valid JSON that matches this exact schema:\n${schemaDescription}\n\nDo NOT include markdown, backticks, or any text outside the JSON. Just output raw JSON.`;
+      
+      const result = await generateText({
         model: getModel(),
-        system,
+        system: jsonSystem,
         ...input,
-        schema,
-        mode: 'json',
+        temperature: 0.3,
       });
-      return { ok: true, data: result.object };
+
+      // Parse the response — strip any accidental markdown wrappers
+      let cleaned = result.text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      // Find first { and last }
+      const firstBrace = cleaned.indexOf('{');
+      const lastBrace = cleaned.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+      }
+      
+      const parsed = JSON.parse(cleaned);
+      return { ok: true, data: parsed };
     } else {
       // Free text / tool output
       const result = await generateText({
@@ -110,6 +135,7 @@ export async function callAI({ system, prompt, schema, tools, maxSteps = 1, mess
         system,
         ...input,
         tools,
+        maxSteps,
       });
       return { ok: true, text: result.text, toolResults: result.toolResults };
     }
