@@ -6,18 +6,18 @@ const router = Router()
 router.get('/feed', async (req, res) => {
   try {
     const feed = await prisma.feedItem.findMany({ 
-      take: 10,
+      take: 20,
       include: { user: true },
       orderBy: { id: 'desc' }
     })
     res.json(feed.map(f => ({
       id: f.id,
       type: f.type,
-      user: f.user.name,
-      avatar: f.user.avatar || 'https://i.pravatar.cc/100',
+      user: f.user?.name || 'FitAI User',
+      avatar: f.user?.avatar || null,
       msg: f.message,
       time: f.timeStr,
-      likes: f.likes,
+      likes: f.likes || 0,
       bpm: f.bpm || undefined
     })))
   } catch (error) {
@@ -31,42 +31,62 @@ router.get('/active-users', async (req, res) => {
     res.json(users.map(u => ({
       id: u.id,
       name: u.name,
-      img: u.avatar || 'https://i.pravatar.cc/100',
-      isLive: true
+      img: u.avatar || null,
+      isLive: false
     })))
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch active users' })
+    res.json([])
   }
 })
 
 router.get('/vitals', async (req, res) => {
   try {
     const vitals = await prisma.vitals.findFirst()
-    if (vitals) {
-      res.json(vitals)
-    } else {
-      res.json({
-        id: '1',
-        bpm: 72,
-        recoveryUpr: 0.5,
-        recoveryLwr: 0.9,
-        recoveryCor: 0.8,
-        recoveryCrd: 0.6,
-        bodyBattery: 85,
-        moveProgress: 0.8,
-        waterProgress: 0.6,
-        trainProgress: 0.4,
-        loadM: 0.2,
-        loadT: 0.8,
-        loadW: 0.5,
-        loadTh: 0.9,
-        loadF: 0.4,
-        loadSa: 0.1,
-        loadSu: 0.6
-      })
-    }
+    if (!vitals) return res.json(null)
+
+    res.json({
+      bpm: vitals.bpm,
+      restingBpm: Math.max(50, vitals.bpm - 15),
+      bpmDelta: null,
+      hrv: vitals.hrv || null,
+      spo2: null,
+      respiratoryRate: null,
+      bodyBattery: Math.round(vitals.bodyBattery * 100),
+      bodyBatteryDelta: null,
+      bodyBatteryTrend: null,
+      moveProgress: vitals.moveProgress,
+      moveCurrent: Math.round(vitals.moveProgress * 500),
+      moveGoal: 500,
+      waterProgress: vitals.waterProgress,
+      waterCurrent: Math.round(vitals.waterProgress * 2500),
+      waterGoal: 2500,
+      trainProgress: vitals.trainProgress,
+      trainCurrent: Math.round(vitals.trainProgress * 60),
+      trainGoal: 60,
+      recoveryUpper: vitals.recoveryUpr,
+      recoveryLower: vitals.recoveryLwr,
+      recoveryCore: vitals.recoveryCor,
+      recoveryCardio: vitals.recoveryCrd,
+      loadM: vitals.loadM,
+      loadT: vitals.loadT,
+      loadW: vitals.loadW,
+      loadTh: vitals.loadTh,
+      loadF: vitals.loadF,
+      loadSa: vitals.loadSa,
+      loadSu: vitals.loadSu,
+      loadTodayIndex: new Date().getDay() === 0 ? 6 : new Date().getDay() - 1,
+      caloriesRemaining: null,
+      caloriesConsumed: null,
+      caloriesGoal: null,
+      protein: null,
+      proteinGoal: null,
+      carbs: null,
+      carbsGoal: null,
+      fat: null,
+      fatGoal: null,
+    })
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch vitals' })
+    res.json(null)
   }
 })
 

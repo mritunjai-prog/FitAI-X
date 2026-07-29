@@ -156,6 +156,11 @@ export async function getUserStats(userId: string) {
 
   const { level, currentXp, nextLevelXp } = calculateLevel(user.xpTotal || 0);
 
+  // Tier names
+  const tiers = ['Iron', 'Bronze', 'Silver', 'Gold', 'Platinum', 'Diamond', 'Elite', 'Legend'];
+  const tierIndex = Math.min(level - 1, tiers.length - 1);
+  const tier = tiers[Math.max(0, tierIndex)];
+
   // Weekly XP
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
@@ -168,11 +173,23 @@ export async function getUserStats(userId: string) {
     where: { userId, status: 'COMPLETED' }
   });
 
+  // Today's earned XP
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todaySessions = await prisma.workoutSession.count({
+    where: { userId, status: 'COMPLETED', createdAt: { gte: today } }
+  });
+  const todayXp = todaySessions * 50;
+
   return {
     totalXp: user.xpTotal || 0,
     level,
-    currentLevelXp: currentXp,
+    tier,
+    currentXp: currentXp,
     nextLevelXp,
+    todayXp,
+    currentLevelXp: currentXp, // maintain legacy key
+    rankLabel: tierIndex <= 1 ? 'Top 100%' : tierIndex <= 3 ? 'Top 25%' : tierIndex <= 5 ? 'Top 10%' : 'Top 5%',
     streak: user.currentStreak || 0,
     longestStreak: user.longestStreak || 0,
     weeklyWorkouts: weeklySessions,
