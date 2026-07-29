@@ -482,10 +482,9 @@ router.get('/meal-plan', async (req, res) => {
     const pref = user.nutritionPref;
     const dietType = pref?.dietType || user.diet || 'Non-Vegetarian';
 
-    // IST timezone (UTC+5:30)
-    const istOffset = 5.5 * 60 * 60 * 1000;
-    const istNow = new Date(Date.now() + istOffset);
-    const todayStart = new Date(Date.UTC(istNow.getFullYear(), istNow.getMonth(), istNow.getDate(), 0, 0, 0, 0));
+    // Use local server date
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     const weekEnd = new Date(todayStart.getTime() + 7 * 86400000);
 
     // Soft-delete OLD meals for the 7-day window, then regenerate all
@@ -543,9 +542,8 @@ router.post('/regenerate-plan', async (req, res) => {
     const targets = calculateTargets(user);
     const dietType = user.nutritionPref?.dietType || user.diet || 'Non-Vegetarian';
 
-    const istOffset = 5.5 * 60 * 60 * 1000;
-    const istNow = new Date(Date.now() + istOffset);
-    const todayStart = new Date(Date.UTC(istNow.getFullYear(), istNow.getMonth(), istNow.getDate(), 0, 0, 0, 0));
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
 
     const dayIndices = day === 'all' ? [0,1,2,3,4,5,6] : [day === 'today' ? 0 : 1];
     const dayLabels = ['today', 'tomorrow', 'day 3', 'day 4', 'day 5', 'day 6', 'day 7'];

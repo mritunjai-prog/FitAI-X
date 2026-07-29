@@ -1715,17 +1715,14 @@ function PlanTab({
         </View>
 
                 {week.map((w, dayIdx) => {
-          const dayM = meals
-            .filter(m => ['Breakfast','Lunch','Dinner'].includes(m.type))
-            .filter((m, i, arr) => arr.findIndex(x => x.type === m.type && (!x.date || !m.date || new Date(x.date).getDate() === new Date(m.date).getDate())) === i)
-            .filter(m => m.date && new Date(m.date).getTime() >= new Date(new Date().toDateString()).getTime() && new Date(m.date).getDate() === w.dayOfMonth);
+          const dayMeals = meals.filter(m => ['Breakfast','Lunch','Dinner'].includes(m.type));
           return (
             <View key={w.label}>
               <View style={{ paddingHorizontal: T.gutter, paddingTop: 20, paddingBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={{ fontFamily: F.header, fontSize: 13, letterSpacing: -0.3, color: C.onSurface }}>{w.label} · {w.dayOfMonth}</Text>
                 <Text style={{ fontFamily: F.num, fontSize: 10, color: C.onSurfaceVariant }}>{w.cals.toLocaleString()} kcal</Text>
               </View>
-              {dayM.length > 0 ? dayM.map((m, i) => {
+              {dayMeals.length > 0 ? dayMeals.slice(0,3).map((m, i) => {
                 const isExpanded = expandedMeal === m.id;
                 return (
                 <View key={m.id}>
@@ -1754,7 +1751,7 @@ function PlanTab({
             </View>
           );
         })}
-        <SectionLabel text="Week Total" C={C} />
+        <SectionLabel text="Week Total"        <SectionLabel text="Week Total" C={C} />
         <StatColumns
           C={C}
           isDark={isDark}
