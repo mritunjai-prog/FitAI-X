@@ -482,146 +482,43 @@ router.get('/meal-plan', async (req, res) => {
     const pref = user.nutritionPref;
     const dietType = pref?.dietType || user.diet || 'Non-Vegetarian';
 
-    // Use IST timezone (UTC+5:30)
-    const now = new Date();
+    // IST timezone (UTC+5:30)
     const istOffset = 5.5 * 60 * 60 * 1000;
-    const istNow = new Date(now.getTime() + istOffset);
+    const istNow = new Date(Date.now() + istOffset);
     const todayStart = new Date(Date.UTC(istNow.getFullYear(), istNow.getMonth(), istNow.getDate(), 0, 0, 0, 0));
-    
-    // Check which days already have meals
-    const days: { key: string; date: Date; label: string }[] = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(todayStart.getTime() + i * 86400000);
-      const key = i === 0 ? 'today' : i === 1 ? 'tomorrow' : `day${i + 1}`;
-      days.push({ key, date: d, label: i === 0 ? 'today' : i === 1 ? 'tomorrow' : `day ${i + 1}` });
-    }
+    const weekEnd = new Date(todayStart.getTime() + 7 * 86400000);
 
+    // Soft-delete OLD meals for the 7-day window, then regenerate all
+    await prisma.meal.updateMany({
+      where: { userId, date: { gte: todayStart, lt: weekEnd }, deletedAt: null },
+      data: { deletedAt: new Date() }
+    });
+
+    // Generate all 7 days using fallback meals (guaranteed to work, no AI needed)
+    const dayNames = ['today', 'tomorrow', 'day3', 'day4', 'day5', 'day6', 'day7'];
+    const dayLabels = ['today', 'tomorrow', 'day 3', 'day 4', 'day 5', 'day 6', 'day 7'];
     const results: any = { targets, dietType, mealTimeSlots: MEAL_TIME_SLOTS };
 
-    // Fetch all existing meals for the next 7 days in one query
-    const weekEnd = new Date(todayStart.getTime() + 7 * 86400000);
-    const allExisting = await prisma.meal.findMany({
-      where: { userId, date: { gte: todayStart, lt: weekEnd }, deletedAt: null },
-      orderBy: [{ type: 'asc' }]
-    });
-
-    // Group existing meals by day
-    const existingByDay: Record<string, any[]> = {};
-    for (const meal of allExisting) {
-      const dayKey = meal.date ? new Date(meal.date).toISOString().split('T')[0] : '';
-      if (dayKey) {
-        if (!existingByDay[dayKey]) existingByDay[dayKey] = [];
-        existingByDay[dayKey].push(meal);
-      }
-    }
-
-    // Batch-generate all missing days in a single AI call
-    const missingDays = days.filter(d => {
-      const dateStr = d.date.toISOString().split('T')[0];
-      return !existingByDay[dateStr] || existingByDay[dateStr].length === 0;
-    });
-
-    if (missingDays.length > 0) {
-      try {
-        const dayLabels = missingDays.map(d => d.label).join(', ');
-        const prompt = `You are an expert Indian AI nutritionist. Generate meal plans for the following days: ${dayLabels}.
-
-USER PROFILE:
-- Age: ${user?.age || 'Unknown'}
-- Gender: ${user?.gender || 'Unknown'}
-- Weight: ${user?.weight || 'Unknown'} kg
-- Goal: ${user?.goal || 'General fitness'}
-- Diet: ${dietType}
-
-NUTRITION TARGETS (per day):
-- Calories: ~${targets.calories} kcal
-- Protein: ~${targets.protein}g
-- Carbs: ~${targets.carbs}g
-- Fat: ~${targets.fat}g
-
-CRITICAL: ${dietType === 'Vegetarian' ? 'NO meat, fish, chicken, eggs.' : dietType === 'Vegan' ? 'NO animal products.' : dietType === 'Eggetarian' ? 'Eggs OK, NO meat/fish.' : 'All foods allowed.'}
-Allergies: ${pref?.allergies || user?.allergies || 'None'}
-
-For EACH day, generate 3 meals (Breakfast, Lunch, Dinner) using INDIAN cuisine.
-
-Return valid JSON with this exact structure:
-{
-  "days": [
-    {
-      "dayLabel": "day 1" | "day 2" | etc.,
-      "meals": [
-        { "type": "Breakfast", "name": "...", "calories": number, "protein": number, "carbs": number, "fat": number, "servingSize": "...", "prepTime": number, "ingredients": [...], "preparation": "..." },
-        { "type": "Lunch", ... },
-        { "type": "Dinner", ... }
-      ]
-    }
-  ]
-}`;
-
-        const aiResult = await callAI({
-          system: 'You are an AI nutritionist. Return ONLY valid JSON. No markdown, no backticks.',
-          prompt,
-          temperature: 0.7,
+    for (let i = 0; i < 7; i++) {
+      const dayDate = new Date(todayStart.getTime() + i * 86400000);
+      const meals = getFallbackMeals(dietType, targets, dayLabels[i]);
+      
+      const saved: any[] = [];
+      for (const m of meals) {
+        const meal = await prisma.meal.create({
+          data: {
+            userId, type: m.type, name: m.name,
+            cals: m.calories || m.cals || 400,
+            protein: m.protein || 20, carbs: m.carbs || 30, fats: m.fat || m.fats || 15,
+            cost: 0, date: dayDate,
+            ingredients: JSON.stringify(m.ingredients || []),
+            preparation: m.preparation || '', servingSize: m.servingSize || '',
+            prepTime: m.prepTime || 15, nutritionPrefUsed: dietType, status: 'generated',
+          }
         });
-
-        if (aiResult.ok && aiResult.text) {
-          let text = aiResult.text.replace(/```json/g, '').replace(/```/g, '').trim();
-          const firstBrace = text.indexOf('{');
-          const lastBrace = text.lastIndexOf('}');
-          if (firstBrace !== -1 && lastBrace > firstBrace) text = text.slice(firstBrace, lastBrace + 1);
-          const parsed = JSON.parse(text);
-
-          // Save AI-generated meals
-          if (parsed.days && Array.isArray(parsed.days)) {
-            for (const dayData of parsed.days) {
-              const dayIndex = missingDays.findIndex(d => d.label.includes(dayData.dayLabel?.replace('day ', '') || ''));
-              const targetDay = dayIndex >= 0 ? missingDays[dayIndex] : missingDays[0];
-              if (!targetDay) continue;
-              
-              for (const m of dayData.meals || []) {
-                await prisma.meal.create({
-                  data: {
-                    userId, type: m.type, name: m.name,
-                    cals: Math.round(m.calories || 400),
-                    protein: m.protein || 20, carbs: m.carbs || 30, fats: m.fat || m.fats || 15,
-                    cost: 0, date: targetDay.date,
-                    ingredients: JSON.stringify(m.ingredients || []),
-                    preparation: m.preparation || '',
-                    servingSize: m.servingSize || '', prepTime: m.prepTime || 15,
-                    nutritionPrefUsed: dietType, status: 'generated',
-                  }
-                });
-              }
-            }
-          }
-        }
-      } catch (e: any) {
-        console.warn('[MealPlan] AI batch generation failed, using fallbacks:', e.message);
-        // Fallback: generate one day at a time using local fallbacks
-        for (const d of missingDays) {
-          try {
-            await generateAndSaveMeals(userId, user, pref, targets, dietType, d.date, d.label);
-          } catch (e2) {
-            console.warn(`[MealPlan] Fallback for ${d.label} failed:`, e2);
-          }
-        }
+        saved.push(meal);
       }
-    }
-
-    // Fetch all meals again after generation
-    const allMeals = await prisma.meal.findMany({
-      where: { userId, date: { gte: todayStart, lt: weekEnd }, deletedAt: null },
-      orderBy: [{ type: 'asc' }]
-    });
-
-    // Group by day for response
-    for (const d of days) {
-      const dateStr = d.date.toISOString().split('T')[0];
-      const dayMeals = allMeals.filter(m => {
-        if (!m.date) return false;
-        return new Date(m.date).toISOString().split('T')[0] === dateStr;
-      });
-      results[d.key] = d.key === 'today' ? filterRelevantMeals(dayMeals) : dayMeals;
+      results[dayNames[i]] = i === 0 ? filterRelevantMeals(saved) : saved;
     }
 
     res.json(results);
@@ -644,28 +541,45 @@ router.post('/regenerate-plan', async (req, res) => {
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const targets = calculateTargets(user);
-    const pref = user.nutritionPref;
-    const dietType = pref?.dietType || user.diet || 'Non-Vegetarian';
+    const dietType = user.nutritionPref?.dietType || user.diet || 'Non-Vegetarian';
 
-    const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const targetDate = day === 'today' ? todayStart : new Date(todayStart.getTime() + 86400000);
-    const dayEnd = new Date(targetDate.getTime() + 86400000);
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const istNow = new Date(Date.now() + istOffset);
+    const todayStart = new Date(Date.UTC(istNow.getFullYear(), istNow.getMonth(), istNow.getDate(), 0, 0, 0, 0));
 
-    // Soft delete old meals
-    await prisma.meal.updateMany({
-      where: { userId, date: { gte: targetDate, lt: dayEnd }, deletedAt: null },
-      data: { deletedAt: new Date() }
-    });
+    const dayIndices = day === 'all' ? [0,1,2,3,4,5,6] : [day === 'today' ? 0 : 1];
+    const dayLabels = ['today', 'tomorrow', 'day 3', 'day 4', 'day 5', 'day 6', 'day 7'];
+    const meals: any[] = [];
 
-    // Generate new meals
-    const dayLabel = day === 'today' ? 'today' : 'tomorrow';
-    const meals = await generateAndSaveMeals(userId, user, pref, targets, dietType, targetDate, dayLabel);
+    for (const idx of dayIndices) {
+      const targetDate = new Date(todayStart.getTime() + idx * 86400000);
+      const dayEnd = new Date(targetDate.getTime() + 86400000);
+      
+      await prisma.meal.updateMany({
+        where: { userId, date: { gte: targetDate, lt: dayEnd }, deletedAt: null },
+        data: { deletedAt: new Date() }
+      });
+
+      const fallbackMeals = getFallbackMeals(dietType, targets, dayLabels[idx]);
+      for (const m of fallbackMeals) {
+        const meal = await prisma.meal.create({
+          data: {
+            userId, type: m.type, name: m.name,
+            cals: m.calories || m.cals || 400,
+            protein: m.protein || 20, carbs: m.carbs || 30, fats: m.fat || m.fats || 15,
+            cost: 0, date: targetDate,
+            ingredients: JSON.stringify(m.ingredients || []),
+            preparation: m.preparation || '', servingSize: m.servingSize || '',
+            prepTime: m.prepTime || 15, nutritionPrefUsed: dietType, status: 'generated',
+          }
+        });
+        meals.push(meal);
+      }
+    }
 
     res.json({ success: true, meals, day, targets });
   } catch (e: any) {
     console.error('[Regenerate Plan] Error:', e.message);
-    // Send proper error message
     res.status(500).json({ error: e.message || 'Failed to regenerate meal plan' });
   }
 });
