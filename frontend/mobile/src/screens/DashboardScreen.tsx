@@ -484,8 +484,8 @@ export default function DashboardScreen({ onNavigate, onNavigateToWorkout, onNav
       { queryKey: ['feed'], queryFn: fetchFeed },
       { queryKey: ['activeUsers'], queryFn: fetchActiveUsers },
       { queryKey: ['vitals'], queryFn: fetchVitals, refetchInterval: 5000 },
-      { queryKey: ['workoutHistory', userId], queryFn: () => fetchWorkoutHistory(userId), enabled: !!userId },
-      { queryKey: ['xpStats', userId], queryFn: () => fetchXpStats(userId), enabled: !!userId },
+      { queryKey: ['workoutHistory', userId], queryFn: () => fetchWorkoutHistory(userId || ''), enabled: !!userId },
+      { queryKey: ['xpStats', userId], queryFn: () => fetchXpStats(userId || ''), enabled: !!userId },
     ],
   });
   const [feedQ, usersQ, vitalsQ, historyQ, xpQ] = results;

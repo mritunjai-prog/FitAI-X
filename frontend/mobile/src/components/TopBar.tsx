@@ -25,7 +25,6 @@ export default function TopBar({
   unreadCount = 0,
 }: TopBarProps) {
   const { C, isDark, toggleTheme } = useTheme();
-  const { user } = useAuth();
 
   const handleAction = (action: TopBarAction) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
