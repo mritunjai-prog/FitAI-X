@@ -760,7 +760,7 @@ interface TodayTabProps {
   C: ThemeColors;
   isDark: boolean;
   /** AI Meal Plan data */
-  mealPlan?: { today?: any[]; tomorrow?: any[]; targets?: any; dietType?: string; timeSlot?: string };
+  mealPlan?: { today?: any[]; tomorrow?: any[]; targets?: any; dietType?: string; timeSlot?: string; mealTimeSlots?: Record<string, string> };
   mealPlanLoading?: boolean;
   onRegenToday?: () => void;
   onRegenTomorrow?: () => void;
@@ -1353,7 +1353,7 @@ function TodayTab({
                             </Text>
                           )}
                           <View style={{ flexDirection: 'row', gap: 20, marginTop: 8 }}>
-                            <Pressable onPress={() => { haptic(done ? 'light' : 'success'); onToggleMeal(m.id); }} hitSlop={6}
+                            <Pressable onPress={() => { haptic(loggedOverride[m.id] ? 'light' : 'success'); onToggleMeal(m.id); }} hitSlop={6}
                               style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                               <Icon name={loggedOverride[m.id] ? 'check-circle' : 'check'} size={12} color={loggedOverride[m.id] ? C.success : C.primary} />
                               <Text style={{ fontFamily: F.header, fontSize: 10.5, color: loggedOverride[m.id] ? C.success : C.primary }}>{loggedOverride[m.id] ? 'Logged' : 'Log it'}</Text>
@@ -1714,58 +1714,46 @@ function PlanTab({
           </ScrollView>
         </View>
 
-        <SectionLabel text={`${day.label} · Meals`} C={C} action="Add" onAction={() => undefined} />
-        {meals
-          .filter(m => ['Breakfast','Lunch','Dinner'].includes(m.type))
-          .filter((m, i, arr) => arr.findIndex(x => x.type === m.type) === i)
-          .filter(m => {
-            if (!m.date) return true;
-            return new Date(m.date).getDate() === day.dayOfMonth;
-          })
-          .map((m, i) => {
-          const isExpanded = expandedMeal === m.id;
+                {week.map((w, dayIdx) => {
+          const dayM = meals
+            .filter(m => ['Breakfast','Lunch','Dinner'].includes(m.type))
+            .filter((m, i, arr) => arr.findIndex(x => x.type === m.type && (!x.date || !m.date || new Date(x.date).getDate() === new Date(m.date).getDate())) === i)
+            .filter(m => !m.date || new Date(m.date).getDate() === w.dayOfMonth);
           return (
-          <View key={m.id}>
-          <Row key={m.id} isDark={isDark} first={i === 0} indented onPress={() => setExpandedMeal(isExpanded ? null : m.id)}>
-            <View style={{ width: 32, alignItems: 'center' }}>
-              <Text style={{ fontFamily: F.num, fontSize: 11.5, color: C.onSurfaceVariant }}>
-                {m.time}
-              </Text>
-              <Text
-                style={{
-                  fontFamily: F.header,
-                  fontSize: 8,
-                  color: C.onSurfaceVariant,
-                  marginTop: 1,
-                }}
-              >
-                {m.meridiem}
-              </Text>
+            <View key={w.label}>
+              <View style={{ paddingHorizontal: T.gutter, paddingTop: 20, paddingBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontFamily: F.header, fontSize: 13, letterSpacing: -0.3, color: C.onSurface }}>{w.label} · {w.dayOfMonth}</Text>
+                <Text style={{ fontFamily: F.num, fontSize: 10, color: C.onSurfaceVariant }}>{w.cals.toLocaleString()} kcal</Text>
+              </View>
+              {dayM.length > 0 ? dayM.map((m, i) => {
+                const isExpanded = expandedMeal === m.id;
+                return (
+                <View key={m.id}>
+                  <Row isDark={isDark} first={i === 0} indented onPress={() => setExpandedMeal(isExpanded ? null : m.id)}>
+                    <View style={{ width: 28, alignItems: 'center' }}>
+                      <Icon name={m.type === 'Breakfast' ? 'free-breakfast' : m.type === 'Lunch' ? 'restaurant' : 'dinner-dining'} size={16} color={C.primary} />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontFamily: F.header, fontSize: 14, letterSpacing: -0.2, color: C.onSurface }} numberOfLines={1}>{m.name}</Text>
+                      <Text style={{ fontFamily: F.num, fontSize: 11, color: C.primary, marginTop: 2 }}>{m.cals} kcal · P{m.protein} · C{m.carbs} · F{m.fat}</Text>
+                    </View>
+                    <Icon name={isExpanded ? 'expand-less' : 'chevron-right'} size={16} color={C.onSurfaceVariant} />
+                  </Row>
+                  {isExpanded && (
+                    <View style={{ paddingHorizontal: T.gutter + 28, paddingBottom: 14 }}>
+                      <Text style={{ fontFamily: F.body, fontSize: 11, color: C.onSurfaceVariant, lineHeight: 16 }}>{m.type} · {m.cals} kcal · Protein: {m.protein}g · Carbs: {m.carbs}g · Fat: {m.fat}g</Text>
+                    </View>
+                  )}
+                </View>);
+              }) : (
+                <Row isDark={isDark} first indented>
+                  <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant, fontStyle: 'italic' }}>No meals planned</Text>
+                </Row>
+              )}
+              {dayIdx < week.length - 1 && <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: T.hairSoft, marginLeft: T.gutter }} />}
             </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={{ fontFamily: F.header, fontSize: 15.5, letterSpacing: -0.2, color: C.onSurface }}>
-                {m.type}: {m.name}
-              </Text>
-              <Text style={{ fontFamily: F.num, fontSize: 12, color: C.primary, marginTop: 3 }}>
-                {m.cals} kcal
-                <Text style={{ color: C.onSurfaceVariant }}> · </Text>
-                {m.protein}p {m.carbs}c {m.fat}f
-              </Text>
-            </View>
-            <Icon name={isExpanded ? 'expand-less' : 'chevron-right'} size={17} color={C.onSurfaceVariant} />
-          </Row>
-          {isExpanded && (
-            <View style={{ paddingHorizontal: T.gutter + 32, paddingBottom: 14 }}>
-              <Text style={{ fontFamily: F.body, fontSize: 12, color: C.onSurfaceVariant, lineHeight: 18 }}>
-                Protein: {m.protein}g | Carbs: {m.carbs}g | Fat: {m.fat}g | Cost: {money(m.cost || 0)}
-              </Text>
-            </View>
-          )}
-          </View>
-        );
-      })}
-
-
+          );
+        })}
         <SectionLabel text="Week Total" C={C} />
         <StatColumns
           C={C}
