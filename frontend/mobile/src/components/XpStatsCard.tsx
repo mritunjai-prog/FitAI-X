@@ -78,7 +78,7 @@ export default function XpStatsCard({ stats, compact = false }: { stats?: XpStat
             <Animated.View style={[{ height: '100%', borderRadius: 2, backgroundColor: C.primary }, progressStyle]} />
           </View>
         </View>
-      </View>
+      </Animated.View>
     );
   }
 

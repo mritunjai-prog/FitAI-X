@@ -133,7 +133,7 @@ function MainApp() {
       ) : currentScreen === 'Analytics' ? (
         <AnalyticsScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigateBack={() => setCurrentScreen('Dashboard')} />
       ) : currentScreen === 'Recovery' ? (
-        <RecoveryScreen navigation={{ goBack: () => setCurrentScreen('Dashboard') }} onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigate={(screen) => setCurrentScreen(screen)} />
+        <RecoveryScreen navigation={{ goBack: () => setCurrentScreen('Dashboard') }} onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigate={(screen: any) => setCurrentScreen(screen)} />
       ) : currentScreen === 'Settings' ? (
         <SettingsScreen onNavigateBack={() => setCurrentScreen('Profile')} />
       ) : currentScreen === 'Notifications' ? (

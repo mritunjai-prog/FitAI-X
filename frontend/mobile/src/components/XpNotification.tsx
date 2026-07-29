@@ -22,7 +22,7 @@ export default function XpNotification({ xpAwarded, totalXp, level, newBadge, cu
   useEffect(() => {
     if (visible) {
       scale.value = withSequence(
-        withTiming(1.1, { duration: 200, easing: Easing.out(Easing.back) }),
+        withTiming(1.1, { duration: 200, easing: Easing.out(Easing.ease) }),
         withTiming(1, { duration: 100 }),
       );
       transY.value = withTiming(0, { duration: 300, easing: Easing.out(Easing.cubic) });
