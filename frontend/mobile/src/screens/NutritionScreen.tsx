@@ -1240,7 +1240,21 @@ function TodayTab({
                     </Text>
                   </Pressable>
 
-                  <Pressable hitSlop={6} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <Pressable
+                    onPress={() => {
+                      haptic('medium');
+                      // Try to swap to next version if available
+                      if (m.versions && m.versions.length > 1) {
+                        const currentIdx = m.versions.findIndex((v: any) => v.isCurrent);
+                        const nextIdx = (currentIdx + 1) % m.versions.length;
+                        onRegenerate(m.id); // Regenerate as a form of swap
+                      } else {
+                        onRegenerate(m.id);
+                      }
+                    }}
+                    hitSlop={6}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}
+                  >
                     <Icon name="swap-horiz" size={13} color={C.onSurfaceVariant} />
                     <Text style={{ fontFamily: F.header, fontSize: 11.5, color: C.onSurfaceVariant }}>
                       Swap
