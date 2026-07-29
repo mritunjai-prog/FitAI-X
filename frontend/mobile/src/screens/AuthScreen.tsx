@@ -74,7 +74,8 @@ function BrandLogo({ isDark, C, styles }: any) {
       <Animated.View style={[animStyle, { width: 200, height: 200, borderRadius: 100, overflow: 'hidden', borderWidth: 2, borderColor: '#F5C400', backgroundColor: isDark ? '#000' : '#FFF', justifyContent: 'center', alignItems: 'center' }]}>
         <Image 
           source={isDark ? require('../../assets/fiAIXlogo.png.png') : require('../../assets/logoforlightmode.png')} 
-          style={{ width: '100%', height: '100%', resizeMode: 'cover' }}
+          resizeMode="cover"
+          style={{ width: '100%', height: '100%' }}
         />
       </Animated.View>
     </View>

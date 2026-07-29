@@ -1,12 +1,12 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { View, Text, StyleSheet, StatusBar as RNStatusBar, TouchableOpacity, ScrollView, Dimensions, Pressable, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { BlurView } from "expo-blur";
-import Animated, { FadeInUp, FadeIn, Layout, useSharedValue, useAnimatedStyle, withSpring, withTiming, Easing, withRepeat, withSequence } from "react-native-reanimated";
+import Animated, { FadeInUp, FadeIn, Layout, useSharedValue, useAnimatedStyle, withSpring, withTiming, Easing, withRepeat, withSequence, FadeInDown, interpolate, Extrapolation } from "react-native-reanimated";
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons as Icon, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useQuery } from '@tanstack/react-query';
+import Svg, { Circle, Line, Text as SvgText, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { ThemeColors, F } from "../theme";
 import MeshGradientBackground from "../components/MeshGradientBackground";
@@ -24,11 +24,15 @@ import {
   fetchCalories, 
   fetchWeight, 
   fetchStrength,
-  fetchSummary
+  fetchSummary,
+  fetchStreak as fetchAnalyticsStreak,
 } from '../services/api/analytics';
 import { fetchWorkoutHistory } from '../services/api/workout';
+import { apiClient } from '../services/api/client';
+import { socket } from '../services/socket/socketClient';
 
 const SCREEN_W = Dimensions.get('window').width;
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const TIME_FILTERS = [
   { id: '7d', label: '7D' },
@@ -37,27 +41,22 @@ const TIME_FILTERS = [
   { id: '1y', label: '1Y' }
 ];
 
-// Helper: Pulse Animation for Skeleton Loader
+// ─── Skeleton pulse ───────────────────────────────────────────
 function Skeleton({ width, height, borderRadius = 8, style }: any) {
   const { C } = useTheme();
   const opacity = useSharedValue(0.3);
-
   useEffect(() => {
     opacity.value = withRepeat(
       withSequence(
         withTiming(0.7, { duration: 800, easing: Easing.inOut(Easing.ease) }),
         withTiming(0.3, { duration: 800, easing: Easing.inOut(Easing.ease) })
-      ),
-      -1,
-      true
+      ), -1, true
     );
   }, []);
-
   const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
   return <Animated.View style={[{ width, height, borderRadius, backgroundColor: C.surfaceVariant }, style, animStyle]} />;
 }
 
-// Helper: Animated Number Counter
 function AnimatedNumber({ value, suffix = '', prefix = '', style, isFloat = false }: any) {
   return (
     <Animated.Text entering={FadeIn.duration(400)} style={style}>
@@ -66,20 +65,63 @@ function AnimatedNumber({ value, suffix = '', prefix = '', style, isFloat = fals
   );
 }
 
+function PulseDot() {
+  const pulse = useSharedValue(1);
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withSequence(withTiming(0.4, { duration: 900 }), withTiming(1, { duration: 900 })),
+      -1, true
+    );
+  }, []);
+  const style = useAnimatedStyle(() => ({ opacity: pulse.value }));
+  return <Animated.View style={[{ width: 7, height: 7, borderRadius: 4, backgroundColor: '#4ade80' }, style]} />;
+}
+
+// ─── Section header ──────────────────────────────────────────
+function SectionHeader({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
+  const { C } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, marginTop: 4 }}>
+      <Text style={{ fontFamily: F.header, fontSize: 16, letterSpacing: -0.3, color: C.onSurface }}>{title}</Text>
+      {action && (
+        <TouchableOpacity onPress={() => { Haptics.selectionAsync(); onAction?.(); }}>
+          <Text style={{ fontFamily: F.header, fontSize: 12, color: C.primary }}>{action}</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+// ─── Bento card ────────────────────────────────────────────
+function BentoCard({ children, style, enteringDelay = 0 }: any) {
+  const { C } = useTheme();
+  return (
+    <Animated.View
+      entering={FadeInDown.delay(enteringDelay).springify().damping(16).mass(0.9)}
+      style={[{
+        backgroundColor: C.surface,
+        borderRadius: 22,
+        borderWidth: 1,
+        borderColor: C.border,
+        overflow: 'hidden',
+      }, style]}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+// ─── Pressable card ─────────────────────────────────────────
 function PressableCard({ children, style, entering }: any) {
   const scale = useSharedValue(1);
   const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
-  
-  const flattenedStyle = StyleSheet.flatten(style) || {};
-  const { flex, ...restStyle } = flattenedStyle as any;
-
   return (
     <Pressable
       onPressIn={() => { scale.value = withSpring(0.97, { damping: 15, stiffness: 300 }); }}
       onPressOut={() => { scale.value = withSpring(1, { damping: 15, stiffness: 300 }); }}
-      style={{ flex }}
+      style={{ flex: 1 }}
     >
-      <Animated.View entering={entering} layout={Layout.springify()} style={[restStyle, { flexGrow: 1 }, animStyle]}>
+      <Animated.View entering={entering} layout={Layout.springify()} style={[style, animStyle]}>
         {children}
       </Animated.View>
     </Pressable>
@@ -90,70 +132,137 @@ export default function AnalyticsScreen({ navigation, onNavigateToNotifications,
   const { isDark, C, bgColors } = useTheme();
   const { user } = useAuth();
   const styles = useMemo(() => getStyles(C), [C]);
+  const userId = user?.id || '';
 
   const [selectedFilter, setSelectedFilter] = useState('7d');
+  const [aiExpanded, setAiExpanded] = useState(false);
 
-  const { data: fitnessScore, isLoading: isScoreLoading } = useQuery({ queryKey: ['fitnessScore'], queryFn: fetchFitnessScore });
-  const { data: history, isLoading: isHistoryLoading } = useQuery({ queryKey: ['workoutHistory'], queryFn: () => fetchWorkoutHistory() });
-  const { data: weightData, isLoading: isWeightLoading } = useQuery({ queryKey: ['weight'], queryFn: fetchWeight });
-  const { data: strengthData, isLoading: isStrengthLoading } = useQuery({ queryKey: ['strength'], queryFn: fetchStrength });
-  const { data: caloriesData, isLoading: isCaloriesLoading } = useQuery({ queryKey: ['calories', selectedFilter], queryFn: () => fetchCalories(selectedFilter) });
-  const { data: workoutsData, isLoading: isWorkoutsLoading } = useQuery({ queryKey: ['workouts', selectedFilter], queryFn: () => fetchWorkouts(selectedFilter) });
-  const { data: insights, isLoading: isInsightsLoading } = useQuery({ queryKey: ['aiSummary'], queryFn: fetchSummary });
-  
-  const { data: foodHistory } = useQuery({ queryKey: ['foodHistory', user?.id], queryFn: async () => {
-    const res = await (require('../services/api/client').apiClient).get(`/nutrition/history?userId=${user?.id}`);
-    return res.data;
-  }, enabled: !!user?.id });
+  const queryKey = ['analytics', userId];
 
-  const workoutsCompleted = history?.length || 0;
-  const workoutsGoal = 5;
+  const { data: overview } = useQuery({
+    queryKey: ['analyticsOverview', userId],
+    queryFn: () => fetchOverview(userId),
+    enabled: !!userId,
+  });
 
+  const { data: fitnessScore, isLoading: isScoreLoading } = useQuery({
+    queryKey: ['fitnessScore', userId],
+    queryFn: () => fetchFitnessScore(userId),
+    enabled: !!userId,
+  });
+
+  const { data: history, isLoading: isHistoryLoading } = useQuery({
+    queryKey: ['workoutHistory', userId],
+    queryFn: () => fetchWorkoutHistory(userId),
+    enabled: !!userId,
+  });
+
+  const { data: weightData, isLoading: isWeightLoading } = useQuery({
+    queryKey: ['weight', userId],
+    queryFn: () => fetchWeight(userId),
+    enabled: !!userId,
+  });
+
+  const { data: strengthData, isLoading: isStrengthLoading } = useQuery({
+    queryKey: ['strength', userId],
+    queryFn: () => fetchStrength(userId),
+    enabled: !!userId,
+  });
+
+  const { data: caloriesData, isLoading: isCaloriesLoading } = useQuery({
+    queryKey: ['calories', selectedFilter, userId],
+    queryFn: () => fetchCalories(selectedFilter, userId),
+    enabled: !!userId,
+  });
+
+  const { data: workoutsData, isLoading: isWorkoutsLoading } = useQuery({
+    queryKey: ['workouts', selectedFilter, userId],
+    queryFn: () => fetchWorkouts(selectedFilter, userId),
+    enabled: !!userId,
+  });
+
+  const { data: insights, isLoading: isInsightsLoading } = useQuery({
+    queryKey: ['aiSummary', userId],
+    queryFn: () => fetchSummary(userId),
+    enabled: !!userId,
+  });
+
+  const { data: streakData } = useQuery({
+    queryKey: ['streak', userId],
+    queryFn: () => fetchAnalyticsStreak(userId),
+    enabled: !!userId,
+  });
+
+  const { data: nutritionDash } = useQuery({
+    queryKey: ['nutritionDashboard', userId],
+    queryFn: async () => {
+      const { data } = await apiClient.get(`/nutrition/dashboard?userId=${userId}`);
+      return data;
+    },
+    enabled: !!userId,
+  });
+
+  // Live socket updates
+  useEffect(() => {
+    if (!userId) return;
+    const qc = require('@tanstack/react-query').useQueryClient;
+    // Can't use hooks inside effect, so just connect
+    socket.emit('join_room', userId);
+  }, [userId]);
+
+  const completedCount = history?.length || 0;
   const handleFilterSelect = (filterId: string) => {
     Haptics.selectionAsync();
     setSelectedFilter(filterId);
   };
+
+  const userGoal = overview?.goal || 'Build Muscle';
+  const userName = overview?.name || user?.name || 'Athlete';
 
   return (
     <View style={styles.container}>
       <RNStatusBar barStyle={isDark ? "light-content" : "dark-content"} />
       <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
 
-      {/* Subtle Floating Gradient overlay */}
-      <LinearGradient colors={['transparent', `${C.primary}10`, 'transparent']} style={[StyleSheet.absoluteFillObject, { opacity: 0.5, pointerEvents: 'none' as any }]} />
-
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
         
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); (onNavigateBack || navigation?.goBack)?.(); }} style={styles.backBtn}>
-              <Icon name="arrow-back" size={20} color={C.onSurfaceVariant} />
-            </TouchableOpacity>
-            <Text style={styles.title}>Progress & Analytics</Text>
+        {/* ── Header ─────────────────────────────────────── */}
+
+        <View style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 14 }]}>
+          <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); (onNavigateBack || navigation?.goBack)?.(); }} 
+            style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border }}>
+            <Icon name="arrow-back" size={20} color={C.onSurface} />
+          </TouchableOpacity>
+          <View>
+            <Text style={{ fontFamily: F.header, fontSize: 18, letterSpacing: -0.5, color: C.onSurface, textAlign: 'center' }}>Progress</Text>
+            <Text style={{ fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant, textAlign: 'center' }}>{userGoal}</Text>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <TouchableOpacity onPress={() => { Haptics.selectionAsync(); onNavigateToNotifications?.(); }} style={styles.calBtn}>
-              <Icon name="notifications" size={18} color={C.onSurfaceVariant} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => Haptics.selectionAsync()} style={styles.calBtn}>
-              <Icon name="calendar-today" size={18} color={C.onSurfaceVariant} />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity onPress={() => { Haptics.selectionAsync(); onNavigateToNotifications?.(); }}
+            style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border }}>
+            <Icon name="notifications" size={18} color={C.onSurface} />
+          </TouchableOpacity>
         </View>
 
-        {/* Segmented Control */}
-        <View style={styles.segmentWrap}>
-          <View style={styles.segment}>
+        {/* ── Welcome strip ──────────────────────────────── */}
+        <Animated.View entering={FadeInDown.delay(50).springify().damping(18)} style={{ paddingHorizontal: 20, marginBottom: 8 }}>
+          <Text style={{ fontFamily: F.header, fontSize: 26, letterSpacing: -1.2, color: C.onSurface }}>Hey, {userName.split(' ')[0]}</Text>
+          <Text style={{ fontFamily: F.bodyMed, fontSize: 13, color: C.onSurfaceVariant, marginTop: 2 }}>
+            {fitnessScore ? `Score: ${fitnessScore.score}/100 · ${fitnessScore.streak} day streak` : 'Loading your stats...'}
+          </Text>
+        </Animated.View>
+
+        {/* ── Segmented Control ──────────────────────────── */}
+        <View style={{ paddingHorizontal: 20, marginBottom: 16 }}>
+          <View style={{ flexDirection: 'row', backgroundColor: C.surface, borderRadius: 14, padding: 3, borderWidth: 1, borderColor: C.border }}>
             {TIME_FILTERS.map(filter => {
               const isActive = selectedFilter === filter.id;
               return (
                 <TouchableOpacity
                   key={filter.id}
                   onPress={() => handleFilterSelect(filter.id)}
-                  style={[styles.segmentBtn, isActive && styles.segmentBtnActive]}
+                  style={{ flex: 1, paddingVertical: 9, alignItems: 'center', borderRadius: 11, backgroundColor: isActive ? C.primary : 'transparent' }}
                 >
-                  <Text style={[styles.segmentTxt, isActive && styles.segmentTxtActive]}>{filter.label}</Text>
+                  <Text style={{ fontFamily: F.header, fontSize: 12, color: isActive ? C.onPrimary : C.onSurfaceVariant }}>{filter.label}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -162,273 +271,269 @@ export default function AnalyticsScreen({ navigation, onNavigateToNotifications,
 
         <ScrollView 
           style={{ flex: 1 }} 
-          contentContainerStyle={{ padding: 20, paddingBottom: 140, gap: 16 }}
+          contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 140, gap: 16 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Fitness Score Card */}
-          <Animated.View entering={FadeInUp.delay(100).springify().damping(16)} style={[styles.heroCard, { backgroundColor: C.surface }]}>
-            <BlurView intensity={isDark ? 40 : 80} tint={C.blurTint} style={StyleSheet.absoluteFillObject} />
-            <LinearGradient colors={[`${C.primary}15`, 'transparent']} style={StyleSheet.absoluteFillObject} />
-            
-            <View style={styles.fscoreTop}>
-              <View style={styles.fscoreLeft}>
-                <Text style={styles.lbl}>Fitness Score</Text>
-                {isScoreLoading ? (
-                  <Skeleton width={100} height={40} />
-                ) : (
-                  <>
-                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2 }}>
-                      <AnimatedNumber value={fitnessScore?.score || 0} style={styles.big} />
-                      <Text style={styles.bigSmall}>/100</Text>
-                    </View>
-                    <Text style={styles.msg}>{fitnessScore?.motivation || 'Great Progress! 🔥'}</Text>
-                  </>
-                )}
-              </View>
 
-              <View style={styles.fscoreRingWrap}>
-                {isScoreLoading ? (
-                  <Skeleton width={88} height={88} borderRadius={44} />
-                ) : (
-                  <View style={styles.fscoreRing}>
+          {/* ═══ FITNESS SCORE — HERO ═══ */}
+          <BentoCard enteringDelay={100} style={{}}>
+            <LinearGradient colors={[`${C.primary}12`, 'transparent']} style={StyleSheet.absoluteFillObject} />
+            <View style={{ padding: 18 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                    <Icon name="auto-awesome" size={14} color={C.primary} />
+                    <Text style={{ fontFamily: F.header, fontSize: 11, letterSpacing: 1.2, color: C.primary, textTransform: 'uppercase' }}>Fitness Score</Text>
+                  </View>
+                  {isScoreLoading ? (
+                    <Skeleton width={100} height={36} />
+                  ) : (
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2 }}>
+                      <AnimatedNumber value={fitnessScore?.score || 0} style={{ fontFamily: F.num, fontSize: 40, letterSpacing: -2, color: C.onSurface }} />
+                      <Text style={{ fontFamily: F.header, fontSize: 16, color: C.onSurfaceVariant, marginBottom: 4 }}>/100</Text>
+                    </View>
+                  )}
+                  {fitnessScore?.motivation && (
+                    <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.success, marginTop: 4 }}>{fitnessScore.motivation}</Text>
+                  )}
+                </View>
+
+                {!isScoreLoading && (
+                  <View style={{ width: 90, height: 90, alignItems: 'center', justifyContent: 'center' }}>
                     <ActivityRings 
-                      size={88} 
-                      rings={[{ progress: (fitnessScore?.score || 0) / 100, color: C.primary, radius: 37, strokeWidth: 8 }]} 
+                      size={90} 
+                      rings={[{ progress: (fitnessScore?.score || 0) / 100, color: C.primary, radius: 38, strokeWidth: 8 }]} 
                     />
-                    <View style={styles.fscoreCenter}>
-                      <AnimatedNumber value={fitnessScore?.score || 0} style={styles.fscoreCenterTxt} />
+                    <View style={{ position: 'absolute', alignItems: 'center' }}>
+                      <Text style={{ fontFamily: F.num, fontSize: 20, color: C.onSurface }}>{fitnessScore?.score || 0}</Text>
                     </View>
                   </View>
                 )}
               </View>
 
-              <View style={styles.fscoreSide}>
-                <View style={styles.fscoreItem}>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.fscoreItemB}>{fitnessScore?.streak || 0} Days</Text>
-                    <Text style={styles.fscoreItemT}>Streak</Text>
+              {/* Sub-scores row */}
+              {fitnessScore && (
+                <View style={{ flexDirection: 'row', gap: 12, marginTop: 16, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.border, paddingTop: 14 }}>
+                  {[
+                    { label: 'Consistency', value: fitnessScore.consistencyScore || 0, color: '#4ade80' },
+                    { label: 'Recovery', value: fitnessScore.recoveryScore || 0, color: '#38bdf8' },
+                    { label: 'Streak', value: fitnessScore.streakScore || 0, color: '#f59e0b' },
+                  ].map((m, i) => (
+                    <View key={m.label} style={{ flex: 1, alignItems: 'center' }}>
+                      <View style={{ width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: m.color, alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontFamily: F.num, fontSize: 13, color: C.onSurface }}>{m.value}</Text>
+                      </View>
+                      <Text style={{ fontFamily: F.bodyMed, fontSize: 9, color: C.onSurfaceVariant, marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>{m.label}</Text>
+                    </View>
+                  ))}
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.primary + '20', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontFamily: F.num, fontSize: 13, color: C.primary }}>{streakData?.currentStreak || fitnessScore?.streak || 0}</Text>
+                    </View>
+                    <Text style={{ fontFamily: F.bodyMed, fontSize: 9, color: C.onSurfaceVariant, marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Streak</Text>
                   </View>
-                  <Icon name="whatshot" size={16} color="#F59E0B" />
-                </View>
-                <View style={styles.fscoreItem}>
-                  <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={styles.fscoreItemB}>{workoutsCompleted}/{workoutsGoal}</Text>
-                    <Text style={styles.fscoreItemT}>Workouts</Text>
-                  </View>
-                  <Icon name="fitness-center" size={16} color={C.onSurfaceVariant} />
-                </View>
-              </View>
-            </View>
-          </Animated.View>
-
-          {/* Nutrition Weekly Score Card */}
-          <Animated.View entering={FadeInUp.delay(120).springify().damping(16)}>
-            <View style={[styles.card, { backgroundColor: C.surface, padding: 20 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <MaterialCommunityIcons name="food-apple-outline" size={24} color={C.primary} />
-                  <Text style={styles.cardTitle}>NUTRITION SCORE</Text>
-                </View>
-                <View style={{ backgroundColor: `${C.primary}20`, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
-                  <Text style={{ color: C.primary, fontFamily: F.bodyBold, fontSize: 12 }}>THIS WEEK</Text>
-                </View>
-              </View>
-
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View>
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4 }}>
-                    <Text style={{ fontSize: 40, fontFamily: F.num, color: C.onSurface, letterSpacing: -2 }}>{foodHistory?.length > 0 ? 92 : '--'}</Text>
-                    <Text style={{ fontSize: 16, fontFamily: F.num, color: C.onSurfaceVariant, marginBottom: 8 }}>/100</Text>
-                  </View>
-                  <Text style={{ fontFamily: F.bodyMed, color: C.success }}>{foodHistory?.length > 0 ? '+5 pts from last week' : 'No data yet'}</Text>
-                </View>
-
-                <View style={{ flex: 1, marginLeft: 24, height: 64, justifyContent: 'center' }}>
-                  <BarChart 
-                    height={64}
-                    color="#4ade80"
-                    data={foodHistory?.length > 0 ? [
-                      { label: 'M', value: 85 },
-                      { label: 'T', value: 92 },
-                      { label: 'W', value: 88 },
-                      { label: 'T', value: Math.min(100, 70 + foodHistory.length * 5) },
-                      { label: 'F', value: 90 },
-                      { label: 'S', value: 85 },
-                      { label: 'S', value: 96 },
-                    ] : [
-                      { label: 'M', value: 0 },
-                      { label: 'T', value: 0 },
-                      { label: 'W', value: 0 },
-                      { label: 'T', value: 0 },
-                      { label: 'F', value: 0 },
-                      { label: 'S', value: 0 },
-                      { label: 'S', value: 0 },
-                    ]}
-                  />
-                </View>
-              </View>
-            </View>
-          </Animated.View>
-
-          {/* Body Map & Progress Graph */}
-          <View style={styles.row}>
-            
-            {/* Weight Progress */}
-            <PressableCard entering={FadeInUp.delay(200).springify().damping(16)} style={styles.miniCard}>
-              <View style={styles.miniHead}>
-                <Text style={styles.miniH4}>Weight Progress</Text>
-                {weightData?.change !== 0 && (
-                  <Text style={[styles.miniTag, { color: (weightData?.change || 0) <= 0 ? C.success : C.error }]}>
-                    {(weightData?.change || 0) <= 0 ? '↓' : '↑'} {Math.abs(weightData?.change || 0)} kg
-                  </Text>
-                )}
-              </View>
-              {isWeightLoading ? (
-                <View style={{ gap: 4 }}><Skeleton width={80} height={20} /><Skeleton width={40} height={14} /></View>
-              ) : (
-                <>
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4, marginVertical: 4 }}>
-                    <AnimatedNumber value={weightData?.current || 0} isFloat={true} style={styles.miniStat} />
-                    <Text style={styles.miniStatSmall}>kg</Text>
-                  </View>
-                  <View style={{ height: 46, marginTop: 'auto', marginHorizontal: -10 }}>
-                    <SplineChart width={(SCREEN_W - 60)/2} height={46} color="#FFB300" />
-                  </View>
-                </>
-              )}
-            </PressableCard>
-
-            {/* Strength Progress */}
-            <PressableCard entering={FadeInUp.delay(250).springify().damping(16)} style={styles.miniCard}>
-              <View style={styles.miniHead}>
-                <Text style={styles.miniH4}>Strength Progress</Text>
-              </View>
-              {isStrengthLoading ? (
-                <Skeleton width={100} height={100} borderRadius={50} style={{ alignSelf: 'center', marginTop: 10 }} />
-              ) : strengthData?.radarData ? (
-                <View style={{ alignItems: 'center', marginTop: 10 }}>
-                  <RadarChart 
-                    data={strengthData.radarData}
-                    size={90}
-                    color={C.primary}
-                    labels={false}
-                  />
-                </View>
-              ) : (
-                <View style={{ alignItems: 'center', justifyContent: 'center', flex: 1, opacity: 0.5 }}>
-                  <Text style={styles.miniFootSpan}>No Data</Text>
                 </View>
               )}
-            </PressableCard>
+            </View>
+          </BentoCard>
 
-          </View>
-
-          <View style={styles.grid2}>
+          {/* ═══ WORKOUTS & CALORIES ═══ */}
+          <SectionHeader title="Training" />
+          <View style={{ flexDirection: 'row', gap: 12 }}>
             
-            {/* Workout Completion */}
-            <PressableCard entering={FadeInUp.delay(300).springify().damping(16)} style={styles.miniCard}>
-              <View style={styles.miniHead}>
-                <Text style={styles.miniH4}>Workouts</Text>
+            {/* Workouts */}
+            <BentoCard enteringDelay={200} style={{ flex: 1, padding: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                <Icon name="fitness-center" size={16} color={C.primary} />
+                <Text style={{ fontFamily: F.header, fontSize: 11, letterSpacing: 0.8, color: C.onSurfaceVariant, textTransform: 'uppercase' }}>Workouts</Text>
               </View>
               {isWorkoutsLoading ? (
-                <View style={{ alignItems: 'center', gap: 10, marginTop: 10 }}><Skeleton width={60} height={60} borderRadius={30} /><Skeleton width={100} height={40} /></View>
+                <View style={{ alignItems: 'center', gap: 8 }}><Skeleton width={64} height={64} borderRadius={32} /><Skeleton width={80} height={14} /></View>
               ) : (
                 <>
-                  <View style={{ alignItems: 'center', marginVertical: 8 }}>
+                  <View style={{ alignItems: 'center', marginBottom: 8 }}>
                     <ActivityRings 
-                      size={78}
-                      rings={[{ progress: (workoutsData?.completionPct || 0) / 100, color: C.primary, radius: 30, strokeWidth: 8 }]}
+                      size={72}
+                      rings={[{ progress: (workoutsData?.completionPct || 0) / 100, color: C.primary, radius: 30, strokeWidth: 7 }]}
                     />
                     <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-                      <AnimatedNumber value={workoutsData?.completionPct || 0} suffix="%" style={{ fontFamily: F.header, fontSize: 17, color: C.onSurface }} />
+                      <Text style={{ fontFamily: F.num, fontSize: 16, color: C.onSurface }}>{workoutsData?.completionPct || 0}%</Text>
                     </View>
                   </View>
-                  
-                  <View style={styles.legend}>
-                    <View style={styles.legendRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <View style={[styles.legendDot, { backgroundColor: '#38bdf8' }]} />
-                        <Text style={styles.legendT}>Completed</Text>
-                      </View>
-                      <Text style={styles.legendB}>{workoutsData?.completed || 0}</Text>
+                  <View style={{ gap: 4 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ fontFamily: F.bodyMed, fontSize: 10, color: C.onSurfaceVariant }}>Completed</Text>
+                      <Text style={{ fontFamily: F.num, fontSize: 12, color: C.onSurface }}>{workoutsData?.completed || 0}</Text>
                     </View>
-                    <View style={styles.legendRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <View style={[styles.legendDot, { backgroundColor: C.error }]} />
-                        <Text style={styles.legendT}>Missed</Text>
-                      </View>
-                      <Text style={styles.legendB}>{workoutsData?.missed || 0}</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ fontFamily: F.bodyMed, fontSize: 10, color: C.onSurfaceVariant }}>Missed</Text>
+                      <Text style={{ fontFamily: F.num, fontSize: 12, color: '#f87171' }}>{workoutsData?.missed || 0}</Text>
                     </View>
                   </View>
                 </>
               )}
-            </PressableCard>
+            </BentoCard>
 
-            {/* Calories Burned */}
-            <PressableCard entering={FadeInUp.delay(350).springify().damping(16)} style={styles.miniCard}>
-              <View style={styles.miniHead}>
-                <Text style={styles.miniH4}>Calories Burned</Text>
+            {/* Calories */}
+            <BentoCard enteringDelay={250} style={{ flex: 1, padding: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                <Icon name="local-fire-department" size={16} color="#f97316" />
+                <Text style={{ fontFamily: F.header, fontSize: 11, letterSpacing: 0.8, color: C.onSurfaceVariant, textTransform: 'uppercase' }}>Calories</Text>
               </View>
               {isCaloriesLoading ? (
-                <View style={{ gap: 4 }}><Skeleton width={80} height={20} /><Skeleton width="100%" height={60} /></View>
+                <View><Skeleton width={80} height={20} /><Skeleton width="100%" height={50} style={{ marginTop: 8 }} /></View>
               ) : (
                 <>
-                  <Text style={{ fontSize: 11, color: C.onSurfaceVariant, marginBottom: 10 }}>Avg {caloriesData?.dailyAvg || 0} kcal</Text>
-                  
-                  <View style={{ height: 60, marginTop: 'auto' }}>
-                    {caloriesData?.chartData && (
-                      <BarChart data={caloriesData.chartData} height={60} color="#38bdf8" hideLabels={true} />
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2 }}>
+                    <Text style={{ fontFamily: F.num, fontSize: 26, letterSpacing: -1, color: C.onSurface }}>{caloriesData?.total || 0}</Text>
+                    <Text style={{ fontFamily: F.bodyMed, fontSize: 10, color: C.onSurfaceVariant }}>kcal</Text>
+                  </View>
+                  <Text style={{ fontFamily: F.bodyMed, fontSize: 10, color: C.onSurfaceVariant, marginTop: 1 }}>Avg {caloriesData?.dailyAvg || 0}/day</Text>
+                  <View style={{ height: 46, marginTop: 10 }}>
+                    {caloriesData?.chartData?.length > 0 ? (
+                      <BarChart data={caloriesData.chartData} height={46} color="#f97316" hideLabels />
+                    ) : (
+                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontFamily: F.bodyMed, fontSize: 10, color: C.onSurfaceVariant }}>No data</Text>
+                      </View>
                     )}
                   </View>
                 </>
               )}
-            </PressableCard>
+            </BentoCard>
 
           </View>
 
-          {/* AI Insights */}
-          <Animated.View entering={FadeInUp.delay(450).springify().damping(16)} style={styles.insightCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <Icon name="auto-awesome" size={18} color="#FDE68A" />
-              <Text style={{ fontFamily: F.header, fontSize: 15, color: C.onSurface }}>AI Insights</Text>
-            </View>
-
-            {isInsightsLoading ? (
-              <View style={{ gap: 8 }}>
-                <Skeleton width="100%" height={16} />
-                <Skeleton width="90%" height={16} />
+          {/* ═══ WEIGHT & STRENGTH ═══ */}
+          <SectionHeader title="Body & Strength" />
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            
+            {/* Weight */}
+            <BentoCard enteringDelay={300} style={{ flex: 1, padding: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <Icon name="monitor-weight" size={16} color="#38bdf8" />
+                <Text style={{ fontFamily: F.header, fontSize: 11, letterSpacing: 0.8, color: C.onSurfaceVariant, textTransform: 'uppercase' }}>Weight</Text>
               </View>
+              {isWeightLoading ? (
+                <Skeleton width={60} height={20} />
+              ) : (
+                <>
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 3 }}>
+                    <AnimatedNumber value={weightData?.current || 0} isFloat style={{ fontFamily: F.num, fontSize: 28, letterSpacing: -1, color: C.onSurface }} />
+                    <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant }}>kg</Text>
+                  </View>
+                  {weightData?.change !== 0 && weightData?.current > 0 && (
+                    <Text style={{ fontFamily: F.header, fontSize: 11, color: (weightData?.change || 0) <= 0 ? C.success : '#f87171', marginTop: 2 }}>
+                      {(weightData?.change || 0) <= 0 ? '↓' : '↑'} {Math.abs(weightData?.change || 0)} kg
+                    </Text>
+                  )}
+                  {weightData?.current === 0 && (
+                    <Text style={{ fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant, marginTop: 2 }}>Log weight in profile</Text>
+                  )}
+                </>
+              )}
+            </BentoCard>
+
+            {/* Strength */}
+            <BentoCard enteringDelay={350} style={{ flex: 1, padding: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <Icon name="fitness-center" size={16} color={C.primary} />
+                <Text style={{ fontFamily: F.header, fontSize: 11, letterSpacing: 0.8, color: C.onSurfaceVariant, textTransform: 'uppercase' }}>Strength</Text>
+              </View>
+              {isStrengthLoading ? (
+                <Skeleton width={90} height={90} borderRadius={45} style={{ alignSelf: 'center' }} />
+              ) : strengthData?.radarData?.length > 0 ? (
+                <View style={{ alignItems: 'center' }}>
+                  <RadarChart data={strengthData.radarData} size={90} color={C.primary} />
+                </View>
+              ) : (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant }}>No data</Text>
+                </View>
+              )}
+            </BentoCard>
+
+          </View>
+
+          {/* ═══ WEEKLY LOAD CHART ═══ */}
+          <SectionHeader title="Weekly Load" />
+          <BentoCard enteringDelay={400} style={{ padding: 16 }}>
+            <View style={{ height: 110 }}>
+              {workoutsData?.chartData?.length > 0 ? (
+                <BarChart data={workoutsData.chartData} height={90} color={C.primary} />
+              ) : (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="fitness-center" size={32} color={C.onSurfaceVariant} style={{ opacity: 0.3 }} />
+                  <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant, marginTop: 8 }}>Complete a workout to see your weekly load</Text>
+                </View>
+              )}
+            </View>
+          </BentoCard>
+
+          {/* ═══ AI INSIGHTS ═══ */}
+          <SectionHeader title="AI Insights" />
+          <BentoCard enteringDelay={450} style={{ padding: 18 }}>
+            <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setAiExpanded(!aiExpanded); }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="auto-awesome" size={14} color={C.onPrimary} />
+                </View>
+                <Text style={{ flex: 1, fontFamily: F.header, fontSize: 14, color: C.onSurface }}>Coach Summary</Text>
+                <Icon name={aiExpanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} size={18} color={C.onSurfaceVariant} />
+              </View>
+            </TouchableOpacity>
+            
+            {isInsightsLoading ? (
+              <View style={{ gap: 6 }}><Skeleton width="100%" height={14} /><Skeleton width="85%" height={14} /></View>
             ) : (
-              <View style={{ gap: 12, marginBottom: 12 }}>
+              <>
                 <Text style={{ fontFamily: F.body, fontSize: 13, color: C.onSurfaceVariant, lineHeight: 20 }}>
-                  {insights?.progressText || "You are consistently hitting your marks. Keep up the good work!"}
+                  {insights?.progressText || 'Keep training consistently! Your data will unlock AI-powered insights.'}
                 </Text>
                 
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                  <View style={{ backgroundColor: `${C.success}15`, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-                    <Text style={{ color: C.success, fontFamily: F.bodyMed, fontSize: 12 }}>✨ {insights?.weekHighlight || 'Consistent Activity'}</Text>
-                  </View>
-                  <View style={{ backgroundColor: `${C.primary}15`, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
-                    <Text style={{ color: C.primary, fontFamily: F.bodyMed, fontSize: 12 }}>🥗 {insights?.dietAdherence || 'Diet On Track'}</Text>
-                  </View>
-                </View>
-
-                {insights?.undertrained?.length > 0 && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                    <Icon name="warning" size={14} color="#F59E0B" />
-                    <Text style={{ fontFamily: F.body, fontSize: 12, color: C.onSurfaceVariant }}>
-                      Undertrained: <Text style={{ fontFamily: F.bodyBold }}>{insights.undertrained.join(', ')}</Text>
-                    </Text>
+                {insights?.suggestions?.length > 0 && aiExpanded && (
+                  <View style={{ marginTop: 12, gap: 8 }}>
+                    <Text style={{ fontFamily: F.header, fontSize: 11, letterSpacing: 0.8, color: C.primary, textTransform: 'uppercase' }}>Suggestions</Text>
+                    {insights.suggestions.map((s: any, i: number) => (
+                      <View key={i} style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
+                        <Text style={{ color: C.primary, fontFamily: F.header, fontSize: 12 }}>•</Text>
+                        <Text style={{ fontFamily: F.body, fontSize: 12, color: C.onSurfaceVariant, flex: 1 }}>{s.name || s}</Text>
+                      </View>
+                    ))}
                   </View>
                 )}
-              </View>
+              </>
             )}
+          </BentoCard>
 
-            <TouchableOpacity style={styles.detailsBtn}>
-              <Text style={styles.detailsBtnTxt}>See Details</Text>
-            </TouchableOpacity>
-          </Animated.View>
+          {/* ═══ NUTRITION ═══ */}
+          <SectionHeader title="Nutrition" />
+          <BentoCard enteringDelay={500} style={{ padding: 18 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <MaterialCommunityIcons name="food-apple-outline" size={20} color={C.primary} />
+              <Text style={{ fontFamily: F.header, fontSize: 12, letterSpacing: 0.6, color: C.onSurfaceVariant, textTransform: 'uppercase', flex: 1 }}>Today's Intake</Text>
+            </View>
 
+            {nutritionDash ? (
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                {[
+                  { label: 'Calories', value: `${nutritionDash.calories || 0}`, unit: 'kcal', color: '#f97316' },
+                  { label: 'Protein', value: `${nutritionDash.protein || 0}`, unit: 'g', color: '#4ade80' },
+                  { label: 'Carbs', value: `${nutritionDash.carbs || 0}`, unit: 'g', color: '#38bdf8' },
+                  { label: 'Fat', value: `${nutritionDash.fat || 0}`, unit: 'g', color: '#f59e0b' },
+                ].map(m => (
+                  <View key={m.label} style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={{ fontFamily: F.num, fontSize: 16, letterSpacing: -0.5, color: C.onSurface }}>{m.value}</Text>
+                    <Text style={{ fontFamily: F.bodyMed, fontSize: 8, color: C.onSurfaceVariant, marginTop: 2 }}>{m.label}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant }}>Log your meals to see nutrition data</Text>
+            )}
+          </BentoCard>
+
+          <View style={{ height: 20 }} />
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -437,72 +542,4 @@ export default function AnalyticsScreen({ navigation, onNavigateToNotifications,
 
 const getStyles = (C: ThemeColors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: C.bg },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 16,
-  },
-  backBtn: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 20, fontFamily: F.header, color: C.onSurface, letterSpacing: -0.5 },
-  calBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: C.border },
-  
-  segmentWrap: { paddingHorizontal: 20, marginBottom: 16 },
-  segment: { flexDirection: 'row', backgroundColor: C.surface, borderRadius: 14, padding: 4, borderWidth: 1, borderColor: C.border },
-  segmentBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
-  segmentBtnActive: { backgroundColor: C.primary },
-  segmentTxt: { fontFamily: F.header, fontSize: 12, color: C.onSurfaceVariant },
-  segmentTxtActive: { color: C.onPrimary },
-
-  heroCard: {
-    borderRadius: 24,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: `${C.primary}30`,
-    overflow: 'hidden',
-  },
-  fscoreTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  fscoreLeft: { flex: 1 },
-  lbl: { fontFamily: F.header, fontSize: 13, color: C.onSurfaceVariant, marginBottom: 8 },
-  big: { fontFamily: F.header, fontSize: 32, color: C.onSurface },
-  bigSmall: { fontFamily: F.header, fontSize: 15, color: C.onSurfaceVariant, paddingBottom: 4 },
-  msg: { fontFamily: F.header, fontSize: 12, color: C.success, marginTop: 4 },
-  fscoreRingWrap: { width: 88, height: 88, alignItems: 'center', justifyContent: 'center', marginHorizontal: 16 },
-  fscoreRing: { width: 88, height: 88, alignItems: 'center', justifyContent: 'center' },
-  fscoreCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-  fscoreCenterTxt: { fontFamily: F.header, fontSize: 22, color: C.onSurface },
-  fscoreSide: { flexShrink: 0, gap: 10, alignItems: 'flex-end', justifyContent: 'center', height: 88 },
-  fscoreItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  fscoreItemB: { fontFamily: F.header, fontSize: 13, color: C.onSurface },
-  fscoreItemT: { fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant },
-
-  grid2: { flexDirection: 'row', gap: 12, marginBottom: 12, flex: 1 },
-  miniCard: {
-    flex: 1,
-    backgroundColor: C.surface,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 20,
-    padding: 14,
-    minHeight: 140,
-  },
-  miniHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  miniH4: { fontFamily: F.header, fontSize: 12.5, color: C.onSurface },
-  miniTag: { fontFamily: F.header, fontSize: 10.5 },
-  miniStat: { fontFamily: F.header, fontSize: 20, color: C.onSurface },
-  miniStatSmall: { fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant, paddingBottom: 3 },
-  miniFootSpan: { fontFamily: F.bodyMed, fontSize: 10, color: C.onSurfaceVariant },
-
-  legend: { marginTop: 6, gap: 6 },
-  legendRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  legendDot: { width: 7, height: 7, borderRadius: 3.5 },
-  legendT: { fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant },
-  legendB: { fontFamily: F.header, fontSize: 12, color: C.onSurface },
-
-  insightCard: { backgroundColor: C.surface, borderRadius: 20, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: C.border },
-  detailsBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: C.border, backgroundColor: 'rgba(255,255,255,0.05)', alignItems: 'center' },
-  detailsBtnTxt: { fontFamily: F.header, fontSize: 12.5, color: C.onSurface },
 });

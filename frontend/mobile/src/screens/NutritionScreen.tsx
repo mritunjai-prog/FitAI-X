@@ -1115,10 +1115,7 @@ function TodayTab({
                     height: 10,
                     borderRadius: 5,
                     backgroundColor: nodeColor,
-                    shadowColor: C.bg,
-                    shadowOpacity: 1,
-                    shadowRadius: 0,
-                    shadowOffset: { width: 0, height: 0 },
+                    boxShadow: '0 0 0 2px ' + C.bg,
                     borderWidth: 4,
                     borderColor: C.bg,
                   }}
