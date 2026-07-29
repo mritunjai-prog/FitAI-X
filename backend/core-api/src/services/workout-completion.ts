@@ -12,7 +12,7 @@
  * ════════════════════════════════════════════════════════════════════════════
  */
 import { Router } from 'express';
-import prisma from '../../db';
+import prisma from '../db';
 import { getIo } from '../realtime/socket';
 import { awardXp, updateStreak } from './xp/xpService';
 
