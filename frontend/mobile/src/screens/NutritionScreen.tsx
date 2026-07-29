@@ -76,7 +76,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { F, ThemeColors } from '../theme';
 import { apiClient } from '../services/api/client';
-import { fetchBudgetPlan, generateAiPlan } from '../services/api/nutrition';
+import { fetchBudgetPlan, generateAiPlan, fetchMealPlan, regenerateMealPlan } from '../services/api/nutrition';
 
 /* ──────────────────────────────────────────────────────────────────────────
    TYPES
@@ -758,6 +758,13 @@ interface TodayTabProps {
   regenerating?: boolean;
   C: ThemeColors;
   isDark: boolean;
+  /** AI Meal Plan data */
+  mealPlan?: { today?: any[]; tomorrow?: any[]; targets?: any; dietType?: string; timeSlot?: string };
+  mealPlanLoading?: boolean;
+  onRegenToday?: () => void;
+  onRegenTomorrow?: () => void;
+  onRegenAll?: () => void;
+  regenBusy?: boolean;
 }
 
 function TodayTab({
@@ -774,6 +781,12 @@ function TodayTab({
   regenerating,
   C,
   isDark,
+  mealPlan,
+  mealPlanLoading,
+  onRegenToday,
+  onRegenTomorrow,
+  onRegenAll,
+  regenBusy,
 }: TodayTabProps) {
   const T = makeTokens(isDark);
   const A = makeAccents(isDark);
@@ -1256,6 +1269,141 @@ function TodayTab({
           );
         })}
       </View>
+
+      {/* ── AI MEAL PLAN ──────────────────────────────── */}
+      {mealPlan && (
+        <>
+          <View style={{ marginTop: 16 }}>
+            <Rule isDark={isDark} />
+          </View>
+          <SectionLabel
+            text={`AI MEAL PLAN · ${(mealPlan.dietType || 'Personalized').toUpperCase()}`}
+            C={C}
+            actionNode={regenBusy ? (
+              <ActivityIndicator size="small" color={C.primary} />
+            ) : (
+              <Pressable onPress={() => { haptic('medium'); onRegenAll?.(); }} hitSlop={8}>
+                <Text style={{ fontFamily: F.header, fontSize: 12, color: C.primary }}>Refresh All</Text>
+              </Pressable>
+            )}
+          />
+
+          {mealPlanLoading ? (
+            <View style={{ paddingHorizontal: T.gutter, gap: 12 }}>            {[0,1,2].map(i => (
+                <View key={i} style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: T.track }} />
+                  <View style={{ flex: 1, gap: 6 }}>
+                    <View style={{ width: '60%', height: 12, borderRadius: 4, backgroundColor: T.track }} />
+                    <View style={{ width: '40%', height: 10, borderRadius: 4, backgroundColor: T.track }} />
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <>
+              {/* Today's remaining meals - time filtered */}
+              {mealPlan.today && mealPlan.today.length > 0 && (
+                <>
+                  <SectionLabel text="Today · Remaining" C={C}
+                    actionNode={
+                      <Pressable onPress={() => { haptic('medium'); onRegenToday?.(); }} hitSlop={8} style={{ opacity: regenBusy ? 0.5 : 1 }} disabled={regenBusy}>
+                        <Text style={{ fontFamily: F.header, fontSize: 11, color: C.primary }}>Regenerate</Text>
+                      </Pressable>
+                    }
+                  />
+                  {mealPlan.today.map((m: any, i: number) => (
+                    <View key={m.id || `t${i}`} style={{ paddingHorizontal: T.gutter, paddingVertical: 12 }}>
+                      {i > 0 && <View style={{ position: 'absolute', left: T.gutter, right: 0, top: 0, height: T.hairline, backgroundColor: T.hairSoft }} />}
+                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+                        <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: `${C.primary}20`, alignItems: 'center', justifyContent: 'center' }}>
+                          <Icon name={m.type === 'Breakfast' ? 'free-breakfast' : m.type === 'Lunch' ? 'restaurant' : 'dinner-dining'} size={18} color={C.primary} />
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={{ fontFamily: F.header, fontSize: 15, letterSpacing: -0.2, color: C.onSurface, flex: 1 }}>{m.name}</Text>
+                            <Text style={{ fontFamily: F.num, fontSize: 14, color: C.onSurface }}>{m.cals || m.calories}<Text style={{ fontFamily: F.bodyMed, fontSize: 9, color: C.onSurfaceVariant }}> kcal</Text></Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: 14, marginTop: 6 }}>
+                            <Text style={{ fontFamily: F.num, fontSize: 11, color: A.protein }}>P {m.protein || 0}g</Text>
+                            <Text style={{ fontFamily: F.num, fontSize: 11, color: A.carbs }}>C {m.carbs || 0}g</Text>
+                            <Text style={{ fontFamily: F.num, fontSize: 11, color: A.fat }}>F {m.fat || m.fats || 0}g</Text>
+                            <Text style={{ fontFamily: F.num, fontSize: 10, color: C.onSurfaceVariant }}>{m.prepTime || '15'}m</Text>
+                          </View>
+                          {m.ingredients && (
+                            <Text numberOfLines={1} style={{ fontFamily: F.body, fontSize: 10, color: C.onSurfaceVariant, marginTop: 4 }}>
+                              {(typeof m.ingredients === 'string' ? JSON.parse(m.ingredients) : m.ingredients).slice(0, 3).join(' · ')}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </>
+              )}
+
+              {/* Tomorrow's meals */}
+              {mealPlan.tomorrow && mealPlan.tomorrow.length > 0 && (
+                <>
+                  <View style={{ marginTop: 4 }}>
+                    <Rule isDark={isDark} soft />
+                  </View>
+                  <SectionLabel text="Tomorrow" C={C}
+                    actionNode={
+                      <Pressable onPress={() => { haptic('medium'); onRegenTomorrow?.(); }} hitSlop={8} style={{ opacity: regenBusy ? 0.5 : 1 }} disabled={regenBusy}>
+                        <Text style={{ fontFamily: F.header, fontSize: 11, color: C.primary }}>Regenerate</Text>
+                      </Pressable>
+                    }
+                  />
+                  {mealPlan.tomorrow.map((m: any, i: number) => (
+                    <View key={m.id || `tm${i}`} style={{ paddingHorizontal: T.gutter, paddingVertical: 12 }}>
+                      {i > 0 && <View style={{ position: 'absolute', left: T.gutter, right: 0, top: 0, height: T.hairline, backgroundColor: T.hairSoft }} />}
+                      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+                        <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: `${C.primary}15`, alignItems: 'center', justifyContent: 'center' }}>
+                          <Icon name={m.type === 'Breakfast' ? 'free-breakfast' : m.type === 'Lunch' ? 'restaurant' : 'dinner-dining'} size={18} color={C.primary} />
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={{ fontFamily: F.header, fontSize: 15, letterSpacing: -0.2, color: C.onSurface, flex: 1 }}>{m.name}</Text>
+                            <Text style={{ fontFamily: F.num, fontSize: 14, color: C.onSurface }}>{m.cals || m.calories}<Text style={{ fontFamily: F.bodyMed, fontSize: 9, color: C.onSurfaceVariant }}> kcal</Text></Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: 14, marginTop: 6 }}>
+                            <Text style={{ fontFamily: F.num, fontSize: 11, color: A.protein }}>P {m.protein || 0}g</Text>
+                            <Text style={{ fontFamily: F.num, fontSize: 11, color: A.carbs }}>C {m.carbs || 0}g</Text>
+                            <Text style={{ fontFamily: F.num, fontSize: 11, color: A.fat }}>F {m.fat || m.fats || 0}g</Text>
+                            <Text style={{ fontFamily: F.num, fontSize: 10, color: C.onSurfaceVariant }}>{m.prepTime || '15'}m</Text>
+                          </View>
+                          {m.ingredients && (
+                            <Text numberOfLines={1} style={{ fontFamily: F.body, fontSize: 10, color: C.onSurfaceVariant, marginTop: 4 }}>
+                              {(typeof m.ingredients === 'string' ? JSON.parse(m.ingredients) : m.ingredients).slice(0, 3).join(' · ')}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </>
+              )}
+
+              {/* Empty state */}
+              {(!mealPlan.today || mealPlan.today.length === 0) && (!mealPlan.tomorrow || mealPlan.tomorrow.length === 0) && !mealPlanLoading && (
+                <View style={{ paddingHorizontal: T.gutter, paddingVertical: 30, alignItems: 'center' }}>
+                  <Icon name="auto-awesome" size={32} color={C.onSurfaceVariant} style={{ opacity: 0.3, marginBottom: 12 }} />
+                  <Text style={{ fontFamily: F.bodyMed, fontSize: 13, color: C.onSurfaceVariant, textAlign: 'center' }}>
+                    Generate a personalized AI meal plan based on your profile and preferences.
+                  </Text>
+                  <PressableScale onPress={() => { haptic('medium'); onRegenAll?.(); }} style={{ marginTop: 16 }}>
+                    <LinearGradient colors={[C.primary, C.primaryDim]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12 }}>
+                      <Icon name="auto-awesome" size={16} color={C.onPrimary} />
+                      <Text style={{ fontFamily: F.header, fontSize: 13, color: C.onPrimary }}>Generate Meal Plan</Text>
+                    </LinearGradient>
+                  </PressableScale>
+                </View>
+              )}
+            </>
+          )}
+        </>
+      )}
 
       <Pressable onPress={() => { haptic('light'); onGoInsights(); }} style={{ paddingVertical: 22 }}>
         <Text style={{ textAlign: 'center', fontFamily: F.header, fontSize: 13, color: C.primary }}>
@@ -2218,6 +2366,14 @@ export default function NutritionScreen({
     enabled: !!user?.id,
   });
 
+  /* Smart AI Meal Plan — fetches personalized meals for today/tomorrow */
+  const { data: mealPlan, isLoading: mealPlanLoading, refetch: refetchMealPlan } = useQuery({
+    queryKey: ['mealPlan', user?.id],
+    queryFn: () => fetchMealPlan(user?.id || ''),
+    enabled: !!user?.id,
+    staleTime: 1000 * 60 * 15, // 15 min cache
+  });
+
   const { data: dashboardData } = useQuery({
     queryKey: ['nutritionDashboard', user?.id],
     queryFn: async () => {
@@ -2262,6 +2418,40 @@ export default function NutritionScreen({
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['nutritionDashboard'] });
+    },
+  });
+
+  const regenTodayMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) throw new Error('No user id');
+      return regenerateMealPlan(user.id, 'today');
+    },
+    onSuccess: () => {
+      haptic('success');
+      void qc.invalidateQueries({ queryKey: ['mealPlan'] });
+    },
+  });
+
+  const regenTomorrowMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) throw new Error('No user id');
+      return regenerateMealPlan(user.id, 'tomorrow');
+    },
+    onSuccess: () => {
+      haptic('success');
+      void qc.invalidateQueries({ queryKey: ['mealPlan'] });
+    },
+  });
+
+  const regenAllMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) throw new Error('No user id');
+      await regenerateMealPlan(user.id, 'today');
+      await regenerateMealPlan(user.id, 'tomorrow');
+    },
+    onSuccess: () => {
+      haptic('success');
+      void qc.invalidateQueries({ queryKey: ['mealPlan'] });
     },
   });
 
@@ -2434,6 +2624,12 @@ export default function NutritionScreen({
                 regenerating={regenMutation.isPending}
                 C={C}
                 isDark={isDark}
+                mealPlan={mealPlan}
+                mealPlanLoading={mealPlanLoading}
+                onRegenToday={() => regenTodayMutation.mutate()}
+                onRegenTomorrow={() => regenTomorrowMutation.mutate()}
+                onRegenAll={() => regenAllMutation.mutate()}
+                regenBusy={regenTodayMutation.isPending || regenTomorrowMutation.isPending || regenAllMutation.isPending}
               />
             </Animated.View>
           )}

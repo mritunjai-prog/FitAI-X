@@ -13,6 +13,7 @@ import coachRoutes from './services/03-ai-decision-explanation/coach'
 import transcribeRoutes from './services/03-ai-decision-explanation/transcribe'
 import workoutRoutes from './services/01-adaptive-planning-engine/workouts'
 import nutritionRoutes from './services/14-meal-planner-budget/nutrition'
+import mealPlanRoutes from './services/14-meal-planner-budget/mealPlan'
 import calendarRoutes from './services/17-smart-calendar/calendar'
 import exerciseGraphRoutes from './services/09-ai-exercise-graph/index'
 import injuryPredictorRoutes from './services/18-ai-injury-predictor/index'
@@ -56,6 +57,7 @@ app.use('/api/v1/coach/transcribe', transcribeRoutes)
 app.use('/api/v1/coach', coachRoutes)
 app.use('/api/v1/workouts', workoutRoutes)
 app.use('/api/v1/nutrition', nutritionRoutes)
+app.use('/api/v1/nutrition', mealPlanRoutes)
 app.use('/api/v1/calendar', calendarRoutes)
 app.use('/api/v1/exercise-graph', exerciseGraphRoutes)
 app.use('/api/v1/injury-predictor', injuryPredictorRoutes)

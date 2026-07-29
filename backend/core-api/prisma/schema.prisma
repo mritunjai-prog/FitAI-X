@@ -165,7 +165,7 @@ model CoachMessage {
 model Meal {
   id        String        @id @default(uuid())
   userId    String
-  type      String
+  type      String        // Breakfast, Lunch, Dinner, Snack
   name      String
   cals      Int
   protein   Float?
@@ -173,6 +173,13 @@ model Meal {
   fats      Float?
   grams     Float?
   cost      Float
+  date      DateTime?     // The date this meal is planned for
+  ingredients String?     // JSON array of ingredients
+  preparation String?     // Short preparation steps
+  servingSize String?     // e.g. "1 bowl", "200g"
+  prepTime  Int?          // Estimated prep time in minutes
+  nutritionPrefUsed String? // Which preference was used when generating
+  status    String?       // planned, generated, logged
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
   deletedAt DateTime?
