@@ -11,24 +11,16 @@ import MeshGradientBackground from "../components/MeshGradientBackground";
 import ActivityRings from "../components/charts/ActivityRings";
 import RadarChart from "../components/charts/RadarChart";
 import BarChart from "../components/charts/BarChart";
+import SplineChart from "../components/charts/SplineChart";
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 
 import { 
-  fetchOverview, 
-  fetchFitnessScore, 
-  fetchWorkouts, 
-  fetchCalories, 
-  fetchWeight, 
-  fetchStrength,
-  fetchSummary,
-  fetchStreak as fetchAnalyticsStreak,
+  fetchOverview, fetchFitnessScore, fetchWorkouts, fetchCalories, 
+  fetchWeight, fetchStrength, fetchSummary, fetchStreak as fetchAnalyticsStreak,
 } from '../services/api/analytics';
-import { fetchWorkoutHistory } from '../services/api/workout';
 import { apiClient } from '../services/api/client';
 import { socket } from '../services/socket/socketClient';
-
-const { width: SCREEN_W } = Dimensions.get('window');
 
 const TIME_FILTERS = [
   { id: '7d', label: '7D' },
@@ -49,229 +41,216 @@ function Skeleton({ w, h, r = 8 }: { w: number | string; h: number; r?: number }
   return <Animated.View style={[{ width: w as any, height: h, borderRadius: r, backgroundColor: C.surfaceVariant }, style]} />;
 }
 
-function NumberDisplay({ val, suffix = '', style }: { val: number | string; suffix?: string; style?: any }) {
-  return (
-    <Animated.Text entering={FadeIn.duration(400)} style={style}>
-      {val}{suffix}
-    </Animated.Text>
-  );
+function Num({ v, suffix = '', style }: { v: number | string; suffix?: string; style?: any }) {
+  return <Animated.Text entering={FadeIn.duration(400)} style={style}>{v}{suffix}</Animated.Text>;
 }
 
 export default function AnalyticsScreen({ navigation, onNavigateToNotifications, onNavigateBack }: any) {
   const { isDark, C, bgColors } = useTheme();
   const { user } = useAuth();
-  const styles = useMemo(() => getStyles(C), [C]);
   const uid = user?.id || '';
 
   const [period, setPeriod] = useState('7d');
   const [aiOpen, setAiOpen] = useState(false);
 
-  const { data: overview } = useQuery({ queryKey: ['ov', uid], queryFn: () => fetchOverview(uid), enabled: !!uid });
-  const { data: fit, isLoading: fitLoad } = useQuery({ queryKey: ['fit', uid], queryFn: () => fetchFitnessScore(uid), enabled: !!uid });
-  const { data: wt, isLoading: wtLoad } = useQuery({ queryKey: ['wt', uid], queryFn: () => fetchWeight(uid), enabled: !!uid });
-  const { data: str, isLoading: strLoad } = useQuery({ queryKey: ['str', uid], queryFn: () => fetchStrength(uid), enabled: !!uid });
-  const { data: cal, isLoading: calLoad } = useQuery({ queryKey: ['cal', period, uid], queryFn: () => fetchCalories(period, uid), enabled: !!uid });
-  const { data: wo, isLoading: woLoad } = useQuery({ queryKey: ['wo', period, uid], queryFn: () => fetchWorkouts(period, uid), enabled: !!uid });
-  const { data: ai, isLoading: aiLoad } = useQuery({ queryKey: ['ai', uid], queryFn: () => fetchSummary(uid), enabled: !!uid });
+  const { data: ov } = useQuery({ queryKey: ['ov', uid], queryFn: () => fetchOverview(uid), enabled: !!uid });
+  const { data: fit, isLoading: fitL } = useQuery({ queryKey: ['fit', uid], queryFn: () => fetchFitnessScore(uid), enabled: !!uid });
+  const { data: wt } = useQuery({ queryKey: ['wt', uid], queryFn: () => fetchWeight(uid), enabled: !!uid });
+  const { data: str } = useQuery({ queryKey: ['str', uid], queryFn: () => fetchStrength(uid), enabled: !!uid });
+  const { data: cal } = useQuery({ queryKey: ['cal', period, uid], queryFn: () => fetchCalories(period, uid), enabled: !!uid });
+  const { data: wo } = useQuery({ queryKey: ['wo', period, uid], queryFn: () => fetchWorkouts(period, uid), enabled: !!uid });
+  const { data: ai } = useQuery({ queryKey: ['ai', uid], queryFn: () => fetchSummary(uid), enabled: !!uid });
   const { data: streak } = useQuery({ queryKey: ['strk', uid], queryFn: () => fetchAnalyticsStreak(uid), enabled: !!uid });
   const { data: nut } = useQuery({ queryKey: ['nut', uid], queryFn: async () => (await apiClient.get(`/nutrition/dashboard?userId=${uid}`)).data, enabled: !!uid });
 
   useEffect(() => { if (uid) socket.emit('join_room', uid); }, [uid]);
 
-  const name = overview?.name || user?.name || 'Athlete';
-  const goal = overview?.goal || '';
+  const name = ov?.name || user?.name || 'Athlete';
+  const goal = ov?.goal || '';
+  const hair = `${C.onSurface}18`;
+
+  const SubStat = ({ label, value, color }: { label: string; value: number; color?: string }) => (
+    <View style={{ flex: 1, alignItems: 'center' }}>
+      <View style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 1.5, borderColor: color || C.primary, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ fontFamily: F.num, fontSize: 11, color: C.onSurface }}>{value}</Text>
+      </View>
+      <Text style={{ fontFamily: F.bodyMed, fontSize: 8, color: C.onSurfaceVariant, marginTop: 2 }}>{label}</Text>
+    </View>
+  );
 
   return (
-    <View style={styles.c}>
+    <View style={s.c}>
       <RNStatusBar barStyle={isDark ? "light-content" : "dark-content"} />
       <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
-
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         
-        {/* ── Header ─────────────────────────────────── */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 12 }}>
+        {/* Header — clean, no bg */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 8 }}>
           <TouchableOpacity onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); (onNavigateBack || navigation?.goBack)?.(); }}>
             <Icon name="arrow-back" size={22} color={C.onSurface} />
           </TouchableOpacity>
-          <View style={{ alignItems: 'center' }}>
-            <Text style={{ fontFamily: F.header, fontSize: 17, color: C.onSurface, letterSpacing: -0.5 }}>Progress</Text>
-            {goal ? <Text style={{ fontFamily: F.bodyMed, fontSize: 10, color: C.onSurfaceVariant }}>{goal}</Text> : null}
-          </View>
+          <Text style={{ fontFamily: F.header, fontSize: 17, color: C.onSurface, letterSpacing: -0.5 }}>Progress</Text>
           <TouchableOpacity onPress={() => { Haptics.selectionAsync(); onNavigateToNotifications?.(); }}>
             <Icon name="notifications" size={22} color={C.onSurface} />
           </TouchableOpacity>
         </View>
 
-        {/* ── Welcome ─────────────────────────────────── */}
-        <Animated.View entering={FadeInDown.delay(60).springify().damping(18)} style={{ paddingHorizontal: 20, marginBottom: 6 }}>
+        {/* Welcome */}
+        <View style={{ paddingHorizontal: 20, marginBottom: 6 }}>
           <Text style={{ fontFamily: F.header, fontSize: 24, letterSpacing: -1, color: C.onSurface }}>Hey, {name.split(' ')[0]}</Text>
-          {fit && <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant, marginTop: 2 }}>Score: {fit.score}/100 · {fit.streak}d streak</Text>}
-        </Animated.View>
+          {goal ? <Text style={{ fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant, marginTop: 1 }}>{goal}</Text> : null}
+        </View>
 
-        {/* ── Period Filter ────────────────────────────── */}
+        {/* Period filter — pills on transparent bg */}
         <View style={{ paddingHorizontal: 20, marginBottom: 14 }}>
           <View style={{ flexDirection: 'row', gap: 6 }}>
             {TIME_FILTERS.map(f => {
               const on = period === f.id;
               return (
                 <TouchableOpacity key={f.id} onPress={() => { Haptics.selectionAsync(); setPeriod(f.id); }}
-                  style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10, backgroundColor: on ? C.primary : `${C.primary}18` }}>
-                  <Text style={{ fontFamily: F.header, fontSize: 11, color: on ? C.onPrimary : C.primary }}>{f.label}</Text>
+                  style={{ paddingHorizontal: 13, paddingVertical: 6, borderRadius: 8, backgroundColor: on ? C.primary : 'transparent', borderWidth: 1, borderColor: on ? C.primary : hair }}>
+                  <Text style={{ fontFamily: F.header, fontSize: 10, color: on ? C.onPrimary : C.onSurfaceVariant }}>{f.label}</Text>
                 </TouchableOpacity>
               );
             })}
           </View>
         </View>
 
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 140, gap: 18 }} showsVerticalScrollIndicator={false}>
-
-          {/* ═══ FITNESS SCORE ═══ */}
-          <Animated.View entering={FadeInDown.delay(80).springify().damping(18)}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 140 }} showsVerticalScrollIndicator={false}>
+          
+          {/* ═══ FITNESS SCORE — no card, just text + ring ═══ */}
+          <Animated.View entering={FadeInDown.delay(60).springify().damping(18)} style={{ paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: hair }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 }}>
-                  <Icon name="auto-awesome" size={12} color={C.primary} />
-                  <Text style={{ fontFamily: F.header, fontSize: 10, letterSpacing: 1, color: C.primary }}>FITNESS SCORE</Text>
-                </View>
-                {fitLoad ? <Skeleton w={100} h={34} /> : (
+                <Text style={{ fontFamily: F.header, fontSize: 10, letterSpacing: 1, color: C.primary, marginBottom: 2 }}>FITNESS SCORE</Text>
+                {fitL ? <Skeleton w={80} h={32} /> : (
                   <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 1 }}>
-                    <NumberDisplay val={fit?.score || 0} style={{ fontFamily: F.num, fontSize: 36, letterSpacing: -1.5, color: C.onSurface }} />
-                    <Text style={{ fontFamily: F.header, fontSize: 14, color: C.onSurfaceVariant }}>/100</Text>
+                    <Num v={fit?.score || 0} style={{ fontFamily: F.num, fontSize: 34, letterSpacing: -1.5, color: C.onSurface }} />
+                    <Text style={{ fontFamily: F.header, fontSize: 13, color: C.onSurfaceVariant }}>/100</Text>
                   </View>
                 )}
                 {fit?.motivation ? <Text style={{ fontFamily: F.bodyMed, fontSize: 11, color: C.success, marginTop: 2 }}>{fit.motivation}</Text> : null}
+                {!fit?.motivation && !fitL ? <Text style={{ fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant, marginTop: 2 }}>Complete workouts to build your score</Text> : null}
               </View>
-              {!fitLoad && (
-                <View style={{ width: 80, height: 80 }}>
-                  <ActivityRings size={80} rings={[{ progress: (fit?.score || 0) / 100, color: C.primary, radius: 34, strokeWidth: 7 }]} />
+              {!fitL && fit ? (
+                <View style={{ width: 72, height: 72 }}>
+                  <ActivityRings size={72} rings={[{ progress: (fit.score || 0) / 100, color: C.primary, radius: 30, strokeWidth: 6 }]} />
                   <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-                    <Text style={{ fontFamily: F.num, fontSize: 18, color: C.onSurface }}>{fit?.score || 0}</Text>
+                    <Text style={{ fontFamily: F.num, fontSize: 16, color: C.onSurface }}>{fit.score || 0}</Text>
                   </View>
                 </View>
-              )}
+              ) : null}
             </View>
-            {fit && (
-              <View style={{ flexDirection: 'row', marginTop: 14, gap: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: `${C.onSurface}20`, paddingTop: 12 }}>
-                {[
-                  { l: 'Consistency', v: fit.consistencyScore || 0, c: '#4ade80' },
-                  { l: 'Recovery', v: fit.recoveryScore || 0, c: '#38bdf8' },
-                  { l: 'Streak', v: fit.streakScore || 0, c: '#f59e0b' },
-                ].map(m => (
-                  <View key={m.l} style={{ flex: 1, alignItems: 'center' }}>
-                    <View style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: m.c, alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontFamily: F.num, fontSize: 12, color: C.onSurface }}>{m.v}</Text>
-                    </View>
-                    <Text style={{ fontFamily: F.bodyMed, fontSize: 8, color: C.onSurfaceVariant, marginTop: 3 }}>{m.l}</Text>
-                  </View>
-                ))}
+
+            {/* Sub-scores — only show if we have data */}
+            {fit ? (
+              <View style={{ flexDirection: 'row', marginTop: 12, gap: 6, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: hair }}>
+                <SubStat label="Consistency" value={fit.consistencyScore || 0} color="#4ade80" />
+                <SubStat label="Recovery" value={fit.recoveryScore || 0} color="#38bdf8" />
+                <SubStat label="Streak" value={fit.streakScore || 0} color="#f59e0b" />
                 <View style={{ flex: 1, alignItems: 'center' }}>
-                  <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: `${C.primary}25`, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontFamily: F.num, fontSize: 12, color: C.primary }}>{streak?.currentStreak || fit?.streak || 0}</Text>
+                  <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: `${C.primary}20`, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontFamily: F.num, fontSize: 11, color: C.primary }}>{streak?.currentStreak || fit?.streak || 0}</Text>
                   </View>
-                  <Text style={{ fontFamily: F.bodyMed, fontSize: 8, color: C.onSurfaceVariant, marginTop: 3 }}>Streak</Text>
+                  <Text style={{ fontFamily: F.bodyMed, fontSize: 8, color: C.onSurfaceVariant, marginTop: 2 }}>Days</Text>
                 </View>
               </View>
-            )}
+            ) : null}
           </Animated.View>
 
-          {/* ═══ WORKOUTS + CALORIES ═══ */}
-          <Animated.View entering={FadeInDown.delay(140).springify().damping(18)}>
-            <Text style={{ fontFamily: F.header, fontSize: 14, color: C.onSurface, marginBottom: 10, letterSpacing: -0.3 }}>Training</Text>
-            <View style={{ flexDirection: 'row', gap: 14 }}>
-              {/* Workouts */}
-              <View style={{ flex: 1, backgroundColor: `${C.primary}10`, borderRadius: 18, padding: 14 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 }}>
-                  <Icon name="fitness-center" size={14} color={C.primary} />
-                  <Text style={{ fontFamily: F.header, fontSize: 9, letterSpacing: 0.7, color: C.onSurfaceVariant }}>WORKOUTS</Text>
-                </View>
-                {woLoad ? <Skeleton w={60} h={60} r={30} /> : (
-                  <>
-                    <View style={{ alignItems: 'center', marginBottom: 6 }}>
-                      <View style={{ width: 64, height: 64 }}>
-                        <ActivityRings size={64} rings={[{ progress: (wo?.completionPct || 0) / 100, color: C.primary, radius: 26, strokeWidth: 6 }]} />
-                        <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
-                          <Text style={{ fontFamily: F.num, fontSize: 14, color: C.onSurface }}>{wo?.completionPct || 0}%</Text>
-                        </View>
+          {/* ═══ TRAINING ═══ */}
+          <Animated.View entering={FadeInDown.delay(120).springify().damping(18)} style={{ paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: hair }}>
+            <Text style={{ fontFamily: F.header, fontSize: 13, color: C.onSurface, marginBottom: 10 }}>Training</Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              
+              {/* Workouts ring */}
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: F.header, fontSize: 9, letterSpacing: 0.6, color: C.onSurfaceVariant, marginBottom: 8 }}>WORKOUTS</Text>
+                {wo ? (
+                  <View style={{ alignItems: 'center' }}>
+                    <View style={{ width: 64, height: 64 }}>
+                      <ActivityRings size={64} rings={[{ progress: (wo.completionPct || 0) / 100, color: C.primary, radius: 26, strokeWidth: 6 }]} />
+                      <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+                        <Text style={{ fontFamily: F.num, fontSize: 14, color: C.onSurface }}>{wo.completionPct || 0}%</Text>
                       </View>
                     </View>
-                    <View style={{ gap: 2 }}>
+                    <View style={{ marginTop: 8, gap: 1, width: '100%' }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                         <Text style={{ fontFamily: F.bodyMed, fontSize: 9, color: C.onSurfaceVariant }}>Done</Text>
-                        <Text style={{ fontFamily: F.num, fontSize: 11, color: C.onSurface }}>{wo?.completed || 0}</Text>
+                        <Text style={{ fontFamily: F.num, fontSize: 11, color: C.onSurface }}>{wo.completed || 0}</Text>
                       </View>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                         <Text style={{ fontFamily: F.bodyMed, fontSize: 9, color: C.onSurfaceVariant }}>Missed</Text>
-                        <Text style={{ fontFamily: F.num, fontSize: 11, color: '#f87171' }}>{wo?.missed || 0}</Text>
+                        <Text style={{ fontFamily: F.num, fontSize: 11, color: '#f87171' }}>{wo.missed || 0}</Text>
                       </View>
                     </View>
-                  </>
+                  </View>
+                ) : (
+                  <Text style={{ fontFamily: F.bodyMed, fontSize: 10, color: C.onSurfaceVariant }}>No data</Text>
                 )}
               </View>
 
               {/* Calories */}
-              <View style={{ flex: 1, backgroundColor: `${C.primary}10`, borderRadius: 18, padding: 14 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 }}>
-                  <Icon name="local-fire-department" size={14} color="#f97316" />
-                  <Text style={{ fontFamily: F.header, fontSize: 9, letterSpacing: 0.7, color: C.onSurfaceVariant }}>CALORIES</Text>
-                </View>
-                {calLoad ? <Skeleton w={60} h={20} /> : (
-                  <>
-                    <NumberDisplay val={cal?.total || 0} suffix=" kcal" style={{ fontFamily: F.num, fontSize: 22, letterSpacing: -0.8, color: C.onSurface }} />
-                    <Text style={{ fontFamily: F.bodyMed, fontSize: 9, color: C.onSurfaceVariant, marginTop: 1 }}>Avg {cal?.dailyAvg || 0}/day</Text>
-                    <View style={{ height: 40, marginTop: 6 }}>
-                      {cal?.chartData?.length > 0 ? <BarChart data={cal.chartData} height={40} color="#f97316" hideLabels /> : null}
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: F.header, fontSize: 9, letterSpacing: 0.6, color: C.onSurfaceVariant, marginBottom: 8 }}>CALORIES</Text>
+                {cal ? (
+                  <View>
+                    <Num v={cal.total || 0} suffix=" kcal" style={{ fontFamily: F.num, fontSize: 20, letterSpacing: -0.8, color: C.onSurface }} />
+                    <Text style={{ fontFamily: F.bodyMed, fontSize: 9, color: C.onSurfaceVariant, marginTop: 1 }}>Avg {cal.dailyAvg || 0}/day</Text>
+                    <View style={{ height: 36, marginTop: 6 }}>
+                      {cal.chartData?.length > 0 ? <BarChart data={cal.chartData} height={36} color="#f97316" hideLabels /> : null}
                     </View>
-                  </>
+                  </View>
+                ) : (
+                  <Text style={{ fontFamily: F.bodyMed, fontSize: 10, color: C.onSurfaceVariant }}>No data</Text>
                 )}
               </View>
+
             </View>
           </Animated.View>
 
-          {/* ═══ WEIGHT + STRENGTH ═══ */}
-          <Animated.View entering={FadeInDown.delay(200).springify().damping(18)}>
-            <Text style={{ fontFamily: F.header, fontSize: 14, color: C.onSurface, marginBottom: 10, letterSpacing: -0.3 }}>Body & Strength</Text>
-            <View style={{ flexDirection: 'row', gap: 14 }}>
-              <View style={{ flex: 1, backgroundColor: `${C.primary}10`, borderRadius: 18, padding: 14 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 }}>
-                  <Icon name="monitor-weight" size={14} color="#38bdf8" />
-                  <Text style={{ fontFamily: F.header, fontSize: 9, letterSpacing: 0.7, color: C.onSurfaceVariant }}>WEIGHT</Text>
-                </View>
-                {wtLoad ? <Skeleton w={50} h={20} /> : (
-                  <>
+          {/* ═══ BODY & STRENGTH ═══ */}
+          <Animated.View entering={FadeInDown.delay(180).springify().damping(18)} style={{ paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: hair }}>
+            <Text style={{ fontFamily: F.header, fontSize: 13, color: C.onSurface, marginBottom: 10 }}>Body & Strength</Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: F.header, fontSize: 9, letterSpacing: 0.6, color: C.onSurfaceVariant, marginBottom: 6 }}>WEIGHT</Text>
+                {wt && wt.current > 0 ? (
+                  <View>
                     <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2 }}>
-                      <NumberDisplay val={wt?.current || 0} style={{ fontFamily: F.num, fontSize: 24, letterSpacing: -1, color: C.onSurface }} />
+                      <Num v={wt.current} style={{ fontFamily: F.num, fontSize: 22, letterSpacing: -0.8, color: C.onSurface }} />
                       <Text style={{ fontFamily: F.bodyMed, fontSize: 10, color: C.onSurfaceVariant }}>kg</Text>
                     </View>
-                    {wt?.change !== 0 && wt?.current > 0 ? (
+                    {wt.change !== 0 ? (
                       <Text style={{ fontFamily: F.header, fontSize: 10, color: (wt.change || 0) <= 0 ? C.success : '#f87171', marginTop: 1 }}>
                         {(wt.change || 0) <= 0 ? '↓' : '↑'} {Math.abs(wt.change || 0)} kg
                       </Text>
                     ) : null}
-                    {(!wt?.current || wt.current === 0) && <Text style={{ fontFamily: F.bodyMed, fontSize: 10, color: C.onSurfaceVariant, marginTop: 2 }}>Log in profile</Text>}
-                  </>
-                )}
-              </View>
-              <View style={{ flex: 1, backgroundColor: `${C.primary}10`, borderRadius: 18, padding: 14 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 }}>
-                  <Icon name="fitness-center" size={14} color={C.primary} />
-                  <Text style={{ fontFamily: F.header, fontSize: 9, letterSpacing: 0.7, color: C.onSurfaceVariant }}>STRENGTH</Text>
-                </View>
-                {strLoad ? <Skeleton w={80} h={80} r={40} /> : str?.radarData?.length > 0 ? (
-                  <View style={{ alignItems: 'center', marginTop: 4 }}>
-                    <RadarChart data={str.radarData} size={80} color={C.primary} />
                   </View>
                 ) : (
-                  <Text style={{ fontFamily: F.bodyMed, fontSize: 10, color: C.onSurfaceVariant, textAlign: 'center', marginTop: 20 }}>No data</Text>
+                  <Text style={{ fontFamily: F.bodyMed, fontSize: 10, color: C.onSurfaceVariant }}>Log in profile</Text>
+                )}
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: F.header, fontSize: 9, letterSpacing: 0.6, color: C.onSurfaceVariant, marginBottom: 6 }}>STRENGTH</Text>
+                {str?.radarData?.length > 0 ? (
+                  <View style={{ alignItems: 'center' }}>
+                    <RadarChart data={str.radarData} size={76} color={C.primary} />
+                  </View>
+                ) : (
+                  <Text style={{ fontFamily: F.bodyMed, fontSize: 10, color: C.onSurfaceVariant }}>No data</Text>
                 )}
               </View>
             </View>
           </Animated.View>
 
           {/* ═══ WEEKLY LOAD ═══ */}
-          <Animated.View entering={FadeInDown.delay(260).springify().damping(18)}>
-            <Text style={{ fontFamily: F.header, fontSize: 14, color: C.onSurface, marginBottom: 10, letterSpacing: -0.3 }}>Weekly Load</Text>
-            <View style={{ backgroundColor: `${C.primary}10`, borderRadius: 18, padding: 14, height: 110 }}>
-              {wo?.chartData?.length > 0 ? <BarChart data={wo.chartData} height={80} color={C.primary} /> : (
+          <Animated.View entering={FadeInDown.delay(240).springify().damping(18)} style={{ paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: hair }}>
+            <Text style={{ fontFamily: F.header, fontSize: 13, color: C.onSurface, marginBottom: 10 }}>Weekly Load</Text>
+            <View style={{ height: 90 }}>
+              {wo?.chartData?.length > 0 ? (
+                <BarChart data={wo.chartData} height={80} color={C.primary} />
+              ) : (
                 <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                   <Text style={{ fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant }}>Complete a workout to see data</Text>
                 </View>
@@ -280,70 +259,60 @@ export default function AnalyticsScreen({ navigation, onNavigateToNotifications,
           </Animated.View>
 
           {/* ═══ AI INSIGHTS ═══ */}
-          <Animated.View entering={FadeInDown.delay(320).springify().damping(18)}>
-            <Text style={{ fontFamily: F.header, fontSize: 14, color: C.onSurface, marginBottom: 10, letterSpacing: -0.3 }}>AI Insights</Text>
-            <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setAiOpen(!aiOpen); }}
-              style={{ backgroundColor: `${C.primary}10`, borderRadius: 18, padding: 16 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 8 }}>
-                <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon name="auto-awesome" size={13} color={C.onPrimary} />
-                </View>
-                <Text style={{ flex: 1, fontFamily: F.header, fontSize: 13, color: C.onSurface }}>Coach Summary</Text>
+          <Animated.View entering={FadeInDown.delay(300).springify().damping(18)} style={{ paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: hair }}>
+            <Text style={{ fontFamily: F.header, fontSize: 13, color: C.onSurface, marginBottom: 8 }}>AI Insights</Text>
+            <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setAiOpen(!aiOpen); }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Icon name="auto-awesome" size={14} color={C.primary} />
+                <Text style={{ flex: 1, fontFamily: F.header, fontSize: 12, color: C.onSurface }}>Coach Summary</Text>
                 <Icon name={aiOpen ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} size={16} color={C.onSurfaceVariant} />
               </View>
-              {aiLoad ? <Skeleton w="100%" h={12} /> : (
-                <>
-                  <Text style={{ fontFamily: F.body, fontSize: 12, color: C.onSurfaceVariant, lineHeight: 18 }}>
-                    {ai?.progressText || 'Keep training!'}
-                  </Text>
-                  {ai?.suggestions?.length > 0 && aiOpen ? (
-                    <View style={{ marginTop: 10, gap: 6 }}>
-                      <Text style={{ fontFamily: F.header, fontSize: 10, letterSpacing: 0.5, color: C.primary }}>SUGGESTIONS</Text>
-                      {ai.suggestions.map((s: any, i: number) => (
-                        <Text key={i} style={{ fontFamily: F.body, fontSize: 11, color: C.onSurfaceVariant }}>• {s.name || s}</Text>
-                      ))}
-                    </View>
-                  ) : null}
-                </>
-              )}
+              <Text style={{ fontFamily: F.body, fontSize: 12, color: C.onSurfaceVariant, lineHeight: 18, marginTop: 6 }}>
+                {ai?.progressText || 'Keep training consistently!'}
+              </Text>
+              {ai?.suggestions?.length > 0 && aiOpen ? (
+                <View style={{ marginTop: 8, gap: 4 }}>
+                  {ai.suggestions.map((s: any, i: number) => (
+                    <Text key={i} style={{ fontFamily: F.body, fontSize: 11, color: C.onSurfaceVariant }}>• {s.name || s}</Text>
+                  ))}
+                </View>
+              ) : null}
             </TouchableOpacity>
           </Animated.View>
 
           {/* ═══ NUTRITION ═══ */}
-          <Animated.View entering={FadeInDown.delay(380).springify().damping(18)}>
-            <Text style={{ fontFamily: F.header, fontSize: 14, color: C.onSurface, marginBottom: 10, letterSpacing: -0.3 }}>Nutrition</Text>
-            <View style={{ backgroundColor: `${C.primary}10`, borderRadius: 18, padding: 16 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                <MaterialCommunityIcons name="food-apple-outline" size={18} color={C.primary} />
-                <Text style={{ fontFamily: F.header, fontSize: 9, letterSpacing: 0.6, color: C.onSurfaceVariant }}>TODAY</Text>
-              </View>
-              {nut ? (
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  {[
-                    { l: 'Cals', v: `${nut.calories || 0}` },
-                    { l: 'Protein', v: `${nut.protein || 0}` },
-                    { l: 'Carbs', v: `${nut.carbs || 0}` },
-                    { l: 'Fat', v: `${nut.fat || 0}` },
-                  ].map(m => (
-                    <View key={m.l} style={{ flex: 1, alignItems: 'center' }}>
-                      <Text style={{ fontFamily: F.num, fontSize: 15, color: C.onSurface }}>{m.v}</Text>
-                      <Text style={{ fontFamily: F.bodyMed, fontSize: 8, color: C.onSurfaceVariant, marginTop: 1 }}>{m.l}</Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={{ fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant }}>Log meals to see nutrition</Text>
-              )}
+          <Animated.View entering={FadeInDown.delay(360).springify().damping(18)} style={{ paddingVertical: 16, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: hair }}>
+            <Text style={{ fontFamily: F.header, fontSize: 13, color: C.onSurface, marginBottom: 8 }}>Nutrition</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <MaterialCommunityIcons name="food-apple-outline" size={16} color={C.primary} />
+              <Text style={{ fontFamily: F.header, fontSize: 9, letterSpacing: 0.5, color: C.onSurfaceVariant }}>TODAY</Text>
             </View>
+            {nut ? (
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                {[
+                  { l: 'Cals', v: `${nut.calories || 0}`, c: '#f97316' },
+                  { l: 'Protein', v: `${nut.protein || 0}g`, c: '#4ade80' },
+                  { l: 'Carbs', v: `${nut.carbs || 0}g`, c: '#38bdf8' },
+                  { l: 'Fat', v: `${nut.fat || 0}g`, c: '#f59e0b' },
+                ].map(m => (
+                  <View key={m.l} style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={{ fontFamily: F.num, fontSize: 14, color: C.onSurface }}>{m.v}</Text>
+                    <Text style={{ fontFamily: F.bodyMed, fontSize: 8, color: C.onSurfaceVariant, marginTop: 1 }}>{m.l}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={{ fontFamily: F.bodyMed, fontSize: 11, color: C.onSurfaceVariant }}>Log meals to see nutrition</Text>
+            )}
           </Animated.View>
 
-          <View style={{ height: 20 }} />
+          <View style={{ height: 40 }} />
         </ScrollView>
       </SafeAreaView>
     </View>
   );
 }
 
-const getStyles = (C: ThemeColors) => StyleSheet.create({
-  c: { flex: 1, backgroundColor: C.bg },
+const s = StyleSheet.create({
+  c: { flex: 1, backgroundColor: 'transparent' },
 });
