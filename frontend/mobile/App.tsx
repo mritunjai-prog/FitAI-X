@@ -139,7 +139,7 @@ function MainApp() {
       ) : currentScreen === 'Notifications' ? (
         <NotificationsScreen onNavigateBack={() => setCurrentScreen('Profile')} />
       ) : (
-        <DashboardScreen onOpenCommandPalette={() => setIsCommandOpen(true)} onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigateToWorkout={() => setCurrentScreen('Workout')} />
+        <DashboardScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigateToWorkout={() => setCurrentScreen('Workout')} onNavigateToNutrition={() => setCurrentScreen('Nutrition')} onNavigateToRecovery={() => setCurrentScreen('Recovery')} onNavigate={(screen) => setCurrentScreen(screen)} />
       )}
       
       {hasOnboarded && !['Settings', 'Notifications', 'Recovery'].includes(currentScreen) && (
