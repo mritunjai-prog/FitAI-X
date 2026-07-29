@@ -1762,7 +1762,9 @@ function PlanTab({
             </View>
           )}
           </View>
-        ))}
+        );
+      })}
+
 
         <SectionLabel text="Week Total" C={C} />
         <StatColumns
