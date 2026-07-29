@@ -2,7 +2,7 @@ import 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import ProfileScreen from './src/screens/ProfileScreen';
-import WorkoutBuilderScreen from './src/screens/WorkoutBuilderScreen';
+import WorkoutScreen from './src/screens/WorkoutScreen';
 import * as Font from 'expo-font';
 import { SpaceGrotesk_700Bold, SpaceGrotesk_500Medium, SpaceGrotesk_400Regular } from '@expo-google-fonts/space-grotesk';
 import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
@@ -36,13 +36,10 @@ import CalendarScreen from './src/screens/CalendarScreen';
 import NutritionScreen from './src/screens/NutritionScreen';
 import AnalyticsScreen from './src/screens/AnalyticsScreen';
 import RecoveryScreen from './src/screens/RecoveryScreen';
-import ActiveWorkoutScreen from './src/screens/ActiveWorkoutScreen';
-import NotificationsScreen from './src/screens/NotificationsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
-import WorkoutHistoryScreen from './src/screens/WorkoutHistoryScreen';
+import NotificationsScreen from './src/screens/NotificationsScreen';
 import BottomNavigation from './src/components/BottomNavigation';
 import CommandPaletteModal from './src/components/CommandPaletteModal';
-import WorkoutHomeScreen from './src/screens/WorkoutHomeScreen';
 import AuthScreen from './src/screens/AuthScreen';
 import SplashScreen from './src/screens/SplashScreen';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
@@ -53,7 +50,7 @@ function MainApp() {
   const { isDark } = useTheme();
   const { user, isLoading, hasOnboarded, completeOnboarding } = useAuth();
   
-  const [currentScreen, setCurrentScreen] = useState<'Profile' | 'WorkoutBuilder' | 'ActiveWorkout' | 'WorkoutHistory' | 'Dashboard' | 'Coach' | 'Calendar' | 'Nutrition' | 'Analytics' | 'Recovery' | 'Settings' | 'Notifications' | 'WorkoutHome'>('Dashboard');
+  const [currentScreen, setCurrentScreen] = useState<'Profile' | 'Workout' | 'Dashboard' | 'Coach' | 'Calendar' | 'Nutrition' | 'Analytics' | 'Recovery' | 'Settings' | 'Notifications'>('Dashboard');
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
 
@@ -117,27 +114,16 @@ function MainApp() {
         <OnboardingScreen onComplete={completeOnboarding} />
       ) : currentScreen === 'Profile' ? (
         <ProfileScreen 
-          onNavigateToBuilder={() => setCurrentScreen('WorkoutBuilder')} 
+          onNavigateToBuilder={() => setCurrentScreen('Workout')} 
           onNavigateToSettings={() => setCurrentScreen('Settings')}
           onNavigateToNotifications={() => setCurrentScreen('Notifications')}
-          onNavigateToHistory={() => setCurrentScreen('WorkoutHistory')}
+          onNavigateToHistory={() => setCurrentScreen('Workout')}
         />
-      ) : currentScreen === 'WorkoutHistory' ? (
-        <WorkoutHistoryScreen onNavigateBack={() => setCurrentScreen('Profile')} />
-      ) : currentScreen === 'WorkoutHome' ? (
-        <WorkoutHomeScreen 
+      ) : currentScreen === 'Workout' ? (
+        <WorkoutScreen 
           onNavigateBack={() => setCurrentScreen('Dashboard')}
-          onNavigateToBuilder={() => setCurrentScreen('WorkoutBuilder')}
-          onNavigateToActive={() => setCurrentScreen('ActiveWorkout')}
-          onNavigateToHistory={() => setCurrentScreen('WorkoutHistory')}
+          onNavigateToNotifications={() => setCurrentScreen('Notifications')}
         />
-      ) : currentScreen === 'WorkoutBuilder' ? (
-        <WorkoutBuilderScreen 
-          onNavigateBack={() => setCurrentScreen('WorkoutHome')} 
-          onStartWorkout={() => setCurrentScreen('ActiveWorkout')}
-        />
-      ) : currentScreen === 'ActiveWorkout' ? (
-        <ActiveWorkoutScreen onFinish={() => setCurrentScreen('Dashboard')} onNavigateBack={() => setCurrentScreen('WorkoutHome')} />
       ) : currentScreen === 'Coach' ? (
         <CoachScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigateBack={() => setCurrentScreen('Dashboard')} />
       ) : currentScreen === 'Calendar' ? (
@@ -153,10 +139,10 @@ function MainApp() {
       ) : currentScreen === 'Notifications' ? (
         <NotificationsScreen onNavigateBack={() => setCurrentScreen('Profile')} />
       ) : (
-        <DashboardScreen onOpenCommandPalette={() => setIsCommandOpen(true)} onNavigateToNotifications={() => setCurrentScreen('Notifications')} />
+        <DashboardScreen onOpenCommandPalette={() => setIsCommandOpen(true)} onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigateToWorkout={() => setCurrentScreen('Workout')} />
       )}
       
-      {hasOnboarded && !['WorkoutBuilder', 'ActiveWorkout', 'WorkoutHistory', 'Settings', 'Notifications', 'WorkoutHome'].includes(currentScreen) && (
+      {hasOnboarded && !['Workout', 'Settings', 'Notifications'].includes(currentScreen) && (
         <BottomNavigation 
           currentScreen={currentScreen as 'Dashboard' | 'Profile' | 'Coach' | 'Calendar' | 'Nutrition' | 'Analytics'} 
           onNavigate={(screen) => setCurrentScreen(screen)} 

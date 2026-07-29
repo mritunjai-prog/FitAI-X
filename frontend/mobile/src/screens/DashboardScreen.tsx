@@ -25,10 +25,12 @@ import { useAuth } from '../context/AuthContext';
 
 export default function DashboardScreen({ 
   onOpenCommandPalette,
-  onNavigateToNotifications
+  onNavigateToNotifications,
+  onNavigateToWorkout
 }: { 
   onOpenCommandPalette?: () => void;
   onNavigateToNotifications?: () => void;
+  onNavigateToWorkout?: () => void;
 }) {
   const { isDark, C, bgColors, toggleTheme } = useTheme();
   const { user } = useAuth();
@@ -170,7 +172,11 @@ export default function DashboardScreen({
               containerStyle={{ marginBottom: 12 }}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-                onOpenCommandPalette?.(); 
+                if (onNavigateToWorkout) {
+                  onNavigateToWorkout();
+                } else {
+                  onOpenCommandPalette?.(); 
+                }
               }}
             >
               <View style={[styles.card, { padding: 0, overflow: 'hidden' }]}>

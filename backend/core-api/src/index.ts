@@ -75,25 +75,29 @@ app.get('/health', (req, res) => {
 setupSocket(io)
 
 // Initialize Event Listeners & BullMQ Workers
-try {
-  registerListeners();
-  startAiWorker();
+if (process.env.NODE_ENV !== 'test') {
+  try {
+    registerListeners();
+    startAiWorker();
 
-  // Initialize Cron Jobs
-  // Daily at midnight (00:00)
-  cron.schedule('0 0 * * *', () => {
-    checkDailyStreaks().catch(err => console.error('[Cron] Daily Streak Error:', err));
-  });
+    // Initialize Cron Jobs
+    // Daily at midnight (00:00)
+    cron.schedule('0 0 * * *', () => {
+      checkDailyStreaks().catch(err => console.error('[Cron] Daily Streak Error:', err));
+    });
 
-  // Monday morning at 00:01
-  cron.schedule('1 0 * * 1', () => {
-    generateWeeklyRecommendations().catch(err => console.error('[Cron] AI Rec Error:', err));
-  });
-  console.log('[Core] Registered Cron Jobs');
-} catch (error: any) {
-  console.warn('Failed to start worker (Redis may not be running):', error.message);
+    // Monday morning at 00:01
+    cron.schedule('1 0 * * 1', () => {
+      generateWeeklyRecommendations().catch(err => console.error('[Cron] AI Rec Error:', err));
+    });
+    console.log('[Core] Registered Cron Jobs');
+  } catch (error: any) {
+    console.warn('Failed to start worker (Redis may not be running):', error.message);
+  }
+
+  httpServer.listen(PORT, () => {
+    console.log(`Core API Server running on port ${PORT}`)
+  })
 }
 
-httpServer.listen(PORT, () => {
-  console.log(`Core API Server running on port ${PORT}`)
-})
+export { app };

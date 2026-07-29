@@ -62,7 +62,7 @@ export default function CommandPaletteModal({ isVisible, onClose, onNavigate }: 
 
   const COMMANDS: Command[] = [
     { id: '1', title: 'Talk to Rachel AI', subtitle: 'Start a new coaching session', icon: 'auto-awesome', section: 'AI', action: () => { onClose(); onNavigate('Coach'); } },
-    { id: '2', title: 'Workout Tracker', subtitle: 'View today\'s AI workout', icon: 'fitness-center', section: 'Quick Actions', action: () => { onClose(); onNavigate('WorkoutHome'); } },
+    { id: '2', title: 'Workout Tracker', subtitle: 'View today\'s AI workout', icon: 'fitness-center', section: 'Quick Actions', action: () => { onClose(); onNavigate('Workout'); } },
     { id: '3', title: 'Recovery & Health', subtitle: 'View sleep, vitals and stress', icon: 'favorite', section: 'Quick Actions', action: () => { onClose(); onNavigate('Recovery'); } },
     { id: '4', title: 'Change Goal', subtitle: `Currently: ${user?.fitnessGoal || 'Not set'}`, icon: 'track-changes', section: 'Quick Actions', action: () => { onClose(); onNavigate('Profile'); } },
     { id: '5', title: 'Smart Calendar', subtitle: 'View AI schedule', icon: 'calendar-month', section: 'Navigation', action: () => { onClose(); onNavigate('Calendar'); } },
