@@ -73,7 +73,7 @@ function BrandLogo({ isDark, C, styles }: any) {
     <View style={[styles.heroContainer, { width: 220, height: 220, backgroundColor: 'transparent' }]}>
       <Animated.View style={[animStyle, { width: 200, height: 200, borderRadius: 100, overflow: 'hidden', borderWidth: 2, borderColor: '#F5C400', backgroundColor: isDark ? '#000' : '#FFF', justifyContent: 'center', alignItems: 'center' }]}>
         <Image 
-          source={require('../../assets/logoforlightmode.png')} 
+          source={isDark ? require('../../assets/icon.png') : require('../../assets/logoforlightmode.png')} 
           resizeMode="cover"
           style={{ width: '100%', height: '100%' }}
         />
