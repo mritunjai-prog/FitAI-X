@@ -1072,8 +1072,8 @@ function TodayTab({
       />
       <Rule isDark={isDark} />
 
-      {/* Meal timeline */}
-      <SectionLabel text="Today's Meals" C={C} action="Edit plan" onAction={onGoPlan} />
+      {/* Meal timeline — hidden when AI meal plan is active */}
+      {!mealPlan && <><SectionLabel text="Today's Meals" C={C} action="Edit plan" onAction={onGoPlan} />
       <View style={{ position: 'relative' }}>
         {/* continuous rail behind the nodes */}
         <View
@@ -1282,7 +1282,7 @@ function TodayTab({
             </Animated.View>
           );
         })}
-      </View>
+      </View></>}
 
       {/* ── AI MEAL PLAN ──────────────────────────────── */}
       {mealPlan && (
