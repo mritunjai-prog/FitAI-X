@@ -10,7 +10,7 @@ import { View, Text, Platform } from 'react-native';
 
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import Animated, { FadeIn, Easing } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
@@ -19,8 +19,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      gcTime: 1000 * 60 * 60 * 24, // cache data for 24 hours (offline access)
-      staleTime: 1000 * 60 * 5, // consider data stale after 5 mins
+      gcTime: 1000 * 60 * 60 * 24,
+      staleTime: 1000 * 60 * 5,
     },
   },
 });
@@ -39,7 +39,6 @@ import RecoveryScreen from './src/screens/RecoveryScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import BottomNavigation from './src/components/BottomNavigation';
-import CommandPaletteModal from './src/components/CommandPaletteModal';
 import AuthScreen from './src/screens/AuthScreen';
 import SplashScreen from './src/screens/SplashScreen';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
@@ -51,25 +50,7 @@ function MainApp() {
   const { user, isLoading, hasOnboarded, completeOnboarding } = useAuth();
   
   const [currentScreen, setCurrentScreen] = useState<'Profile' | 'Workout' | 'Dashboard' | 'Coach' | 'Calendar' | 'Nutrition' | 'Analytics' | 'Recovery' | 'Settings' | 'Notifications'>('Dashboard');
-  const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
-
-  // Keyboard shortcut for Cmd+K / Ctrl+K on Web
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-           e.preventDefault();
-           setIsCommandOpen(prev => !prev);
-        }
-        if (e.key === 'Escape') {
-           setIsCommandOpen(false);
-        }
-      };
-      window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
-    }
-  }, []);
 
   // AI Function Calling Realtime Link
   useEffect(() => {
@@ -144,18 +125,8 @@ function MainApp() {
       
       {hasOnboarded && !['Settings', 'Notifications', 'Recovery'].includes(currentScreen) && (
         <BottomNavigation 
-          currentScreen={currentScreen as 'Dashboard' | 'Profile' | 'Coach' | 'Calendar' | 'Nutrition' | 'Analytics'} 
+          currentScreen={currentScreen as 'Dashboard' | 'Profile' | 'Coach' | 'Nutrition' | 'Workout'} 
           onNavigate={(screen) => setCurrentScreen(screen)} 
-          onOpenActionMenu={() => setIsCommandOpen(true)} 
-        />
-      )}
-
-      {/* Global Command Palette */}
-      {isCommandOpen && (
-        <CommandPaletteModal 
-          isVisible={isCommandOpen} 
-          onClose={() => setIsCommandOpen(false)} 
-          onNavigate={(screen) => { setCurrentScreen(screen); setIsCommandOpen(false); }} 
         />
       )}
     </Animated.View>

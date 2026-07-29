@@ -1,29 +1,33 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, Platform, Dimensions } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Platform, Dimensions, Text } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { MaterialIcons as Icon } from '@expo/vector-icons';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withRepeat, withTiming, Easing } from 'react-native-reanimated';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { DarkColors } from '../theme';
 import { useTheme } from '../context/ThemeContext';
+import { F } from '../theme';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 type BottomNavProps = {
-  currentScreen: 'Dashboard' | 'Profile' | 'Coach' | 'Calendar' | 'Nutrition' | 'Analytics' | 'Recovery';
-  onNavigate: (screen: 'Dashboard' | 'Profile' | 'Coach' | 'Calendar' | 'Nutrition' | 'Analytics' | 'Recovery') => void;
-  onOpenActionMenu: () => void;
+  currentScreen: 'Dashboard' | 'Profile' | 'Coach' | 'Nutrition' | 'Workout';
+  onNavigate: (screen: 'Dashboard' | 'Profile' | 'Coach' | 'Nutrition' | 'Workout') => void;
 };
 
-export default function BottomNavigation({ currentScreen, onNavigate, onOpenActionMenu }: BottomNavProps) {
+export default function BottomNavigation({ currentScreen, onNavigate }: BottomNavProps) {
   const { C, isDark } = useTheme();
-  const isCoachScreen = currentScreen === 'Coach';
-  const styles = React.useMemo(() => getStyles(C, isDark, isCoachScreen), [C, isDark, isCoachScreen]);
-  // 5 tabs conceptually: 0=Dashboard, 1=Calendar, 2=FAB, 3=Coach, 4=Profile
-  const activeIndex = currentScreen === 'Dashboard' ? 0 : currentScreen === 'Calendar' ? 1 : currentScreen === 'Coach' ? 3 : currentScreen === 'Profile' ? 4 : -1;
-  const tabWidth = SCREEN_WIDTH / 5;
+  const tabCount = 5;
+  const tabWidth = SCREEN_WIDTH / tabCount;
 
-  const pillPos = useSharedValue(activeIndex !== -1 ? (activeIndex * tabWidth) + (tabWidth / 2) - 24 : -100);
+  // Map screens to indices: 0=Dashboard, 1=Workout, 2=Coach(center), 3=Nutrition, 4=Profile
+  const activeIndex = currentScreen === 'Dashboard' ? 0 
+    : currentScreen === 'Workout' ? 1 
+    : currentScreen === 'Coach' ? 2 
+    : currentScreen === 'Nutrition' ? 3 
+    : currentScreen === 'Profile' ? 4 
+    : -1;
+
+  const pillPos = useSharedValue(activeIndex !== -1 ? (activeIndex * tabWidth) + (tabWidth / 2) - 24 : 1000);
   const pillOpacity = useSharedValue(activeIndex !== -1 ? 1 : 0);
 
   useEffect(() => {
@@ -40,20 +44,7 @@ export default function BottomNavigation({ currentScreen, onNavigate, onOpenActi
     opacity: pillOpacity.value,
   }));
 
-  const rippleScale = useSharedValue(1);
-  const rippleOpacity = useSharedValue(0.5);
-
-  useEffect(() => {
-    rippleScale.value = withRepeat(withTiming(1.6, { duration: 1500, easing: Easing.out(Easing.ease) }), -1, false);
-    rippleOpacity.value = withRepeat(withTiming(0, { duration: 1500, easing: Easing.out(Easing.ease) }), -1, false);
-  }, []);
-
-  const rippleStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: rippleScale.value }],
-    opacity: rippleOpacity.value
-  }));
-
-  const handleNav = (screen: 'Dashboard' | 'Profile' | 'Coach' | 'Calendar' | 'Nutrition' | 'Analytics' | 'Recovery') => {
+  const handleNav = (screen: 'Dashboard' | 'Profile' | 'Coach' | 'Nutrition' | 'Workout') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onNavigate(screen);
   };
@@ -62,67 +53,101 @@ export default function BottomNavigation({ currentScreen, onNavigate, onOpenActi
     <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={styles.bottomNav}>
       <Animated.View style={[styles.navActivePill, pillStyle]} />
       
+      {/* Dashboard / Home */}
       <TouchableOpacity style={styles.navItem} onPress={() => handleNav('Dashboard')}>
         <Icon name="home" size={24} color={activeIndex === 0 ? C.primary : C.onSurfaceVariant} />
+        <Text style={[styles.navLabel, { color: activeIndex === 0 ? C.primary : C.onSurfaceVariant }]}>Home</Text>
       </TouchableOpacity>
       
-      <TouchableOpacity style={styles.navItem} onPress={() => handleNav('Calendar')}>
-        <Icon name="event" size={24} color={activeIndex === 1 ? C.primary : C.onSurfaceVariant} />
+      {/* Workout Tracker */}
+      <TouchableOpacity style={styles.navItem} onPress={() => handleNav('Workout')}>
+        <Icon name="fitness-center" size={24} color={activeIndex === 1 ? C.primary : C.onSurfaceVariant} />
+        <Text style={[styles.navLabel, { color: activeIndex === 1 ? C.primary : C.onSurfaceVariant }]}>Workout</Text>
       </TouchableOpacity>
       
-      <View style={{ flex: 1 }} />
-      
-      <TouchableOpacity style={styles.navItem} onPress={() => handleNav('Coach')}>
-        <Icon name="auto-awesome" size={24} color={activeIndex === 3 ? C.primary : C.onSurfaceVariant} />
+      {/* AI Coach Rachel - Center Button */}
+      <TouchableOpacity style={styles.centerBtn} onPress={() => handleNav('Coach')} activeOpacity={0.85}>
+        <View style={[styles.aiFaceCircle, { backgroundColor: C.primary }]}>
+          <Icon name="auto-awesome" size={26} color={C.onPrimary} />
+        </View>
       </TouchableOpacity>
       
+      {/* Nutrition */}
+      <TouchableOpacity style={styles.navItem} onPress={() => handleNav('Nutrition')}>
+        <Icon name="local-dining" size={24} color={activeIndex === 3 ? C.primary : C.onSurfaceVariant} />
+        <Text style={[styles.navLabel, { color: activeIndex === 3 ? C.primary : C.onSurfaceVariant }]}>Nutrition</Text>
+      </TouchableOpacity>
+      
+      {/* Profile */}
       <TouchableOpacity style={styles.navItem} onPress={() => handleNav('Profile')}>
         <Icon name="person" size={24} color={activeIndex === 4 ? C.primary : C.onSurfaceVariant} />
+        <Text style={[styles.navLabel, { color: activeIndex === 4 ? C.primary : C.onSurfaceVariant }]}>Profile</Text>
       </TouchableOpacity>
-
-      <View style={styles.fabContainer}>
-        <TouchableOpacity activeOpacity={0.85} style={styles.fab} onPress={onOpenActionMenu}>
-          <Animated.View style={[StyleSheet.absoluteFill, { borderRadius: 28, backgroundColor: C.primary, pointerEvents: 'none' }, rippleStyle]} />
-          <Icon name="add" size={32} color={C.onPrimary} />
-        </TouchableOpacity>
-      </View>
     </BlurView>
   );
 }
 
-const getStyles = (C: any, isDark: boolean, isCoachScreen: boolean) => StyleSheet.create({
+const styles = StyleSheet.create({
   bottomNav: { 
     position: 'absolute', 
     bottom: 0, left: 0, right: 0, 
     flexDirection: 'row', 
     paddingBottom: Platform.OS === 'ios' ? 24 : 16, 
-    paddingTop: 12, 
-    backgroundColor: isDark ? 'rgba(15, 23, 42, 0.90)' : 'rgba(255, 255, 255, 0.95)',
-    borderTopWidth: 1, 
-    borderTopColor: C.outlineVariant 
+    paddingTop: 8, 
+    backgroundColor: 'transparent',
+    borderTopWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  navItem: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 48, zIndex: 2 },
-  navActivePill: { position: 'absolute', top: 12, left: 0, width: 48, height: 48, borderRadius: 24, backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)', zIndex: 1 },
-  
-  fabContainer: { position: 'absolute', top: isCoachScreen ? 4 : -20, left: '50%', marginLeft: -28, width: 56, height: 56, zIndex: 3 },
-  fab: { 
-    width: 56, 
-    height: 56, 
-    borderRadius: 28, 
-    backgroundColor: C.primary, 
+  navItem: { 
+    flex: 1, 
     alignItems: 'center', 
+    justifyContent: 'center', 
+    height: 56, 
+    zIndex: 2,
+    paddingTop: 6,
+  },
+  navLabel: {
+    fontFamily: F.header,
+    fontSize: 9,
+    letterSpacing: 0.3,
+    marginTop: 2,
+  },
+  navActivePill: { 
+    position: 'absolute', 
+    bottom: Platform.OS === 'ios' ? 24 : 16, 
+    left: 0, 
+    width: 48, 
+    height: 4, 
+    borderRadius: 2, 
+    backgroundColor: 'rgba(245,196,0,0.6)', 
+    zIndex: 1,
+  },
+  centerBtn: {
+    width: 64,
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 3,
+    marginTop: -20,
+  },
+  aiFaceCircle: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: 'center',
     justifyContent: 'center',
     ...Platform.select({
       web: {
-        boxShadow: `0px 4px 12px ${C.primary}66`
+        boxShadow: '0px 4px 16px rgba(245,196,0,0.45)',
       },
       default: {
-        shadowColor: C.primary, 
-        shadowOpacity: 0.4, 
-        shadowRadius: 12, 
-        shadowOffset: { width: 0, height: 4 }, 
-        elevation: 8
+        shadowColor: '#F5C400',
+        shadowOpacity: 0.45,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 8,
       }
-    })
+    }),
   },
 });
