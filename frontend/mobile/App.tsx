@@ -173,7 +173,7 @@ function MainApp() {
 
     if (!hasOnboarded) return screen;
 
-    const hideTopFor = ['Settings', 'Notifications'];
+    const hideTopFor = ['Dashboard', 'Settings', 'Notifications'];
     const showTop = !hideTopFor.includes(currentScreen);
 
     return (

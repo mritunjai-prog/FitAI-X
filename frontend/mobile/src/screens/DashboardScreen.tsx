@@ -655,18 +655,28 @@ export default function DashboardScreen({ onNavigate, onNavigateToWorkout, onNav
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <Animated.ScrollView onScroll={scrollHandler} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: 44 }} showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}>
-          {/* Nav */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2, paddingHorizontal: 18, paddingTop: 6 }}>
-            <Pressable onPress={() => { haptic('select'); toggleTheme(); }} hitSlop={8} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name={isDark ? 'light-mode' : 'dark-mode'} size={22} color={C.onSurface} />
+          {/* Nav - profile left, settings right */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 6 }}>
+            <Pressable onPress={() => { haptic('select'); onNavigate?.('Profile'); }} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: T.track, alignItems: 'center', justifyContent: 'center' }}>
+                {hasText(user?.avatar) ? <Image source={{ uri: user!.avatar! }} style={{ width: 32, height: 32, borderRadius: 16 }} /> : <Icon name="person" size={18} color={C.onSurfaceVariant} />}
+              </View>
             </Pressable>
-            <Pressable onPress={() => { haptic('select'); setSheet('palette'); }} hitSlop={8} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name="search" size={22} color={C.onSurface} />
-            </Pressable>
-            <Pressable onPress={() => { haptic('select'); if (onNavigateToNotifications) onNavigateToNotifications(); else setSheet('notifications'); }} hitSlop={8} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
-              <Icon name="notifications" size={22} color={C.onSurface} />
-              {unreadCount > 0 && <View style={{ position: 'absolute', top: 5, right: 5, width: 7, height: 7, borderRadius: 4, backgroundColor: C.primary, borderWidth: 2, borderColor: C.bg }} />}
-            </Pressable>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+              <Pressable onPress={() => { haptic('select'); toggleTheme(); }} hitSlop={8} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name={isDark ? 'light-mode' : 'dark-mode'} size={22} color={C.onSurface} />
+              </Pressable>
+              <Pressable onPress={() => { haptic('select'); setSheet('palette'); }} hitSlop={8} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="search" size={22} color={C.onSurface} />
+              </Pressable>
+              <Pressable onPress={() => { haptic('select'); if (onNavigateToNotifications) onNavigateToNotifications(); else setSheet('notifications'); }} hitSlop={8} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="notifications" size={22} color={C.onSurface} />
+                {unreadCount > 0 && <View style={{ position: 'absolute', top: 5, right: 5, width: 7, height: 7, borderRadius: 4, backgroundColor: C.primary, borderWidth: 2, borderColor: C.bg }} />}
+              </Pressable>
+              <Pressable onPress={() => { haptic('select'); onNavigate?.('Settings'); }} hitSlop={8} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="settings" size={22} color={C.onSurface} />
+              </Pressable>
+            </View>
           </View>
           {/* Greeting */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: T.gutter, paddingTop: 8 }}>
