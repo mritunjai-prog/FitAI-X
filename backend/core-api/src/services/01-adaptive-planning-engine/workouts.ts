@@ -3,6 +3,7 @@ import prisma from '../../db'
 import AppEvents, { EVENTS } from '../../core/events'
 import { z } from 'zod'
 import { callAI, buildUserContext } from '../ai/aiService'
+import { awardXp, updateStreak } from '../xp/xpService'
 
 const router = Router()
 
@@ -226,10 +227,64 @@ router.post('/session/complete', async (req, res) => {
       });
     }
 
+    // ── AUTO: Award XP for completing workout ──
+    let xpResult = null;
+    let streakResult = null;
+    try {
+      xpResult = await awardXp(session.userId, 'workout_completed', `Completed: ${session.title}`);
+      
+      // Streak bonus for consecutive days
+      streakResult = await updateStreak(session.userId);
+      if (streakResult.streakContinued && streakResult.currentStreak > 1) {
+        await awardXp(session.userId, 'workout_streak', `${streakResult.currentStreak} day streak!`);
+      }
+    } catch (xpErr) {
+      console.warn('[XP/Streak] Non-critical error:', xpErr);
+    }
+
+    // ── AUTO: Update recovery score ──
+    try {
+      const vitals = await prisma.vitals.findUnique({ where: { userId: session.userId } });
+      if (vitals) {
+        await prisma.vitals.update({
+          where: { userId: session.userId },
+          data: {
+            recoveryCor: Math.max(0.2, (vitals.recoveryCor || 0.5) - 0.08),
+            bodyBattery: Math.max(0.1, (vitals.bodyBattery || 0.5) - 0.12),
+          }
+        });
+      }
+    } catch (recErr) {
+      console.warn('[Recovery] Update error:', recErr);
+    }
+
+    // ── AUTO: Post to social feed ──
+    try {
+      const user = await prisma.user.findUnique({ where: { id: session.userId } });
+      await prisma.feedItem.create({
+        data: {
+          userId: session.userId,
+          type: 'workout',
+          message: `Completed "${session.title}" workout · ${duration || '?'} min · 🔥`,
+          timeStr: 'Just now',
+        }
+      });
+    } catch (feedErr) {
+      console.warn('[Feed] Error:', feedErr);
+    }
+
     // Trigger Event-Driven Pipeline (Analytics, AI Recovery, etc)
     AppEvents.emit(EVENTS.WORKOUT_COMPLETED, { userId: session.userId, workoutId: session.workoutId, sessionId: session.id });
 
-    res.json(session);
+    res.json({
+      session,
+      xpAwarded: xpResult?.xpAwarded || 0,
+      totalXp: xpResult?.totalXp || 0,
+      level: xpResult?.level || 1,
+      newBadge: xpResult?.newBadge || null,
+      currentStreak: streakResult?.currentStreak || 0,
+      streakContinued: streakResult?.streakContinued || false,
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to complete session' });

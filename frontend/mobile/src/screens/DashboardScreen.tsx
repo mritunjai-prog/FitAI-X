@@ -19,6 +19,8 @@ import SplineChart from "../components/charts/SplineChart";
 import AnimatedPressable from "../components/AnimatedPressable";
 import { fetchFeed, fetchActiveUsers, fetchVitals, FeedItem } from '../services/api/dashboard';
 import { fetchWorkoutHistory } from '../services/api/workout';
+import { fetchXpStats } from '../services/api/xp';
+import XpStatsCard from '../components/XpStatsCard';
 import { socket } from '../services/socket/socketClient';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -42,6 +44,7 @@ export default function DashboardScreen({
   const { data: activeUsers = [] } = useQuery({ queryKey: ['activeUsers'], queryFn: fetchActiveUsers });
   const { data: vitals } = useQuery({ queryKey: ['vitals'], queryFn: fetchVitals, refetchInterval: 3000 });
   const { data: history } = useQuery({ queryKey: ['workoutHistory'], queryFn: () => fetchWorkoutHistory(user?.id || '') });
+  const { data: xpStats } = useQuery({ queryKey: ['xpStats', user?.id], queryFn: () => fetchXpStats(user?.id || ''), enabled: !!user?.id });
 
   const recentWorkout = history?.[0];
 
@@ -192,6 +195,13 @@ export default function DashboardScreen({
               </View>
             </AnimatedPressable>
           </Animated.View>
+
+          {/* XP & Stats Card */}
+          {xpStats && (
+            <Animated.View entering={FadeInUp.delay(155).springify().damping(15)} style={{ marginBottom: 12 }}>
+              <XpStatsCard stats={xpStats} />
+            </Animated.View>
+          )}
 
           {/* BENTO BOX GRID */}
           <Animated.View entering={FadeInUp.delay(150).springify().damping(15)}>
