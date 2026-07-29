@@ -791,7 +791,7 @@ export default function DashboardScreen({ onNavigate, onNavigateToWorkout, onNav
             </View>
             <View style={{ marginTop: 12, height: 76 }}><Waveform width={screenW} height={76} color={A.heart} colorTail={A.heart2} /></View>
             {hasItems(vitalStats) && <StatColumns items={vitalStats} C={C} isDark={isDark} marginTop={2} />}
-            </></>
+            </>
           ) : <><SectionLabel text="Live vitals" C={C} /><EmptyState icon="favorite" title="Heart rate unavailable" body="Your watch hasn't reported recently." C={C} /></>}
           {/* Recovery */}
           {hasItems(recovery) && (
