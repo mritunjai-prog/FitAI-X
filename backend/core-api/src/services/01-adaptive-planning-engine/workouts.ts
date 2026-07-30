@@ -140,6 +140,41 @@ router.post('/', async (req, res) => {
       include: { exercises: true }
     });
 
+    // ── AUTO: Create/update calendar event for today ──
+    try {
+      const todayIndex = new Date().getDay(); // 0=Sun
+      // Delete existing event for today
+      await prisma.calendarEvent.deleteMany({
+        where: { userId, dayIndex: todayIndex, type: 'workout' }
+      });
+      // Create new calendar event
+      await prisma.calendarEvent.create({
+        data: {
+          userId,
+          dayIndex: todayIndex,
+          title: title || 'Workout',
+          intensity: difficulty || 'Moderate',
+          description: description || targetMuscles || '',
+          exercises: JSON.stringify(workout.exercises.map((ex: any) => ({
+            name: ex.name, sets: ex.sets, reps: ex.reps,
+            weight: ex.weight, muscleGroup: ex.muscleGroup,
+            notes: ex.notes, instructions: ex.notes
+          }))),
+          workoutId: workout.id,
+          type: 'workout'
+        }
+      });
+    } catch (calErr) {
+      console.warn('[Calendar] Event creation error:', calErr);
+    }
+
+    // ── Socket notification ──
+    try {
+      const io = getIo();
+      io?.to(userId).emit('workout_update', { refresh: true, workoutId: workout.id });
+      io?.to(userId).emit('calendar_update', { refresh: true });
+    } catch (e) {}
+
     res.json(workout);
   } catch (error) {
     console.error(error);

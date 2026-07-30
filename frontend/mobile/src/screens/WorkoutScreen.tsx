@@ -1646,6 +1646,24 @@ export default function WorkoutScreen({ onNavigateBack, onNavigateToNotification
   const qc = useQueryClient();
 
   const [tab, setTab] = useState<TabKey>('overview');
+  // Auto-save draft when leaving builder tab
+  const handleTabChange = useCallback((newTab: TabKey) => {
+    if (tab === 'builder' && newTab !== 'builder') {
+      // If there's unsaved draft, auto-save to DB
+      if (draft && draft.length > 0 && userId) {
+        const estDuration = Math.round(draft.reduce((a, e) => a + e.sets * ((e.rest ?? 60) + 40), 0) / 60);
+        saveWorkoutMutation.mutate({
+          userId,
+          title: draftTitle.trim() || workout?.title || 'Custom Workout',
+          duration: String(estDuration),
+          targetMuscles: draftMuscleGroup.trim() || workout?.targetMuscles || undefined,
+          parentVersionId: workout?.id,
+          exercises: draft,
+        });
+      }
+    }
+    setTab(newTab);
+  }, [tab, draft, draftTitle, draftMuscleGroup, userId, workout, saveWorkoutMutation]);
   const [draft, setDraft] = useState<WorkoutExercise[] | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftMuscleGroup, setDraftMuscleGroup] = useState('');
@@ -1681,32 +1699,17 @@ export default function WorkoutScreen({ onNavigateBack, onNavigateToNotification
   const { data: sleepData } = useQuery({ queryKey: ['sleep', userId], queryFn: () => fetchSleepData(userId), enabled: !!userId });
   const { data: recoveryScore } = useQuery({ queryKey: ['recoveryScore', userId], queryFn: () => fetchRecoveryScore(userId), enabled: !!userId });
 
-  // Auto-generate initial workout if none exists
+  // Auto-generate initial workout if none exists — backend saves to DB directly
   const generateInitMutation = useMutation({
     mutationFn: () => generateInitialWorkout(userId),
-    onSuccess: (data: any) => {
-      if (data?.exercises?.length) {
-        // Save to DB as a proper workout
-        const estDuration = data.duration ? parseInt(data.duration) || 30 : 30;
-        saveWorkoutMutation.mutate({
-          userId,
-          title: data.title || 'Generated Workout',
-          duration: String(estDuration),
-          targetMuscles: data.targetMuscles,
-          aiExplanation: data.aiExplanation,
-          exercises: data.exercises.map((ex: any, idx: number) => ({
-            id: `gen-${idx}-${Date.now()}`,
-            name: ex.name,
-            muscleGroup: ex.muscleGroup,
-            sets: ex.sets,
-            reps: ex.reps,
-            weight: String(ex.weight),
-            restTime: ex.restTime || 60,
-            notes: ex.notes,
-            order: idx
-          }))
-        });
-      }
+    onSuccess: () => {
+      // Backend already saved to DB, just invalidate queries
+      void qc.invalidateQueries({ queryKey: ['currentWorkout', userId] });
+      void qc.invalidateQueries({ queryKey: ['calendar', userId] });
+      void qc.invalidateQueries({ queryKey: ['calendar'] });
+      setDraft(null);
+      setDraftTitle('');
+      haptic('success');
     },
   });
 
@@ -1977,7 +1980,7 @@ export default function WorkoutScreen({ onNavigateBack, onNavigateToNotification
           </View>
         )}
 
-        <WorkoutTabs active={tab} onChange={setTab} C={C} isDark={isDark} />
+        <WorkoutTabs active={tab} onChange={handleTabChange} C={C} isDark={isDark} />
 
         <View style={{ flex: 1 }}>
           {tab === 'overview' && (
@@ -1988,9 +1991,9 @@ export default function WorkoutScreen({ onNavigateBack, onNavigateToNotification
                 readiness={readinessData}
                 sessions={sessions}
                 generating={generateInitMutation.isPending}
-                onStart={() => setTab('active')}
-                onCustomise={() => setTab('builder')}
-                onHistory={() => setTab('history')}
+                onStart={() => handleTabChange('active')}
+                onCustomise={() => handleTabChange('builder')}
+                onHistory={() => handleTabChange('history')}
                 onRename={handleRename}
                 onRegenerate={() => {
                   if (userId) generateInitMutation.mutate();
@@ -2041,8 +2044,8 @@ export default function WorkoutScreen({ onNavigateBack, onNavigateToNotification
                 onExtendRest={session.extendRest}
                 onSkipRest={session.skipRest}
                 onFinish={handleFinish}
-                onViewHistory={() => setTab('history')}
-                onBackToOverview={() => { session.reset(); setSessionId(null); setTab('overview'); }}
+                onViewHistory={() => handleTabChange('history')}
+                onBackToOverview={() => { session.reset(); setSessionId(null); handleTabChange('overview'); }}
                 C={C}
                 isDark={isDark}
               />
@@ -2056,7 +2059,7 @@ export default function WorkoutScreen({ onNavigateBack, onNavigateToNotification
                 loading={historyLoading}
                 weeklyLoad={weeklyLoadData}
                 streak={(user as any)?.currentStreak ?? 0}
-                onStartWorkout={() => setTab('overview')}
+                onStartWorkout={() => handleTabChange('overview')}
                 C={C}
                 isDark={isDark}
               />
