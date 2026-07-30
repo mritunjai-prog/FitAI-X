@@ -5,6 +5,62 @@ import { callAI, buildUserContext } from '../ai/aiService';
 import { z } from 'zod';
 import { getIo } from '../../realtime/socket';
 
+
+/** Sync meals for a date range into CalendarEvent records */
+async function syncMealsToCalendar(userId: string) {
+  try {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 7);
+    
+    const meals = await prisma.meal.findMany({
+      where: { userId, deletedAt: null, date: { gte: today, lt: weekEnd } },
+      orderBy: [{ date: 'asc' }, { type: 'asc' }]
+    });
+    
+    // Delete old meal calendar events
+    await prisma.calendarEvent.deleteMany({
+      where: { userId, type: 'meal' }
+    });
+    
+    // Group meals by date
+    const mealsByDay: Record<string, any[]> = {};
+    meals.forEach(m => {
+      const key = m.date ? m.date.toISOString().slice(0, 10) : 'unknown';
+      if (!mealsByDay[key]) mealsByDay[key] = [];
+      mealsByDay[key].push(m);
+    });
+    
+    // Create calendar event for each day
+    for (const [dateStr, dayMeals] of Object.entries(mealsByDay)) {
+      const dayDate = new Date(dateStr + 'T00:00:00');
+      const dayIndex = dayDate.getDay();
+      const totalCals = dayMeals.reduce((s, m: any) => s + m.cals, 0);
+      const totalP = dayMeals.reduce((s, m: any) => s + (m.protein || 0), 0);
+      const totalC = dayMeals.reduce((s, m: any) => s + (m.carbs || 0), 0);
+      const totalF = dayMeals.reduce((s, m: any) => s + (m.fats || 0), 0);
+      
+      await prisma.calendarEvent.create({
+        data: {
+          userId, dayIndex, type: 'meal',
+          title: `Meal Plan - ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dayIndex]}`,
+          description: `${dayMeals.length} meals · ${totalCals}kcal · P${totalP}g · C${totalC}g · F${totalF}g`,
+          intensity: 'Moderate',
+          exercises: JSON.stringify(dayMeals.map((m: any) => ({
+            type: m.type, name: m.name, cals: m.cals,
+            protein: m.protein || 0, carbs: m.carbs || 0, fats: m.fats || 0,
+          })))
+        }
+      });
+    }
+    
+    if (meals.length > 0) {
+      console.log(`[Calendar] Synced ${meals.length} meals for user ${userId}`);
+    }
+  } catch (e: any) {
+    console.warn('[Calendar Sync] Error:', e.message);
+  }
+}
+
 const router = Router()
 
 // GET /api/v1/nutrition
@@ -45,11 +101,26 @@ router.get('/dashboard', async (req, res) => {
     const carbs = logs.reduce((sum, log) => sum + (log.carbs || 0), 0);
     const fat = logs.reduce((sum, log) => sum + (log.fats || 0), 0);
 
+    // Calculate calorie goals from user profile
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    const weight = user?.weight || 70;
+    const baseCals = Math.round(weight * 28);
+    const calorieGoal = user?.goal?.toLowerCase().includes('loss') ? Math.round(baseCals * 0.8)
+      : user?.goal?.toLowerCase().includes('gain') ? Math.round(baseCals * 1.15) : baseCals;
+    const proteinGoal = Math.round(weight * 2);
+    const carbGoal = Math.round((calorieGoal - proteinGoal * 4) * 0.5 / 4);
+    const fatGoal = Math.round((calorieGoal - proteinGoal * 4) * 0.25 / 9);
+
     res.json({
       calories,
       protein,
       carbs,
       fat,
+      calorieGoal,
+      proteinGoal,
+      carbGoal,
+      fatGoal,
+      caloriesRemaining: Math.max(0, calorieGoal - calories),
       waterProgress: vitals?.waterProgress || 0,
       dailyWaterMl: vitals?.dailyWaterMl || 0,
       waterGoalMl: vitals?.waterGoalMl || 2500,
@@ -165,6 +236,13 @@ Create 3 to 5 meals that STRICTLY adhere to the dietary restrictions (e.g. if Ve
       savedMeals.push(meal);
     }
 
+    // Sync to calendar
+    await syncMealsToCalendar(userId);
+    
+    const io = getIo();
+    io?.to(userId).emit('nutrition_update', { type: 'meal_plan_created' });
+    io?.to(userId).emit('calendar_update', { refresh: true });
+    
     res.json({ success: true, meals: savedMeals });
   } catch (error: any) {
     console.error(error);
@@ -367,7 +445,10 @@ router.post('/log-food', async (req, res) => {
     // Socket notification for real-time update
     try {
       const io = getIo();
-      if (io) io.to(userId).emit('nutrition_update', { type: 'food_logged', log });
+      if (io) {
+        io.to(userId).emit('nutrition_update', { type: 'food_logged', log });
+        io.to(userId).emit('vitals_update', { refresh: true });
+      }
     } catch (e) {}
     
     res.json(log);
@@ -495,8 +576,12 @@ router.post('/meal/manual', async (req, res) => {
       }
     });
 
+    // Sync to calendar
+    await syncMealsToCalendar(userId);
+    
     const io = getIo();
     io?.to(userId).emit('nutrition_update', { type: 'meal_created', meal });
+    io?.to(userId).emit('calendar_update', { refresh: true });
     
     res.json(meal);
   } catch (error) {
@@ -542,8 +627,12 @@ router.post('/meal-plan/manual', async (req, res) => {
       saved.push(meal);
     }
 
+    // Sync to calendar
+    await syncMealsToCalendar(userId);
+    
     const io = getIo();
     io?.to(userId).emit('nutrition_update', { type: 'meal_plan_created' });
+    io?.to(userId).emit('calendar_update', { refresh: true });
     
     res.json({ success: true, meals: saved, count: saved.length });
   } catch (error) {

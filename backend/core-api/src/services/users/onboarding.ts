@@ -149,9 +149,48 @@ Use INDIAN cuisine. Vary meals across days. Return ONLY valid JSON.`,
       data: { userId, type: 'milestone', message: 'Just joined FitAI-X and received a personalized AI meal plan!', timeStr: 'Just now' }
     });
 
+    // Sync all meals to calendar
+    try {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 7);
+      const weekMeals = await prisma.meal.findMany({
+        where: { userId, deletedAt: null, date: { gte: today, lt: weekEnd } }
+      });
+      
+      await prisma.calendarEvent.deleteMany({ where: { userId, type: 'meal' } });
+      
+      const mealsByDay: Record<string, any[]> = {};
+      weekMeals.forEach(m => {
+        const key = m.date ? m.date.toISOString().slice(0, 10) : 'unknown';
+        if (!mealsByDay[key]) mealsByDay[key] = [];
+        mealsByDay[key].push(m);
+      });
+      
+      for (const [dateStr, dayMeals] of Object.entries(mealsByDay)) {
+        const dayDate = new Date(dateStr + 'T00:00:00');
+        const dayIndex = dayDate.getDay();
+        const totalCals = dayMeals.reduce((s, m) => s + m.cals, 0);
+        const totalP = dayMeals.reduce((s, m) => s + (m.protein || 0), 0);
+        const totalC = dayMeals.reduce((s, m) => s + (m.carbs || 0), 0);
+        const totalF = dayMeals.reduce((s, m) => s + (m.fats || 0), 0);
+        
+        await prisma.calendarEvent.create({
+          data: { userId, dayIndex, type: 'meal',
+            title: `Meal Plan - ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dayIndex]}`,
+            description: `${dayMeals.length} meals · ${totalCals}kcal · P${totalP}g · C${totalC}g · F${totalF}g`,
+            intensity: 'Moderate',
+            exercises: JSON.stringify(dayMeals.map(m => ({ type: m.type, name: m.name, cals: m.cals, protein: m.protein || 0, carbs: m.carbs || 0, fats: m.fats || 0 })))
+          }
+        });
+      }
+    } catch (calErr: any) {
+      console.warn('[Onboarding] Calendar sync error:', calErr.message);
+    }
+
     // Socket notification
     const io = getIo();
     io?.to(userId).emit('nutrition_update', { type: 'meal_plan_ready' });
+    io?.to(userId).emit('calendar_update', { refresh: true });
     io?.to(userId).emit('system_notification', { message: 'Rachel built your personalized 7-day meal plan based on your profile!' });
 
     return true;
