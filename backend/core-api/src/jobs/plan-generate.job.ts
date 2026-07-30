@@ -415,6 +415,14 @@ You MUST respond with ONLY a valid JSON object. The JSON must match this exact s
       await prisma.workout.updateMany({ where: { userId }, data: { isCurrent: false } });
       await prisma.meal.deleteMany({ where: { userId } });
 
+      // Determine today's workout index — find today's dayIndex or the next future workout
+      const todayIndex = new Date().getDay(); // 0=Sun
+  
+      // Find the first workout day that matches today or is the closest future workout
+      const workoutDays = plan.weekPlan.filter(d => !d.isRestDay && d.exercises.length > 0);
+      const todayWorkoutIndex = workoutDays.find(d => d.dayIndex >= todayIndex)?.dayIndex 
+        ?? workoutDays[0]?.dayIndex; // Fall back to the first workout day
+      
       for (const day of plan.weekPlan) {
         const exercisesJson = JSON.stringify(day.exercises);
 
@@ -442,7 +450,7 @@ You MUST respond with ONLY a valid JSON object. The JSON must match this exact s
               goal,
               equipment,
               description: day.description,
-              isCurrent: day.dayIndex === plan.weekPlan.find(d => !d.isRestDay)?.dayIndex,
+              isCurrent: day.dayIndex === todayWorkoutIndex,
               aiExplanation: `AI-generated for ${goal} goal at ${experience} level.`,
               exercises: {
                 create: day.exercises.map((ex: any, idx: number) => ({

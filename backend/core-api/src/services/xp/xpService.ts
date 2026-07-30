@@ -60,7 +60,7 @@ export async function awardXp(userId: string, event: XpEvent, reason?: string): 
     where: { id: userId },
     data: { 
       xpTotal: newTotal,
-      xpLastEarned: new Date(),
+      xpLastEarned: Date.now(),
       lastStreakReason: reason || event,
     }
   });
