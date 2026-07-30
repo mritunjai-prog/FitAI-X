@@ -415,8 +415,8 @@ You MUST respond with ONLY a valid JSON object. The JSON must match this exact s
       await prisma.workout.updateMany({ where: { userId }, data: { isCurrent: false } });
       await prisma.meal.deleteMany({ where: { userId } });
 
-      // Determine today's workout index — find today's dayIndex or the next future workout
-      const todayIndex = new Date().getDay(); // 0=Sun
+      // Determine today's workout index — find today's dayIndex or the closest future workout
+      // todayIndex already defined above as new Date().getDay()
   
       // Find the first workout day that matches today or is the closest future workout
       const workoutDays = plan.weekPlan.filter(d => !d.isRestDay && d.exercises.length > 0);
