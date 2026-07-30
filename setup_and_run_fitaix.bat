@@ -39,10 +39,18 @@ echo Starting Frontend in a new window...
 cd ..\..\frontend\mobile
 start "FitAI Frontend" cmd /c "npx expo start -c"
 
+echo Starting Auto Sync Watcher (testing branch)...
+cd ..\..
+start "FitAI AutoSync" cmd /c "auto_sync_testing.bat"
+
 echo.
 echo ========================================================
 echo Both servers are now starting up in separate windows!
 echo - Look for the "FitAI Backend" and "FitAI Frontend" windows.
 echo - You can scan the Expo QR code in the Frontend window.
+echo.
+echo AUTO SYNC is running in "FitAI AutoSync" window!
+echo - Har 15 seconds mein testing branch check hoga
+echo - Naya commit aate hi automatically pull ho jayega
 echo ========================================================
 pause
