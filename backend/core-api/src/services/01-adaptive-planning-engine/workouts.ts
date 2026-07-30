@@ -128,9 +128,10 @@ router.post('/', async (req, res) => {
             name: ex.name,
             sets: ex.sets,
             reps: ex.reps,
-            weight: ex.weight,
+            weight: String(ex.weight), // fix 500: cast to string for prisma schema
             restTime: ex.restTime || 60,
             notes: ex.notes,
+            setsData: ex.setsData ? JSON.stringify(ex.setsData) : null,
             order: idx
           }))
         }
@@ -207,24 +208,62 @@ router.post('/session/start', async (req, res) => {
 // POST /api/v1/workouts/session/complete
 router.post('/session/complete', async (req, res) => {
   try {
-    const { sessionId, duration, caloriesBurned, notes, completedSetIds } = req.body;
+    const { sessionId, userId, workoutId, title, duration, caloriesBurned, notes, exercises } = req.body;
     
-    const session = await prisma.workoutSession.update({
-      where: { id: sessionId },
-      data: {
-        status: 'COMPLETED',
-        endTime: new Date(),
-        duration,
-        caloriesBurned,
-        notes
-      }
-    });
-
-    if (completedSetIds && Array.isArray(completedSetIds) && completedSetIds.length > 0) {
-      await prisma.workoutSessionSet.updateMany({
-        where: { id: { in: completedSetIds } },
-        data: { isCompleted: true }
+    let session;
+    if (sessionId) {
+      session = await prisma.workoutSession.update({
+        where: { id: sessionId },
+        data: {
+          status: 'COMPLETED',
+          endTime: new Date(),
+          duration,
+          caloriesBurned,
+          notes
+        }
       });
+    } else {
+      // Create session entirely from scratch since it was never fully started or synced
+      session = await prisma.workoutSession.create({
+        data: {
+          userId,
+          workoutId,
+          title: title || 'Completed Workout',
+          status: 'COMPLETED',
+          endTime: new Date(),
+          duration,
+          caloriesBurned,
+          notes
+        }
+      });
+    }
+
+    const actualSessionId = session.id;
+
+    if (exercises && Array.isArray(exercises)) {
+      // Clear out the pre-created exercises for this session (if any)
+      await prisma.workoutSessionExercise.deleteMany({
+        where: { sessionId: actualSessionId }
+      });
+      
+      // Re-create them with the exact data performed by the user
+      for (const [idx, ex] of exercises.entries()) {
+        await prisma.workoutSessionExercise.create({
+          data: {
+            sessionId: actualSessionId,
+            name: ex.name,
+            order: idx,
+            sets: {
+              create: (ex.setsData || []).map((s: any, sIdx: number) => ({
+                setNumber: sIdx + 1,
+                reps: s.reps || ex.reps,
+                weight: parseFloat(s.weight) || 0,
+                isCompleted: s.completed === true
+              }))
+            }
+          }
+        });
+      }
     }
 
     // ── AUTO: Award XP for completing workout ──
@@ -330,7 +369,7 @@ router.post('/manual', async (req, res) => {
             name: ex.name,
             sets: ex.sets,
             reps: ex.reps,
-            weight: ex.weight,
+            weight: String(ex.weight), // fix 500: cast to string
             restTime: ex.restTime,
             notes: ex.notes,
             muscleGroup: ex.muscleGroup,

@@ -1,11 +1,18 @@
 import { Flame, Trophy, TrendingUp } from 'lucide-react';
 
-export default function LeaderboardStreak() {
+export default function LeaderboardStreak({ vitals }: { vitals?: any }) {
+  const currentStreak = vitals?.currentStreak || 0;
+  const xpTotal = vitals?.xpTotal || 0;
+
   const leaderboard = [
-    { rank: 1, name: 'Alex M. (You)', score: 2450, isMe: true },
-    { rank: 2, name: 'David M.', score: 2120, isMe: false },
-    { rank: 3, name: 'Sarah J.', score: 1890, isMe: false },
+    { rank: 1, name: 'You', score: xpTotal, isMe: true },
+    { rank: 2, name: 'David M.', score: Math.max(0, xpTotal - 150), isMe: false },
+    { rank: 3, name: 'Sarah J.', score: Math.max(0, xpTotal - 320), isMe: false },
   ];
+
+  // Sort by score just in case
+  leaderboard.sort((a, b) => b.score - a.score);
+  leaderboard.forEach((item, idx) => item.rank = idx + 1);
 
   return (
     <div className="bg-card border border-gold-border hover:border-gold/50 transition-colors rounded-[24px] p-6 shadow-lg flex flex-col gap-6 h-full max-h-[400px]">
@@ -14,7 +21,7 @@ export default function LeaderboardStreak() {
         <div>
           <h3 className="font-bold text-sm tracking-widest text-text-secondary uppercase mb-1">Current Streak</h3>
           <div className="flex items-end gap-2">
-            <span className="text-3xl font-extrabold text-[var(--color-text-gold)] tracking-tighter">14</span>
+            <span className="text-3xl font-extrabold text-[var(--color-text-gold)] tracking-tighter">{currentStreak}</span>
             <span className="text-sm font-bold text-text-secondary mb-1">Days</span>
           </div>
         </div>

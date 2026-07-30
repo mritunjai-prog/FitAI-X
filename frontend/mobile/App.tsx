@@ -55,6 +55,17 @@ function MainApp() {
   const [isCommandOpen, setIsCommandOpen] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [createWorkoutMode, setCreateWorkoutMode] = useState(false);
+
+  const navigateToCreateWorkout = () => {
+    setCreateWorkoutMode(true);
+    setCurrentScreen('Workout');
+  };
+
+  const navigateToScreen = (screen: any) => {
+    if (screen !== 'Workout') setCreateWorkoutMode(false);
+    setCurrentScreen(screen);
+  };
 
   // Check for unread notifications
   useEffect(() => {
@@ -101,9 +112,9 @@ function MainApp() {
 
   const handleTopAction = (action: string) => {
     switch (action) {
-      case 'settings': setCurrentScreen('Settings'); break;
+      case 'settings': navigateToScreen('Settings'); break;
       case 'palette': setIsCommandOpen(true); break;
-      case 'notifications': setCurrentScreen('Notifications'); break;
+      case 'notifications': navigateToScreen('Notifications'); break;
     }
   };
 
@@ -141,32 +152,37 @@ function MainApp() {
       <>
         {currentScreen === 'Profile' ? (
           <ProfileScreen 
-            onNavigateToBuilder={() => setCurrentScreen('Workout')} 
-            onNavigateToSettings={() => setCurrentScreen('Settings')}
-            onNavigateToNotifications={() => setCurrentScreen('Notifications')}
-            onNavigateToHistory={() => setCurrentScreen('Workout')}
+            onNavigateToBuilder={() => navigateToScreen('Workout')} 
+            onNavigateToSettings={() => navigateToScreen('Settings')}
+            onNavigateToNotifications={() => navigateToScreen('Notifications')}
+            onNavigateToHistory={() => navigateToScreen('Workout')}
           />
         ) : currentScreen === 'Workout' ? (
           <WorkoutScreen 
-            onNavigateBack={() => setCurrentScreen('Dashboard')}
-            onNavigateToNotifications={() => setCurrentScreen('Notifications')}
+            createMode={createWorkoutMode}
+            onNavigateBack={() => navigateToScreen('Dashboard')}
+            onNavigateToNotifications={() => navigateToScreen('Notifications')}
           />
         ) : currentScreen === 'Coach' ? (
-          <CoachScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigateBack={() => setCurrentScreen('Dashboard')} />
+          <CoachScreen onNavigateToNotifications={() => navigateToScreen('Notifications')} onNavigateBack={() => navigateToScreen('Dashboard')} />
         ) : currentScreen === 'Calendar' ? (
-          <CalendarScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigateBack={() => setCurrentScreen('Dashboard')} />
+          <CalendarScreen 
+            onNavigateToNotifications={() => navigateToScreen('Notifications')} 
+            onNavigateBack={() => navigateToScreen('Dashboard')} 
+            onNavigateToCreateWorkout={navigateToCreateWorkout}
+          />
         ) : currentScreen === 'Nutrition' ? (
-          <NutritionScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigateBack={() => setCurrentScreen('Dashboard')} />
+          <NutritionScreen onNavigateToNotifications={() => navigateToScreen('Notifications')} onNavigateBack={() => navigateToScreen('Dashboard')} />
         ) : currentScreen === 'Analytics' ? (
-          <AnalyticsScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigateBack={() => setCurrentScreen('Dashboard')} />
+          <AnalyticsScreen onNavigateToNotifications={() => navigateToScreen('Notifications')} onNavigateBack={() => navigateToScreen('Dashboard')} />
         ) : currentScreen === 'Recovery' ? (
-          <RecoveryScreen navigation={{ goBack: () => setCurrentScreen('Dashboard') }} onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigate={(screen: any) => setCurrentScreen(screen)} />
+          <RecoveryScreen navigation={{ goBack: () => navigateToScreen('Dashboard') }} onNavigateToNotifications={() => navigateToScreen('Notifications')} onNavigate={(screen: any) => navigateToScreen(screen)} />
         ) : currentScreen === 'Settings' ? (
-          <SettingsScreen onNavigateBack={() => setCurrentScreen('Profile')} />
+          <SettingsScreen onNavigateBack={() => navigateToScreen('Profile')} />
         ) : currentScreen === 'Notifications' ? (
-          <NotificationsScreen onNavigateBack={() => setCurrentScreen('Profile')} />
+          <NotificationsScreen onNavigateBack={() => navigateToScreen('Profile')} />
         ) : (
-          <DashboardScreen onNavigateToNotifications={() => setCurrentScreen('Notifications')} onNavigateToWorkout={() => setCurrentScreen('Workout')} onNavigateToNutrition={() => setCurrentScreen('Nutrition')} onNavigateToRecovery={() => setCurrentScreen('Recovery')} onNavigate={(screen) => setCurrentScreen(screen)} />
+          <DashboardScreen onNavigateToNotifications={() => navigateToScreen('Notifications')} onNavigateToWorkout={() => navigateToScreen('Workout')} onNavigateToNutrition={() => navigateToScreen('Nutrition')} onNavigateToRecovery={() => navigateToScreen('Recovery')} onNavigate={(screen) => navigateToScreen(screen)} />
         )}
       </>
     );
@@ -201,7 +217,7 @@ function MainApp() {
       {hasOnboarded && !['Settings', 'Notifications', 'Recovery'].includes(currentScreen) && (
         <BottomNavigation 
           currentScreen={currentScreen as 'Dashboard' | 'Profile' | 'Coach' | 'Nutrition' | 'Workout'} 
-          onNavigate={(screen) => setCurrentScreen(screen)} 
+          onNavigate={(screen) => navigateToScreen(screen)} 
         />
       )}
 

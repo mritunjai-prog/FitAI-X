@@ -147,6 +147,7 @@ model Exercise {
   restTime    Int? // in seconds
   notes       String?
   muscleGroup String?
+  setsData    String? // JSON string of [{ weight, reps }]
   status      String    @default("pending")
   order       Int       @default(0)
   deletedAt   DateTime?

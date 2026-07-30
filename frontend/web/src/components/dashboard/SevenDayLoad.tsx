@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export default function SevenDayLoad() {
+export default function SevenDayLoad({ vitals }: { vitals?: any }) {
   const [loaded, setLoaded] = useState(false);
   
   useEffect(() => {
@@ -10,13 +10,13 @@ export default function SevenDayLoad() {
   }, []);
 
   const data = [
-    { day: 'M', val: 0.3 },
-    { day: 'T', val: 0.5 },
-    { day: 'W', val: 0.8 },
-    { day: 'T', val: 0.6 },
-    { day: 'F', val: 0.4 },
-    { day: 'S', val: 0.9 },
-    { day: 'S', val: 0.7 },
+    { day: 'M', val: vitals?.loadM ?? 0 },
+    { day: 'T', val: vitals?.loadT ?? 0 },
+    { day: 'W', val: vitals?.loadW ?? 0 },
+    { day: 'T', val: vitals?.loadTh ?? 0 },
+    { day: 'F', val: vitals?.loadF ?? 0 },
+    { day: 'S', val: vitals?.loadSa ?? 0 },
+    { day: 'S', val: vitals?.loadSu ?? 0 },
   ];
 
   return (
@@ -29,7 +29,7 @@ export default function SevenDayLoad() {
             <div className="w-full bg-card-inner rounded-t-sm rounded-b-sm overflow-hidden h-full flex items-end">
               <div 
                 className="w-full bg-brand-green transition-all duration-1000 ease-out rounded-t-sm group-hover:bg-[var(--color-gold)] shadow-[0_0_10px_rgba(245,196,0,0)] group-hover:shadow-[0_0_15px_rgba(245,196,0,0.5)]"
-                style={{ height: loaded ? `${item.val * 100}%` : '0%' }}
+                style={{ height: loaded ? `${Math.min(item.val, 1) * 100}%` : '0%' }}
               ></div>
             </div>
             <span className="text-[10px] font-bold text-text-secondary">{item.day}</span>

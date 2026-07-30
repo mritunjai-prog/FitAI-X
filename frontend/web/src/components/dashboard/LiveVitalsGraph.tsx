@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 
-export default function LiveVitalsGraph({ bpm = 145 }: { bpm?: number }) {
+export default function LiveVitalsGraph({ bpm = 0, vitals }: { bpm?: number, vitals?: any }) {
   const [loaded, setLoaded] = useState(false);
   
   useEffect(() => {
     const timer = setTimeout(() => setLoaded(true), 100);
     return () => clearTimeout(timer);
   }, []);
+
+  const displayBpm = bpm > 0 ? bpm : (vitals?.bpm || '--');
 
   return (
     <div className="bg-card border border-gold-border hover:border-gold/50 transition-colors rounded-2xl p-5 flex flex-col shadow-lg overflow-hidden">
@@ -20,7 +22,7 @@ export default function LiveVitalsGraph({ bpm = 145 }: { bpm?: number }) {
 
       {/* BPM Section */}
         <div className="flex items-baseline gap-1">
-          <span className="text-4xl font-extrabold text-text-primary tracking-tighter">{bpm}</span>
+          <span className="text-4xl font-extrabold text-text-primary tracking-tighter">{displayBpm}</span>
           <span className="text-xs font-bold text-text-secondary">BPM</span>
       </div>
 
@@ -40,7 +42,10 @@ export default function LiveVitalsGraph({ bpm = 145 }: { bpm?: number }) {
 
       {/* Body Battery Section */}
       <div className="mt-auto">
-        <h4 className="font-bold text-xs tracking-widest text-text-secondary uppercase mb-2">Fatigue Prediction</h4>
+        <div className="flex justify-between items-end mb-2">
+          <h4 className="font-bold text-xs tracking-widest text-text-secondary uppercase">Fatigue Prediction</h4>
+          <span className="text-sm font-bold text-brand-blue">{vitals?.bodyBattery || '--'}%</span>
+        </div>
         <div className="h-16 w-full relative">
           <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="w-full h-full overflow-visible">
             {/* Gradient Fill */}

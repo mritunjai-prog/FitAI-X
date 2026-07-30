@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export default function ConcentricActivityRings() {
+export default function ConcentricActivityRings({ vitals }: { vitals?: any }) {
   const [loaded, setLoaded] = useState(false);
   
   useEffect(() => {
@@ -15,9 +15,9 @@ export default function ConcentricActivityRings() {
   
   // Rings configuration (outer to inner)
   const rings = [
-    { name: 'Move', color: '#3B82F6', percentage: 75, radius: 66 },
-    { name: 'Water', color: '#10B981', percentage: 50, radius: 48 },
-    { name: 'Train', color: '#F5C400', percentage: 85, radius: 30 }
+    { name: 'Move', color: '#3B82F6', percentage: Math.min(100, (vitals?.moveProgress || 0) * 100), radius: 66 },
+    { name: 'Water', color: '#10B981', percentage: Math.min(100, (vitals?.waterProgress || 0) * 100), radius: 48 },
+    { name: 'Train', color: '#F5C400', percentage: Math.min(100, (vitals?.trainProgress || 0) * 100), radius: 30 }
   ];
 
   return (

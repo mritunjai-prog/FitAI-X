@@ -1,12 +1,23 @@
 import { useState, useEffect } from 'react';
 
-export default function RecoveryRadarChart() {
+export default function RecoveryRadarChart({ vitals }: { vitals?: any }) {
   const [loaded, setLoaded] = useState(false);
   
   useEffect(() => {
     const timer = setTimeout(() => setLoaded(true), 100);
     return () => clearTimeout(timer);
   }, []);
+
+  const upr = vitals?.recoveryUpper ?? 0.8;
+  const lwr = vitals?.recoveryLower ?? 0.6;
+  const cor = vitals?.recoveryCore ?? 0.9;
+  const crd = vitals?.recoveryCardio ?? 0.7;
+
+  const ptUpr = `50,${50 - upr * 40}`;
+  const ptLwr = `${50 + lwr * 40},50`;
+  const ptCor = `50,${50 + cor * 40}`;
+  const ptCrd = `${50 - crd * 40},50`;
+  const pointsStr = `${ptUpr} ${ptLwr} ${ptCor} ${ptCrd}`;
 
   return (
     <div className="bg-card border border-gold-border hover:border-gold/50 transition-colors rounded-2xl p-5 flex flex-col shadow-lg h-[320px]">
@@ -27,7 +38,7 @@ export default function RecoveryRadarChart() {
 
           {/* Data Polygon (The Diamond) */}
           <polygon 
-            points={loaded ? "50,20 80,50 50,70 30,50" : "50,50 50,50 50,50 50,50"} 
+            points={loaded ? pointsStr : "50,50 50,50 50,50 50,50"} 
             fill="rgba(245, 196, 0, 0.2)" 
             stroke="var(--color-gold, #F5C400)" 
             strokeWidth="2" 
@@ -37,10 +48,10 @@ export default function RecoveryRadarChart() {
 
           {/* Data Points */}
           <g className={`transition-opacity duration-1000 delay-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}>
-            <circle cx="50" cy="20" r="3" fill="var(--color-gold, #F5C400)" />
-            <circle cx="80" cy="50" r="3" fill="var(--color-gold, #F5C400)" />
-            <circle cx="50" cy="70" r="3" fill="var(--color-gold, #F5C400)" />
-            <circle cx="30" cy="50" r="3" fill="var(--color-gold, #F5C400)" />
+            <circle cx="50" cy={50 - upr * 40} r="3" fill="var(--color-gold, #F5C400)" />
+            <circle cx={50 + lwr * 40} cy="50" r="3" fill="var(--color-gold, #F5C400)" />
+            <circle cx="50" cy={50 + cor * 40} r="3" fill="var(--color-gold, #F5C400)" />
+            <circle cx={50 - crd * 40} cy="50" r="3" fill="var(--color-gold, #F5C400)" />
           </g>
         </svg>
 

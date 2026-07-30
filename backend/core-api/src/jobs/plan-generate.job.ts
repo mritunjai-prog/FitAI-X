@@ -460,14 +460,75 @@ You MUST respond with ONLY a valid JSON object. The JSON must match this exact s
         }
       }
 
-      // Generate a starter meal
+      // Generate a starter meal and vitals using AI
+      const { text: mealAndVitalsText } = await generateText({
+        model: groq('llama-3.3-70b-versatile'),
+        system: `You are an AI fitness coach. Based on the user's profile, generate a personalized starter meal and baseline vitals.
+Return ONLY valid JSON matching this exact structure:
+{
+  "meal": { "name": "String", "type": "Lunch", "cals": 500, "cost": 10.0 },
+  "vitals": {
+    "bpm": 65,
+    "recoveryUpr": 0.8,
+    "recoveryLwr": 0.8,
+    "recoveryCor": 0.9,
+    "recoveryCrd": 0.9,
+    "bodyBattery": 1.0,
+    "moveProgress": 0.1,
+    "waterProgress": 0.1,
+    "trainProgress": 0.0
+  }
+}`,
+        prompt: `Create a meal and baseline vitals for: Goal=${goal}, Experience=${experience}, Diet=${diet}, Age=${age}, Weight=${weight}kg. Return ONLY the JSON object.`
+      });
+
+      let aiMealAndVitals;
+      try {
+        const cleanedMV = mealAndVitalsText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        aiMealAndVitals = JSON.parse(cleanedMV);
+      } catch (err) {
+        aiMealAndVitals = {
+          meal: { name: 'Healthy AI Meal', type: 'Lunch', cals: 600, cost: 10 },
+          vitals: { bpm: 65, recoveryUpr: 0.8, recoveryLwr: 0.8, recoveryCor: 0.9, recoveryCrd: 0.9, bodyBattery: 1.0, moveProgress: 0.1, waterProgress: 0.1, trainProgress: 0.0 }
+        };
+      }
+
       await prisma.meal.create({
         data: {
           userId,
-          name: goal === 'Build Muscle' ? 'High-Protein Chicken & Rice' : goal === 'Lose Weight' ? 'Green Salad with Grilled Salmon' : 'Balanced Chicken Wrap',
-          type: 'Lunch',
-          cals: goal === 'Build Muscle' ? 750 : goal === 'Lose Weight' ? 450 : 600,
-          cost: 9.50
+          name: aiMealAndVitals.meal.name,
+          type: aiMealAndVitals.meal.type,
+          cals: aiMealAndVitals.meal.cals,
+          cost: aiMealAndVitals.meal.cost
+        }
+      });
+
+      // Initialize AI Vitals
+      await prisma.vitals.upsert({
+        where: { userId },
+        update: {},
+        create: {
+          userId,
+          bpm: aiMealAndVitals.vitals.bpm,
+          recoveryUpr: aiMealAndVitals.vitals.recoveryUpr,
+          recoveryLwr: aiMealAndVitals.vitals.recoveryLwr,
+          recoveryCor: aiMealAndVitals.vitals.recoveryCor,
+          recoveryCrd: aiMealAndVitals.vitals.recoveryCrd,
+          bodyBattery: aiMealAndVitals.vitals.bodyBattery,
+          moveProgress: aiMealAndVitals.vitals.moveProgress,
+          waterProgress: aiMealAndVitals.vitals.waterProgress,
+          trainProgress: aiMealAndVitals.vitals.trainProgress,
+          loadM: 0, loadT: 0, loadW: 0, loadTh: 0, loadF: 0, loadSa: 0, loadSu: 0
+        }
+      });
+
+      // Add a first milestone FeedItem
+      await prisma.feedItem.create({
+        data: {
+          userId,
+          type: 'milestone',
+          message: 'Just joined FitAI-X and received a personalized AI plan!',
+          timeStr: 'Just now'
         }
       });
 

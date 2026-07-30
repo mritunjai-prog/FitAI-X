@@ -139,6 +139,8 @@ export interface WorkoutExercise {
   rest?: number;
   /** Ghost value from the previous logged session, e.g. "80×8". */
   prev?: string;
+  /** JSON array of sets data */
+  setsData?: { weight: number; reps: number }[];
 }
 
 export interface Workout {
@@ -1058,17 +1060,38 @@ function useLiveSession({ template, autoRest = true }: Options) {
 
   /* Hydrate working copy from the template. */
   useEffect(() => {
-    if (!template.length) return;
+    if (!template.length) {
+      setExercises([]);
+      return;
+    }
     setExercises((prev) => {
-      if (prev.length) return prev;
-      return template.map((ex) => ({
-        ...ex,
-        setsData: Array.from({ length: ex.sets }, () => ({
-          weight: ex.weight,
-          reps: ex.reps,
-          completed: false,
-        })),
-      }));
+      // Reconcile new template with existing progress to keep Builder/Active in sync
+      return template.map((ex) => {
+        const existing = prev.find((p) => p.id === ex.id || p.name === ex.name);
+        
+        const newSetsData = Array.from({ length: ex.sets }, (_, i) => {
+          if (existing && i < existing.setsData.length) {
+            return existing.setsData[i]; // Preserve completion status and logged weights
+          }
+          if (ex.setsData && i < ex.setsData.length) {
+            return {
+              weight: ex.setsData[i].weight,
+              reps: ex.setsData[i].reps,
+              completed: false,
+            };
+          }
+          return {
+            weight: ex.weight,
+            reps: ex.reps,
+            completed: false,
+          };
+        });
+        
+        return {
+          ...ex,
+          setsData: newSetsData,
+        };
+      });
     });
   }, [template]);
 
@@ -1582,6 +1605,10 @@ interface BuilderTabProps {
   onSave: () => void;
   onDiscard: () => void;
   onGenerate: (prompt: string) => void;
+  title: string;
+  setTitle: (title: string) => void;
+  muscleGroup: string;
+  setMuscleGroup: (mg: string) => void;
   generating?: boolean;
   saving?: boolean;
   C: ThemeColors;
@@ -1595,6 +1622,10 @@ function BuilderTab({
   onSave,
   onDiscard,
   onGenerate,
+  title,
+  setTitle,
+  muscleGroup,
+  setMuscleGroup,
   generating = false,
   saving = false,
   C,
@@ -1607,14 +1638,14 @@ function BuilderTab({
   const [prompt, setPrompt] = useState('');
 
   const bump = useCallback(
-    (id: string, field: NumericField, dir: 1 | -1) => {
+    (id: string, field: 'sets' | 'reps' | 'weight' | 'rest', delta: number) => {
       haptic('light');
       onChange(
         exercises.map((e) =>
           e.id === id
             ? {
                 ...e,
-                [field]: Math.max(MIN[field], (e[field] ?? 0) + dir * STEP[field]),
+                [field]: Math.max(0, (e[field] ?? 0) + delta),
               }
             : e,
         ),
@@ -1636,6 +1667,43 @@ function BuilderTab({
     setChips((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
   };
 
+  const duplicate = useCallback(
+    (index: number) => {
+      haptic('light');
+      const cloned = { ...exercises[index], id: `custom-${Date.now()}` };
+      const next = [...exercises];
+      next.splice(index + 1, 0, cloned);
+      onChange(next);
+    },
+    [exercises, onChange]
+  );
+
+  const moveUp = useCallback(
+    (index: number) => {
+      if (index === 0) return;
+      haptic('light');
+      const next = [...exercises];
+      const temp = next[index - 1];
+      next[index - 1] = next[index];
+      next[index] = temp;
+      onChange(next);
+    },
+    [exercises, onChange]
+  );
+
+  const moveDown = useCallback(
+    (index: number) => {
+      if (index === exercises.length - 1) return;
+      haptic('light');
+      const next = [...exercises];
+      const temp = next[index + 1];
+      next[index + 1] = next[index];
+      next[index] = temp;
+      onChange(next);
+    },
+    [exercises, onChange]
+  );
+
   const totalSets = exercises.reduce((a, b) => a + b.sets, 0);
   const tonnage = exercises.reduce((a, b) => a + b.sets * b.reps * b.weight, 0) / 1000;
   const minutes = Math.round(exercises.reduce((a, b) => a + b.sets * ((b.rest ?? 60) + 35), 0) / 60);
@@ -1647,6 +1715,50 @@ function BuilderTab({
       keyboardVerticalOffset={90}
     >
       <ScrollView contentContainerStyle={{ paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
+        <SectionLabel text="Workout Details" C={C} />
+        <View style={{ paddingHorizontal: T.gutter, gap: 16, marginBottom: 16 }}>
+          <View>
+            <Text style={{ fontFamily: F.header, fontSize: 11, letterSpacing: 0.5, color: C.onSurfaceVariant, marginBottom: 8 }}>WORKOUT NAME</Text>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              placeholder="e.g. Pull Day - Back & Biceps"
+              placeholderTextColor={C.onSurfaceVariant}
+              style={{
+                fontFamily: F.bodyMed,
+                fontSize: 16,
+                color: C.onSurface,
+                backgroundColor: T.wash,
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+                borderRadius: 12,
+                borderWidth: T.hairline,
+                borderColor: T.hairSoft,
+              }}
+            />
+          </View>
+          <View>
+            <Text style={{ fontFamily: F.header, fontSize: 11, letterSpacing: 0.5, color: C.onSurfaceVariant, marginBottom: 8 }}>TARGET MUSCLES</Text>
+            <TextInput
+              value={muscleGroup}
+              onChangeText={setMuscleGroup}
+              placeholder="e.g. Back, Biceps, Forearms"
+              placeholderTextColor={C.onSurfaceVariant}
+              style={{
+                fontFamily: F.bodyMed,
+                fontSize: 16,
+                color: C.onSurface,
+                backgroundColor: T.wash,
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+                borderRadius: 12,
+                borderWidth: T.hairline,
+                borderColor: T.hairSoft,
+              }}
+            />
+          </View>
+        </View>
+
         <SectionLabel text="Muscle Activation" C={C} />
         <MuscleMap activation={activation} view={view} onChangeView={setView} C={C} isDark={isDark} />
 
@@ -1753,7 +1865,21 @@ function BuilderTab({
         </View>
 
         {/* ── Exercises ────────────────────────────────────── */}
-        <SectionLabel text={`Exercises · ${exercises.length}`} C={C} action="Add" onAction={() => undefined} />
+        <SectionLabel text={`Exercises · ${exercises.length}`} C={C} action="Add" onAction={() => {
+          haptic('light');
+          onChange([
+            ...exercises,
+            {
+              id: `custom-${Date.now()}`,
+              name: 'New Exercise',
+              muscle: 'Full Body',
+              sets: 3,
+              reps: 10,
+              weight: 0,
+              rest: 60,
+            }
+          ]);
+        }} />
 
         {exercises.map((e, i) => {
           const expanded = open === e.id;
@@ -1802,89 +1928,94 @@ function BuilderTab({
 
                 {expanded && (
                   <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)}>
-                    {/* 2×2 stepper grid — hairline dividers, no boxes */}
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        flexWrap: 'wrap',
-                        marginTop: 15,
-                        borderTopWidth: T.hairline,
-                        borderBottomWidth: T.hairline,
-                        borderColor: T.hairSoft,
-                      }}
-                    >
-                      {(
-                        [
-                          ['SETS', 'sets', ''],
-                          ['REPS', 'reps', ''],
-                          ['WEIGHT', 'weight', 'kg'],
-                          ['REST', 'rest', 's'],
-                        ] as Array<[string, NumericField, string]>
-                      ).map(([label, field, unit], idx) => (
-                        <View key={field} style={{ width: '50%', paddingVertical: 12, alignItems: 'center' }}>
-                          {idx % 2 === 1 && (
-                            <View
-                              style={{
-                                position: 'absolute',
-                                left: 0,
-                                top: 12,
-                                bottom: 12,
-                                width: T.hairline,
-                                backgroundColor: T.hairSoft,
-                              }}
-                            />
-                          )}
-                          {idx >= 2 && (
-                            <View
-                              style={{
-                                position: 'absolute',
-                                left: 0,
-                                right: 0,
-                                top: 0,
-                                height: T.hairline,
-                                backgroundColor: T.hairSoft,
-                              }}
-                            />
-                          )}
-                          <Text
-                            style={{
-                              fontFamily: F.header,
-                              fontSize: 9,
-                              letterSpacing: 1,
-                              color: C.onSurfaceVariant,
-                              marginBottom: 7,
-                            }}
-                          >
-                            {label}
-                          </Text>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
-                            <Stepper sign="−" onPress={() => bump(e.id, field, -1)} C={C} T={T} />
-                            <Text
-                              style={{
-                                fontFamily: F.num,
-                                fontSize: 16,
-                                letterSpacing: -0.5,
-                                color: C.onSurface,
-                                minWidth: 54,
-                                textAlign: 'center',
-                              }}
-                            >
-                              {e[field] ?? 0}
-                              {!!unit && (
-                                <Text style={{ fontFamily: F.bodyBold, fontSize: 9, color: C.onSurfaceVariant }}>
-                                  {' '}{unit}
-                                </Text>
-                              )}
-                            </Text>
-                            <Stepper sign="+" onPress={() => bump(e.id, field, 1)} C={C} T={T} />
-                          </View>
-                        </View>
+                    {/* Per-Set Table */}
+                    <View style={{ marginTop: 15 }}>
+                      <View style={{ flexDirection: 'row', paddingHorizontal: 0, paddingBottom: 8 }}>
+                        <Text style={{ width: 30, fontFamily: F.header, fontSize: 9, letterSpacing: 1.2, color: C.onSurfaceVariant }}>SET</Text>
+                        <Text style={{ flex: 1, textAlign: 'center', fontFamily: F.header, fontSize: 9, letterSpacing: 1.2, color: C.onSurfaceVariant }}>WEIGHT</Text>
+                        <Text style={{ flex: 1, textAlign: 'center', fontFamily: F.header, fontSize: 9, letterSpacing: 1.2, color: C.onSurfaceVariant }}>REPS</Text>
+                        <View style={{ width: 34 }} />
+                      </View>
+                      
+                      {(e.setsData || []).map((sd, sIdx) => (
+                        <BuilderSetRow
+                          key={sIdx}
+                          index={sIdx}
+                          data={sd}
+                          onBump={(field, delta) => {
+                            const newExercises = [...exercises];
+                            const exIdx = exercises.findIndex(x => x.id === e.id);
+                            if (exIdx >= 0) {
+                              const newSetsData = [...(newExercises[exIdx].setsData || [])];
+                              if (newSetsData[sIdx]) {
+                                newSetsData[sIdx] = {
+                                  ...newSetsData[sIdx],
+                                  [field]: Math.max(0, newSetsData[sIdx][field as 'weight'|'reps'] + delta)
+                                };
+                              }
+                              newExercises[exIdx] = { ...newExercises[exIdx], setsData: newSetsData, sets: newSetsData.length };
+                              onChange(newExercises);
+                            }
+                          }}
+                          onDelete={() => {
+                            haptic('light');
+                            const newExercises = [...exercises];
+                            const exIdx = exercises.findIndex(x => x.id === e.id);
+                            if (exIdx >= 0) {
+                              const newSetsData = (newExercises[exIdx].setsData || []).filter((_, i) => i !== sIdx);
+                              newExercises[exIdx] = { ...newExercises[exIdx], setsData: newSetsData, sets: newSetsData.length };
+                              onChange(newExercises);
+                            }
+                          }}
+                          C={C}
+                          isDark={isDark}
+                        />
                       ))}
+
+                      <Pressable
+                        onPress={() => {
+                          haptic('light');
+                          const newExercises = [...exercises];
+                          const exIdx = exercises.findIndex(x => x.id === e.id);
+                          if (exIdx >= 0) {
+                            const lastSet = e.setsData && e.setsData.length > 0 
+                              ? e.setsData[e.setsData.length - 1] 
+                              : { weight: e.weight, reps: e.reps };
+                            const newSetsData = [...(e.setsData || []), lastSet];
+                            newExercises[exIdx] = { ...newExercises[exIdx], setsData: newSetsData, sets: newSetsData.length };
+                            onChange(newExercises);
+                          }
+                        }}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 7,
+                          paddingVertical: 12,
+                          marginTop: 4,
+                          borderTopWidth: T.hairline,
+                          borderTopColor: T.hairSoft,
+                        }}
+                      >
+                        <Icon name="add" size={13} color={C.primary} />
+                        <Text style={{ fontFamily: F.header, fontSize: 12.5, color: C.primary }}>Add set</Text>
+                      </Pressable>
+
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 12, paddingVertical: 12, borderTopWidth: T.hairline, borderTopColor: T.hairSoft }}>
+                        <Text style={{ fontFamily: F.header, fontSize: 9, letterSpacing: 1, color: C.onSurfaceVariant }}>REST (s)</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+                          <Stepper sign="−" onPress={() => bump(e.id, 'rest', -10)} C={C} T={T} />
+                          <Text style={{ fontFamily: F.num, fontSize: 16, letterSpacing: -0.5, color: C.onSurface, minWidth: 40, textAlign: 'center' }}>
+                            {e.rest ?? 60}
+                          </Text>
+                          <Stepper sign="+" onPress={() => bump(e.id, 'rest', 10)} C={C} T={T} />
+                        </View>
+                      </View>
                     </View>
 
-                    <View style={{ flexDirection: 'row', gap: 24, marginTop: 14 }}>
-                      <MiniAction icon="swap-horiz" label="Swap" C={C} onPress={() => undefined} />
-                      <MiniAction icon="play-arrow" label="Form video" C={C} onPress={() => undefined} />
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 24, marginTop: 14 }}>
+                      <MiniAction icon="content-copy" label="Duplicate" C={C} onPress={() => duplicate(i)} />
+                      {i > 0 && <MiniAction icon="arrow-upward" label="Move Up" C={C} onPress={() => moveUp(i)} />}
+                      {i < exercises.length - 1 && <MiniAction icon="arrow-downward" label="Move Down" C={C} onPress={() => moveDown(i)} />}
                       <MiniAction icon="delete" label="Remove" C={C} tone={C.error} onPress={() => remove(e.id)} />
                     </View>
                   </Animated.View>
@@ -2342,12 +2473,26 @@ function ActiveTab({
                 <Pressable style={{ padding: 12 }} hitSlop={6}>
                   <Icon name="timer" size={20} color={C.onSurface} />
                 </Pressable>
-                <HoldToConfirm
-                  label="Finish Workout"
-                  onConfirm={onFinish}
-                  C={C}
-                  isDark={isDark}
-                />
+                <PressableScale onPress={onFinish} style={{ flex: 1 }} hapticStyle="medium">
+                  <LinearGradient
+                    colors={[C.primary, C.primaryDim]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      paddingVertical: 12,
+                      borderRadius: 14,
+                    }}
+                  >
+                    <Icon name="check" size={17} color={C.onPrimary} />
+                    <Text style={{ fontFamily: F.header, fontSize: 14.5, color: C.onPrimary }}>
+                      Finish Workout
+                    </Text>
+                  </LinearGradient>
+                </PressableScale>
               </View>
             </>
           )}
@@ -2356,6 +2501,62 @@ function ActiveTab({
     </View>
   );
 }
+
+/* ── Builder Set row ────────────────────────────────────────────── */
+const BuilderSetRow = React.memo(function BuilderSetRow({
+  index,
+  data,
+  onBump,
+  onDelete,
+  C,
+  isDark,
+}: {
+  index: number;
+  data: { weight: number; reps: number };
+  onBump: (field: 'weight' | 'reps', delta: number) => void;
+  onDelete: () => void;
+  C: ThemeColors;
+  isDark: boolean;
+}) {
+  const T = useMemo(() => makeTokens(C, isDark), [C, isDark]);
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 11 }}>
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: 0,
+          height: T.hairline,
+          backgroundColor: T.hairSoft,
+        }}
+      />
+      <Text style={{ width: 30, fontFamily: F.num, fontSize: 13, color: C.onSurfaceVariant }}>{index + 1}</Text>
+      
+      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        <Stepper sign="−" onPress={() => onBump('weight', -2.5)} C={C} T={T} />
+        <Text style={{ fontFamily: F.num, fontSize: 15, letterSpacing: -0.4, color: C.onSurface, minWidth: 32, textAlign: 'center' }}>
+          {data.weight}
+        </Text>
+        <Stepper sign="+" onPress={() => onBump('weight', 2.5)} C={C} T={T} />
+      </View>
+
+      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        <Stepper sign="−" onPress={() => onBump('reps', -1)} C={C} T={T} />
+        <Text style={{ fontFamily: F.num, fontSize: 15, letterSpacing: -0.4, color: C.onSurface, minWidth: 24, textAlign: 'center' }}>
+          {data.reps}
+        </Text>
+        <Stepper sign="+" onPress={() => onBump('reps', 1)} C={C} T={T} />
+      </View>
+
+      <View style={{ width: 34, alignItems: 'flex-end' }}>
+        <Pressable onPress={onDelete} style={{ padding: 4 }}>
+          <Icon name="close" size={16} color={C.onSurfaceVariant} />
+        </Pressable>
+      </View>
+    </View>
+  );
+});
 
 /* ── Set row ────────────────────────────────────────────── */
 const SetRow = React.memo(function SetRow({
@@ -2989,6 +3190,7 @@ function mapApiExercise(ex: any): WorkoutExercise {
     weight: typeof ex.weight === 'string' ? parseFloat(ex.weight) || 0 : (ex.weight || 0), // API returns weight as string
     rest: ex.restTime || ex.rest || 60, // API returns restTime
     prev: ex.prev,
+    setsData: typeof ex.setsData === 'string' ? JSON.parse(ex.setsData) : ex.setsData,
   };
 }
 
@@ -3046,12 +3248,14 @@ export interface WorkoutScreenProps {
   onNavigateBack?: () => void;
   onNavigateToNotifications?: () => void;
   userId?: string;
+  createMode?: boolean;
 }
 
 export default function WorkoutScreen({
   onNavigateBack,
   onNavigateToNotifications,
   userId: propUserId,
+  createMode = false,
 }: WorkoutScreenProps) {
   const { user } = useAuth();
   const userId = propUserId || user?.id || '';
@@ -3090,7 +3294,18 @@ export default function WorkoutScreen({
 
   const [tab, setTab] = useState<TabKey>('overview');
   const [draft, setDraft] = useState<WorkoutExercise[] | null>(null);
+  const [draftTitle, setDraftTitle] = useState('');
+  const [draftMuscleGroup, setDraftMuscleGroup] = useState('');
   const [sessionId, setSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (createMode) {
+      setTab('builder');
+      setDraft([]);
+      setDraftTitle('');
+      setDraftMuscleGroup('');
+    }
+  }, [createMode]);
 
   /* ── Queries ──────────────────────────────────────── */
   const { data: workout } = useQuery<Workout | null>({
@@ -3113,7 +3328,7 @@ export default function WorkoutScreen({
   );
 
   /* ── Live session ─────────────────────────────────── */
-  const session = useLiveSession({ template: templateExercises });
+  const session = useLiveSession({ template: builderExercises });
 
   const startMutation = useMutation({
     mutationFn: startSession,
@@ -3167,8 +3382,8 @@ export default function WorkoutScreen({
     startMutation.mutate({
       userId,
       workoutId: workout?.id,
-      title: workout?.title ?? (templateExercises.length > 0 ? `${templateExercises.length} Exercise Workout` : 'Untitled Workout'),
-      exercises: templateExercises,
+      title: workout?.title ?? (builderExercises.length > 0 ? `${builderExercises.length} Exercise Workout` : 'Untitled Workout'),
+      exercises: builderExercises,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
@@ -3179,10 +3394,13 @@ export default function WorkoutScreen({
     const estimatedCalories = Math.round(session.stats.volume * 0.05 + session.stats.minutes * 5);
     completeMutation.mutate({
       sessionId: realSessionId,
+      userId,
+      workoutId: workout?.id,
+      title: draftTitle.trim() || workout?.title || 'Custom Workout',
       duration: session.stats.minutes,
       caloriesBurned: estimatedCalories,
       notes: `Completed ${session.stats.done} sets · ${(session.stats.volume / 1000).toFixed(1)}t volume`,
-      completedSetIds: [],
+      exercises: session.exercises,
     });
     if (!realSessionId) {
       console.warn('[Workout] No sessionId — session completed locally only.');
@@ -3194,12 +3412,13 @@ export default function WorkoutScreen({
     const estDuration = Math.round(builderExercises.reduce((a, e) => a + e.sets * ((e.rest ?? 60) + 40), 0) / 60);
     saveMutation.mutate({
       userId,
-      title: workout?.title ?? (builderExercises.length > 0 ? `Custom ${builderExercises.length} Exercise Workout` : 'Custom Workout'),
+      title: draftTitle.trim() || workout?.title || (builderExercises.length > 0 ? `Custom ${builderExercises.length} Exercise Workout` : 'Custom Workout'),
+      targetMuscles: draftMuscleGroup.trim() || undefined,
       duration: workout?.duration ?? String(estDuration),
       parentVersionId: workout?.parentVersionId ?? workout?.id,
       exercises: builderExercises,
     });
-  }, [builderExercises, saveMutation, userId, workout]);
+  }, [builderExercises, saveMutation, userId, workout, draftTitle, draftMuscleGroup]);
 
   /* ── Collapsing header title ──────────────────────── */
   const scrollY = useSharedValue(0);
@@ -3264,6 +3483,10 @@ export default function WorkoutScreen({
           {tab === 'builder' && (
             <Animated.View style={{ flex: 1 }} entering={FadeIn.duration(180)}>
               <BuilderTab
+                title={draftTitle}
+                setTitle={setDraftTitle}
+                muscleGroup={draftMuscleGroup}
+                setMuscleGroup={setDraftMuscleGroup}
                 exercises={builderExercises}
                 activation={activation}
                 onChange={setDraft}

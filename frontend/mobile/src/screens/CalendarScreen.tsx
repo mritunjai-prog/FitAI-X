@@ -295,7 +295,13 @@ function AddWorkoutModal({ dayIndex, dayName, onClose, onSave, C }: { dayIndex: 
 }
 
 // ─── MAIN SCREEN ─────────────────────────────────────────────────────────────
-export default function CalendarScreen({ onNavigateToNotifications, onNavigateBack }: any) {
+export interface CalendarScreenProps {
+  onNavigateBack?: () => void;
+  onNavigateToNotifications?: () => void;
+  onNavigateToCreateWorkout?: () => void;
+}
+
+export default function CalendarScreen({ onNavigateBack, onNavigateToNotifications, onNavigateToCreateWorkout }: CalendarScreenProps) {
   const { isDark, C, bgColors } = useTheme();
   const styles = useMemo(() => getStyles(C), [C]);
   const { user } = useAuth();
@@ -404,7 +410,7 @@ export default function CalendarScreen({ onNavigateToNotifications, onNavigateBa
                   )}
                 </Text>
                 <TouchableOpacity
-                  onPress={() => { setAddModalDayIndex(selectedDayIndex); Haptics.selectionAsync(); }}
+                  onPress={() => { onNavigateToCreateWorkout?.(); Haptics.selectionAsync(); }}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: `${C.primary}15`, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 }}
                 >
                   <Feather name="plus" size={16} color={C.primary} />
@@ -419,7 +425,7 @@ export default function CalendarScreen({ onNavigateToNotifications, onNavigateBa
                 </View>
               ) : selectedDayEvents.length === 0 ? (
                 <Pressable
-                  onPress={() => { setAddModalDayIndex(selectedDayIndex); Haptics.selectionAsync(); }}
+                  onPress={() => { onNavigateToCreateWorkout?.(); Haptics.selectionAsync(); }}
                   style={[styles.emptySlot, { height: 120 }]}
                 >
                   <Feather name="plus-circle" size={28} color={C.outline} />
