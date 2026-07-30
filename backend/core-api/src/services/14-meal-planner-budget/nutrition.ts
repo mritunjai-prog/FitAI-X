@@ -3,6 +3,7 @@ import prisma from '../../db'
 import { generateBudgetPlan } from '../13-scenario-planner/planner';
 import { callAI, buildUserContext } from '../ai/aiService';
 import { z } from 'zod';
+import { getIo } from '../../realtime/socket';
 
 const router = Router()
 
@@ -282,13 +283,93 @@ router.get('/version-history', async (req, res) => {
   }
 });
 
+// POST /api/v1/nutrition/ai-scan — AI estimates macros from food description
+router.post('/ai-scan', async (req, res) => {
+  try {
+    const { foodDescription } = req.body;
+    if (!foodDescription) return res.status(400).json({ error: 'Missing food description' });
+
+    const schema = z.object({
+      name: z.string().describe("Standardized food/meal name"),
+      cals: z.number().describe("Estimated total calories"),
+      protein: z.number().describe("Protein in grams"),
+      carbs: z.number().describe("Carbs in grams"),
+      fats: z.number().describe("Fats in grams"),
+      servingSize: z.string().optional().describe("Serving size"),
+    });
+
+    const aiResult = await callAI({
+      system: 'You are a nutrition analysis AI. Estimate nutritional values from food description. Use Indian food knowledge. Return ONLY valid JSON.',
+      prompt: `Food description: "${foodDescription}". Estimate realistic macros for a standard serving. Use Indian food knowledge.`,
+      schema
+    });
+
+    if (!aiResult.ok || !aiResult.data) {
+      return res.json({
+        name: foodDescription, cals: 350, protein: 15, carbs: 40, fats: 12, servingSize: '1 serving'
+      });
+    }
+    res.json(aiResult.data);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'AI scan failed' });
+  }
+});
+
+// GET /api/v1/nutrition/foods/search — Search food database
+router.get('/foods/search', async (req, res) => {
+  try {
+    const query = (req.query.q as string || '').toLowerCase().trim();
+    if (!query) return res.json([]);
+
+    const FOOD_DB = [
+      { name: 'Rice (steamed)', cals: 206, protein: 4.2, carbs: 45, fats: 0.4, serving: '1 cup', category: 'Grains' },
+      { name: 'Chapati / Roti', cals: 120, protein: 3.5, carbs: 22, fats: 2, serving: '1 medium', category: 'Grains' },
+      { name: 'Dal (cooked)', cals: 150, protein: 9, carbs: 25, fats: 3, serving: '1 bowl', category: 'Legumes' },
+      { name: 'Paneer (100g)', cals: 265, protein: 18, carbs: 1.2, fats: 20, serving: '100g', category: 'Dairy' },
+      { name: 'Chicken breast (grilled)', cals: 165, protein: 31, carbs: 0, fats: 3.6, serving: '100g', category: 'Meat' },
+      { name: 'Egg (whole)', cals: 70, protein: 6, carbs: 1, fats: 5, serving: '1 egg', category: 'Eggs' },
+      { name: 'Curd / Yogurt', cals: 60, protein: 5, carbs: 4, fats: 3, serving: '100g', category: 'Dairy' },
+      { name: 'Banana', cals: 105, protein: 1.3, carbs: 27, fats: 0.4, serving: '1 medium', category: 'Fruits' },
+      { name: 'Idli', cals: 78, protein: 2, carbs: 15, fats: 0.5, serving: '1 idli', category: 'South Indian' },
+      { name: 'Dosa', cals: 130, protein: 3, carbs: 25, fats: 3, serving: '1 dosa', category: 'South Indian' },
+      { name: 'Sambhar (bowl)', cals: 120, protein: 6, carbs: 20, fats: 2, serving: '1 bowl', category: 'South Indian' },
+      { name: 'Poha', cals: 180, protein: 4, carbs: 32, fats: 4, serving: '1 bowl', category: 'Breakfast' },
+      { name: 'Oats (cooked)', cals: 150, protein: 5, carbs: 27, fats: 2.5, serving: '1 bowl', category: 'Grains' },
+      { name: 'Chicken Curry (1 bowl)', cals: 320, protein: 25, carbs: 10, fats: 20, serving: '1 bowl', category: 'Curries' },
+      { name: 'Fish Curry (1 bowl)', cals: 250, protein: 22, carbs: 8, fats: 15, serving: '1 bowl', category: 'Curries' },
+      { name: 'Chole (Chickpea Curry)', cals: 250, protein: 10, carbs: 35, fats: 8, serving: '1 bowl', category: 'Curries' },
+      { name: 'Whey Protein (1 scoop)', cals: 120, protein: 24, carbs: 3, fats: 1.5, serving: '1 scoop', category: 'Supplements' },
+      { name: 'Mixed Vegetables (cooked)', cals: 120, protein: 4, carbs: 20, fats: 3, serving: '1 bowl', category: 'Vegetables' },
+      { name: 'Salad (green)', cals: 50, protein: 2, carbs: 8, fats: 1, serving: '1 plate', category: 'Sides' },
+      { name: 'Raita', cals: 60, protein: 3, carbs: 5, fats: 3, serving: '1 katori', category: 'Sides' },
+    ];
+
+    const results = FOOD_DB.filter(f => 
+      f.name.toLowerCase().includes(query) || f.category.toLowerCase().includes(query)
+    ).slice(0, 10);
+    res.json(results);
+  } catch (error) {
+    res.status(500).json({ error: 'Search failed' });
+  }
+});
+
 // POST /api/v1/nutrition/log-food
 router.post('/log-food', async (req, res) => {
   try {
     const { userId, name, cals, protein, carbs, fats } = req.body;
+    if (!userId || !name) return res.status(400).json({ error: 'Missing userId or name' });
+    
     const log = await prisma.foodLog.create({
-      data: { userId, name, cals, protein, carbs, fats }
+      data: { userId, name: name.trim(), cals: Math.round(cals || 0), protein: parseFloat(protein || 0), carbs: parseFloat(carbs || 0), fats: parseFloat(fats || 0) }
     });
+    
+    // Socket notification for real-time update
+    try {
+      const io = getIo();
+      if (io) io.to(userId).emit('nutrition_update', { type: 'food_logged', log });
+    } catch (e) {}
+    
     res.json(log);
   } catch (error) {
     console.error(error);

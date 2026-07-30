@@ -76,7 +76,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { F, ThemeColors } from '../theme';
 import { apiClient } from '../services/api/client';
-import { fetchBudgetPlan, generateAiPlan, fetchMealPlan, regenerateMealPlan } from '../services/api/nutrition';
+import { fetchBudgetPlan, generateAiPlan, fetchMealPlan, regenerateMealPlan, logFood, aiScanFood, searchFoods } from '../services/api/nutrition';
 
 /* ──────────────────────────────────────────────────────────────────────────
    TYPES
@@ -766,6 +766,7 @@ interface TodayTabProps {
   onRegenTomorrow?: () => void;
   onRegenAll?: () => void;
   regenBusy?: boolean;
+  onLogFood?: () => void;
 }
 
 function TodayTab({
@@ -788,6 +789,7 @@ function TodayTab({
   onRegenTomorrow,
   onRegenAll,
   regenBusy,
+  onLogFood,
 }: TodayTabProps) {
   const T = makeTokens(isDark);
   const A = makeAccents(isDark);
@@ -948,7 +950,7 @@ function TodayTab({
           paddingTop: 18,
         }}
       >
-        <PressableScale onPress={() => undefined} style={{ flex: 1 }} hapticStyle="medium">
+        <PressableScale onPress={onLogFood} style={{ flex: 1 }} hapticStyle="medium">
           <LinearGradient
             colors={[C.primary, C.primaryDim]}
             start={{ x: 0, y: 0 }}
@@ -2368,6 +2370,163 @@ function toMeal(raw: any, index: number): Meal {
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
+   FOOD LOG MODAL — Manual Entry · AI Scan · Food Search
+   ────────────────────────────────────────────────────────────────────────── */
+
+function FoodLogModal({ visible, onClose, onLog, userId, C, isDark }: {
+  visible: boolean; onClose: () => void; onLog: (data: any) => void; userId: string; C: ThemeColors; isDark: boolean;
+}) {
+  const T = makeTokens(isDark);
+  const Acc = makeAccents(isDark);
+  const [foodTab, setFoodTab] = useState<'manual' | 'scan' | 'search'>('manual');
+  const [name, setName] = useState('');
+  const [cals, setCals] = useState('');
+  const [protein, setProtein] = useState('');
+  const [carbs, setCarbs] = useState('');
+  const [fats, setFats] = useState('');
+  const [scanInput, setScanInput] = useState('');
+  const [scanResult, setScanResult] = useState<any>(null);
+  const [scanning, setScanning] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  const handleManualLog = () => {
+    if (!name.trim() || !cals) return;
+    onLog({ name: name.trim(), cals: parseInt(cals) || 0, protein: parseFloat(protein) || 0, carbs: parseFloat(carbs) || 0, fats: parseFloat(fats) || 0 });
+    setName(''); setCals(''); setProtein(''); setCarbs(''); setFats('');
+    onClose();
+  };
+
+  const handleScan = async () => {
+    if (!scanInput.trim()) return;
+    setScanning(true);
+    try {
+      const result = await aiScanFood(scanInput);
+      setScanResult(result);
+    } catch (e) {}
+    setScanning(false);
+  };
+
+  const handleSearch = async (q: string) => {
+    setSearchQuery(q);
+    if (q.length < 2) { setSearchResults([]); return; }
+    setSearching(true);
+    try {
+      const results = await searchFoods(q);
+      setSearchResults(results);
+    } catch (e) {}
+    setSearching(false);
+  };
+
+  const handleLogResult = (result: any) => {
+    onLog({ name: result.name, cals: result.cals || 0, protein: result.protein || 0, carbs: result.carbs || 0, fats: result.fats || 0 });
+    setScanResult(null); setScanInput(''); onClose();
+  };
+
+  if (!visible) return null;
+
+  return (
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+      <Pressable style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} onPress={onClose} />
+      <Animated.View entering={FadeInDown.springify().damping(20)} style={{ backgroundColor: C.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: T.hairline, borderBottomColor: T.hairSoft }}>
+          <Text style={{ fontFamily: F.header, fontSize: 18, color: C.onSurface }}>Log Food</Text>
+          <Pressable onPress={onClose} hitSlop={10}><Icon name="close" size={22} color={C.onSurfaceVariant} /></Pressable>
+        </View>
+
+        {/* Tab selector */}
+        <View style={{ flexDirection: 'row', marginHorizontal: 20, marginTop: 12, gap: 8 }}>
+          {[{ key: 'manual', icon: 'edit', label: 'Manual' }, { key: 'scan', icon: 'auto-awesome', label: 'AI Scan' }, { key: 'search', icon: 'search', label: 'Search' }].map(t => (
+            <Pressable key={t.key} onPress={() => { setFoodTab(t.key as any); setScanResult(null); }}
+              style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, backgroundColor: foodTab === t.key ? C.primary : T.track, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Icon name={t.icon as any} size={14} color={foodTab === t.key ? C.onPrimary : C.onSurfaceVariant} />
+              <Text style={{ fontFamily: F.header, fontSize: 11, color: foodTab === t.key ? C.onPrimary : C.onSurfaceVariant }}>{t.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+          {/* ── MANUAL TAB ── */}
+          {foodTab === 'manual' && (
+            <>
+              <TextInput value={name} onChangeText={setName} placeholder="Meal name (e.g. Chicken Rice)" placeholderTextColor={C.onSurfaceVariant}
+                style={{ backgroundColor: T.wash, borderRadius: 12, padding: 14, fontSize: 15, fontFamily: F.bodyMed, color: C.onSurface, borderWidth: T.hairline, borderColor: T.hairSoft, marginBottom: 12 }} />
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+                <View style={{ flex: 1 }}><Text style={{ fontFamily: F.header, fontSize: 10, color: C.onSurfaceVariant, marginBottom: 4 }}>CALORIES</Text>
+                  <TextInput value={cals} onChangeText={setCals} keyboardType="numeric" placeholder="0" style={{ backgroundColor: T.wash, borderRadius: 10, padding: 12, fontSize: 16, fontFamily: F.num, color: C.onSurface, textAlign: 'center' }} /></View>
+                <View style={{ flex: 1 }}><Text style={{ fontFamily: F.header, fontSize: 10, color: C.onSurfaceVariant, marginBottom: 4 }}>PROTEIN (g)</Text>
+                  <TextInput value={protein} onChangeText={setProtein} keyboardType="numeric" placeholder="0" style={{ backgroundColor: T.wash, borderRadius: 10, padding: 12, fontSize: 16, fontFamily: F.num, color: C.onSurface, textAlign: 'center' }} /></View>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+                <View style={{ flex: 1 }}><Text style={{ fontFamily: F.header, fontSize: 10, color: C.onSurfaceVariant, marginBottom: 4 }}>CARBS (g)</Text>
+                  <TextInput value={carbs} onChangeText={setCarbs} keyboardType="numeric" placeholder="0" style={{ backgroundColor: T.wash, borderRadius: 10, padding: 12, fontSize: 16, fontFamily: F.num, color: C.onSurface, textAlign: 'center' }} /></View>
+                <View style={{ flex: 1 }}><Text style={{ fontFamily: F.header, fontSize: 10, color: C.onSurfaceVariant, marginBottom: 4 }}>FATS (g)</Text>
+                  <TextInput value={fats} onChangeText={setFats} keyboardType="numeric" placeholder="0" style={{ backgroundColor: T.wash, borderRadius: 10, padding: 12, fontSize: 16, fontFamily: F.num, color: C.onSurface, textAlign: 'center' }} /></View>
+              </View>
+              <Pressable onPress={handleManualLog} disabled={!name.trim() || !cals}
+                style={{ backgroundColor: C.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', opacity: (!name.trim() || !cals) ? 0.5 : 1 }}>
+                <Text style={{ fontFamily: F.header, fontSize: 15, color: C.onPrimary }}>Log Food</Text>
+              </Pressable>
+            </>
+          )}
+
+          {/* ── AI SCAN TAB ── */}
+          {foodTab === 'scan' && (
+            <>
+              <Text style={{ fontFamily: F.bodyMed, fontSize: 13, color: C.onSurfaceVariant, marginBottom: 12 }}>Describe your meal and Rachel AI will estimate the macros.</Text>
+              <TextInput value={scanInput} onChangeText={setScanInput} placeholder="e.g. 2 chapatis with dal and salad" placeholderTextColor={C.onSurfaceVariant} multiline
+                style={{ backgroundColor: T.wash, borderRadius: 12, padding: 14, fontSize: 15, fontFamily: F.bodyMed, color: C.onSurface, borderWidth: T.hairline, borderColor: T.hairSoft, minHeight: 80, marginBottom: 12 }} />
+              <Pressable onPress={handleScan} disabled={!scanInput.trim() || scanning}
+                style={{ backgroundColor: C.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', opacity: (!scanInput.trim() || scanning) ? 0.5 : 1 }}>
+                <Text style={{ fontFamily: F.header, fontSize: 15, color: C.onPrimary }}>{scanning ? 'Scanning...' : 'Scan with AI'}</Text>
+              </Pressable>
+              {scanResult && (
+                <View style={{ marginTop: 16, backgroundColor: T.wash, borderRadius: 12, padding: 16, borderWidth: T.hairline, borderColor: T.hairGold }}>
+                  <Text style={{ fontFamily: F.header, fontSize: 16, color: C.onSurface }}>{scanResult.name}</Text>
+                  <Text style={{ fontFamily: F.num, fontSize: 14, color: C.onSurface, marginTop: 6 }}>{scanResult.cals} kcal</Text>
+                  <View style={{ flexDirection: 'row', gap: 16, marginTop: 4 }}>
+                    <Text style={{ fontFamily: F.num, fontSize: 12, color: Acc.protein }}>P {scanResult.protein}g</Text>
+                    <Text style={{ fontFamily: F.num, fontSize: 12, color: Acc.carbs }}>C {scanResult.carbs}g</Text>
+                    <Text style={{ fontFamily: F.num, fontSize: 12, color: Acc.fat }}>F {scanResult.fats}g</Text>
+                  </View>
+                  {scanResult.servingSize && <Text style={{ fontFamily: F.body, fontSize: 11, color: C.onSurfaceVariant, marginTop: 4 }}>{scanResult.servingSize}</Text>}
+                  <Pressable onPress={() => handleLogResult(scanResult)} style={{ marginTop: 12, backgroundColor: C.primary, borderRadius: 10, paddingVertical: 10, alignItems: 'center' }}>
+                    <Text style={{ fontFamily: F.header, fontSize: 13, color: C.onPrimary }}>Log This</Text>
+                  </Pressable>
+                </View>
+              )}
+            </>
+          )}
+
+          {/* ── SEARCH TAB ── */}
+          {foodTab === 'search' && (
+            <>
+              <TextInput value={searchQuery} onChangeText={handleSearch} placeholder="Search foods..." placeholderTextColor={C.onSurfaceVariant}
+                style={{ backgroundColor: T.wash, borderRadius: 12, padding: 14, fontSize: 15, fontFamily: F.bodyMed, color: C.onSurface, borderWidth: T.hairline, borderColor: T.hairSoft, marginBottom: 12 }} />
+              {searching && <ActivityIndicator color={C.primary} style={{ marginVertical: 10 }} />}
+              {searchResults.map((item, i) => (
+                <Pressable key={i} onPress={() => handleLogResult(item)}
+                  style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: T.hairline, borderBottomColor: T.hairSoft }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: F.header, fontSize: 14, color: C.onSurface }}>{item.name}</Text>
+                    <Text style={{ fontFamily: F.num, fontSize: 11, color: C.onSurfaceVariant, marginTop: 2 }}>{item.cals} kcal · P{item.protein} · C{item.carbs} · F{item.fats}</Text>
+                  </View>
+                  <Text style={{ fontFamily: F.header, fontSize: 10, color: C.primary, marginTop: 4 }}>{item.category}</Text>
+                </Pressable>
+              ))}
+              {searchQuery.length >= 2 && searchResults.length === 0 && !searching && (
+                <Text style={{ fontFamily: F.body, fontSize: 13, color: C.onSurfaceVariant, textAlign: 'center', marginTop: 20 }}>No foods found. Try manual entry.</Text>
+              )}
+            </>
+          )}
+        </ScrollView>
+      </Animated.View>
+    </View>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
    SCREEN
    ────────────────────────────────────────────────────────────────────────── */
 
@@ -2390,6 +2549,7 @@ export default function NutritionScreen({
   const [logged, setLogged] = useState<Record<string, boolean>>({});
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [selectedDay, setSelectedDay] = useState(1);
+  const [showFoodModal, setShowFoodModal] = useState(false);
 
   /* ── Queries ─────────────────────────────────────── */
   const { data: userMeals = [] } = useQuery({
@@ -2475,6 +2635,14 @@ export default function NutritionScreen({
     onSuccess: () => {
       haptic('success');
       void qc.invalidateQueries({ queryKey: ['mealPlan'] });
+    },
+  });
+
+  const logFoodMutation = useMutation({
+    mutationFn: (data: any) => logFood({ userId: user?.id || '', ...data }),
+    onSuccess: () => {
+      haptic('success');
+      void qc.invalidateQueries({ queryKey: ['nutritionDashboard'] });
     },
   });
 
@@ -2628,6 +2796,7 @@ export default function NutritionScreen({
                 onRegenTomorrow={() => regenTomorrowMutation.mutate()}
                 onRegenAll={() => regenAllMutation.mutate()}
                 regenBusy={regenTodayMutation.isPending || regenTomorrowMutation.isPending || regenAllMutation.isPending}
+                onLogFood={() => setShowFoodModal(true)}
               />
             </Animated.View>
           )}
@@ -2681,6 +2850,9 @@ export default function NutritionScreen({
           )}
         </View>
       </SafeAreaView>
+
+      <FoodLogModal visible={showFoodModal} onClose={() => setShowFoodModal(false)}
+        onLog={(data) => logFoodMutation.mutate(data)} userId={user?.id || ''} C={C} isDark={isDark} />
     </View>
   );
 }
