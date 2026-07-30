@@ -1646,24 +1646,6 @@ export default function WorkoutScreen({ onNavigateBack, onNavigateToNotification
   const qc = useQueryClient();
 
   const [tab, setTab] = useState<TabKey>('overview');
-  // Auto-save draft when leaving builder tab
-  const handleTabChange = useCallback((newTab: TabKey) => {
-    if (tab === 'builder' && newTab !== 'builder') {
-      // If there's unsaved draft, auto-save to DB
-      if (draft && draft.length > 0 && userId) {
-        const estDuration = Math.round(draft.reduce((a, e) => a + e.sets * ((e.rest ?? 60) + 40), 0) / 60);
-        saveWorkoutMutation.mutate({
-          userId,
-          title: draftTitle.trim() || workout?.title || 'Custom Workout',
-          duration: String(estDuration),
-          targetMuscles: draftMuscleGroup.trim() || workout?.targetMuscles || undefined,
-          parentVersionId: workout?.id,
-          exercises: draft,
-        });
-      }
-    }
-    setTab(newTab);
-  }, [tab, draft, draftTitle, draftMuscleGroup, userId, workout, saveWorkoutMutation]);
   const [draft, setDraft] = useState<WorkoutExercise[] | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
   const [draftMuscleGroup, setDraftMuscleGroup] = useState('');
@@ -1753,6 +1735,24 @@ export default function WorkoutScreen({ onNavigateBack, onNavigateToNotification
       setTab('overview');
     },
   });
+
+  // Auto-save draft when leaving builder tab
+  const handleTabChange = useCallback((newTab: TabKey) => {
+    if (tab === 'builder' && newTab !== 'builder') {
+      if (draft && draft.length > 0 && userId) {
+        const estDuration = Math.round(draft.reduce((a, e) => a + e.sets * ((e.rest ?? 60) + 40), 0) / 60);
+        saveWorkoutMutation.mutate({
+          userId,
+          title: draftTitle.trim() || workout?.title || 'Custom Workout',
+          duration: String(estDuration),
+          targetMuscles: draftMuscleGroup.trim() || workout?.targetMuscles || undefined,
+          parentVersionId: workout?.id,
+          exercises: draft,
+        });
+      }
+    }
+    setTab(newTab);
+  }, [tab, draft, draftTitle, draftMuscleGroup, userId, workout, saveWorkoutMutation]);
 
   const readinessData: ReadinessMetric[] = useMemo(() => {
     if (!vitals) return [];
