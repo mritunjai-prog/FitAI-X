@@ -95,9 +95,16 @@ router.post('/generate-plan', async (req, res) => {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ error: 'Missing userId' });
 
-    const userContext = await buildUserContext(userId);
+    // Try to build context, gracefully fallback if user not found
+    let userContext: any = { profile: { diet: 'None', allergies: 'None', dislikedFoods: 'None' } };
+    try {
+      userContext = await buildUserContext(userId);
+    } catch (ctxErr) {
+      console.warn('[Nutrition] buildUserContext failed, using defaults:', (ctxErr as any)?.message);
+    }
+    
     const pref = await prisma.nutritionPreference.findUnique({ where: { userId } });
-    const calsGoal = 2500; // In a real app, calculate from TDEE
+    const calsGoal = 2500;
 
     const schema = z.object({
       meals: z.array(z.object({
@@ -187,7 +194,12 @@ router.post('/regenerate', async (req, res) => {
     const meal = await prisma.meal.findUnique({ where: { id: mealId }, include: { versions: true } });
     if (!meal) return res.status(404).json({ error: 'Meal not found' });
     
-    const userContext = await buildUserContext(meal.userId);
+    let userContext: any = { profile: { diet: 'None', allergies: 'None' } };
+    try {
+      userContext = await buildUserContext(meal.userId);
+    } catch (ctxErr) {
+      console.warn('[Regen] User context failed:', (ctxErr as any)?.message);
+    }
 
     let newData: any = null;
     try {

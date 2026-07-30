@@ -43,10 +43,10 @@ export function generateBudgetPlan(targetWeeklyBudget: number, targetDailyCals: 
 
     for (const m of selectedMeals) {
       if (!m) continue;
-      const stats = calculateMealStats(m);
+      const stats = calculateMealStats(m.meal);
       dailyCost += stats.cost;
       dailyCals += stats.cals;
-      for (const ing of m.ingredients || []) {
+      for (const ing of m.meal.ingredients || []) {
         ingredientCounts[ing] = (ingredientCounts[ing] || 0) + 7;
       }
     }
