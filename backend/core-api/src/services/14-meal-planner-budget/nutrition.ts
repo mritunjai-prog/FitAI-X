@@ -52,6 +52,7 @@ router.get('/dashboard', async (req, res) => {
       waterProgress: vitals?.waterProgress || 0,
       dailyWaterMl: vitals?.dailyWaterMl || 0,
       waterGoalMl: vitals?.waterGoalMl || 2500,
+    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to fetch dashboard' });
