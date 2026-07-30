@@ -53,7 +53,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
   Extrapolation,
   FadeIn,
@@ -653,6 +653,7 @@ function AiCoach({
   isDark: boolean;
 }) {
   const T = makeTokens(isDark);
+  const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   return (
     <View style={{ paddingHorizontal: T.gutter, paddingVertical: 16 }}>
@@ -1481,6 +1482,7 @@ function CreateMealPlanModal({ visible, onClose, onGenerateAI, onSaveManual, gen
   generating?: boolean; C: ThemeColors; isDark: boolean;
 }) {
   const T = makeTokens(isDark);
+  const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<'choose' | 'manual' | 'ai'>('choose');
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const [meals, setMeals] = useState<Array<{dayIndex: number; type: string; name: string; cals: string; protein: string; carbs: string; fats: string}>>(
@@ -1510,7 +1512,7 @@ function CreateMealPlanModal({ visible, onClose, onGenerateAI, onSaveManual, gen
           <Text style={{ fontFamily: F.header, fontSize: 18, color: C.onSurface }}>Create Meal Plan</Text>
           <Pressable onPress={() => { setMode('choose'); onClose(); }} hitSlop={10}><Icon name="close" size={22} color={C.onSurfaceVariant} /></Pressable>
         </View>
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: Platform.OS === 'ios' ? 50 : 40 }} keyboardShouldPersistTaps="handled">
+        <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 80 }} keyboardShouldPersistTaps="handled">
           {mode === 'choose' && (
             <View style={{ gap: 16 }}>
               <Pressable onPress={() => { setMode('ai'); onGenerateAI(); }}
@@ -2489,6 +2491,7 @@ function FoodLogModal({ visible, onClose, onLog, userId, C, isDark }: {
 }) {
   const T = makeTokens(isDark);
   const Acc = makeAccents(isDark);
+  const insets = useSafeAreaInsets();
   const [foodTab, setFoodTab] = useState<'manual' | 'scan' | 'search'>('manual');
   const [name, setName] = useState('');
   const [cals, setCals] = useState('');
@@ -2558,7 +2561,7 @@ function FoodLogModal({ visible, onClose, onLog, userId, C, isDark }: {
           </ScrollView>
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: Platform.OS === 'ios' ? 50 : 40 }} keyboardShouldPersistTaps="handled">
+        <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 80 }} keyboardShouldPersistTaps="handled">
           {foodTab === 'manual' && (
             <>
               <TextInput value={name} onChangeText={setName} placeholder="Meal name (e.g. Chicken Rice)" placeholderTextColor={C.onSurfaceVariant}
