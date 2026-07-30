@@ -869,7 +869,7 @@ function TodayTab({
             <Text
               style={{ fontFamily: F.header, fontSize: 10, letterSpacing: 1.6, color: C.primary }}
             >
-              AI PLAN · HIGH PROTEIN
+              AI PLAN
             </Text>
           </View>
 
@@ -1062,12 +1062,8 @@ function TodayTab({
         }
         details={[
           {
-            title: 'Why this plan',
-            body: 'Training day — carbs front-loaded around your session, protein spread across 5 feedings for even MPS.',
-          },
-          {
-            title: 'Budget tracking',
-            body: `${money(totals.cost)} spent today. Weekly pace ${money(totals.cost * 7)}.`,
+            title: 'Daily tracking',
+            body: `${money(totals.cost)} spent today. Log meals to stay on track.`,
           },
         ]}
       />
@@ -2323,14 +2319,6 @@ function InsightsTab({
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
-   FALLBACK DATA — used only until the API resolves
-   ────────────────────────────────────────────────────────────────────────── */
-
-const FALLBACK_MEALS: Meal[] = [];
-const FALLBACK_WEEK: DayPlan[] = [];
-
-const DEFAULT_TARGETS: MacroTargets = { calories: 2500, protein: 200, carbs: 250, fat: 90 };
 
 /** Group a flat grocery array into categories, tolerating a missing field. */
 function groupGrocery(list: any[]): GroceryCategory[] {
@@ -2530,10 +2518,10 @@ export default function NutritionScreen({
 
   const targets: MacroTargets = useMemo(
     () => ({
-      calories: dashboardData?.calorieGoal ?? DEFAULT_TARGETS.calories,
-      protein: dashboardData?.proteinGoal ?? DEFAULT_TARGETS.protein,
-      carbs: dashboardData?.carbGoal ?? DEFAULT_TARGETS.carbs,
-      fat: dashboardData?.fatGoal ?? DEFAULT_TARGETS.fat,
+      calories: dashboardData?.calorieGoal ?? 2200,
+      protein: dashboardData?.proteinGoal ?? 140,
+      carbs: dashboardData?.carbGoal ?? 200,
+      fat: dashboardData?.fatGoal ?? 60,
     }),
     [dashboardData],
   );
@@ -2589,11 +2577,11 @@ export default function NutritionScreen({
   const subtitle: Record<NutritionTabKey, string> = {
     today: 'Day plan · AI optimised',
     plan: 'Week of your current plan',
-    grocery: `Budget ${money(budgetData?.budget ?? 75)} / week`,
+    grocery: `Budget ${money(budgetData?.budget || 0)} / week`,
     insights: 'Last 7 days',
   };
 
-  const weeklyCost = budgetData?.weeklyCost ?? 68.4;
+  const weeklyCost = budgetData?.weeklyCost ?? 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -2682,7 +2670,7 @@ export default function NutritionScreen({
               <InsightsTab
                 week={budgetData?.week ?? []}
                 targets={targets}
-                macroSplit={{ protein: 32, carbs: 44, fat: 24 }}
+                macroSplit={{ protein: 0, carbs: 0, fat: 0 }}
                 adherence={{ logged: 0, total: 0 }}
                 spend={{ week: 0, day: 0, meal: 0 }}
                 topProtein={[]}

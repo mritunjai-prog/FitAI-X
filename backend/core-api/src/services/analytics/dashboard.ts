@@ -56,19 +56,30 @@ router.get('/vitals', async (req, res) => {
     });
     if (!vitals) return res.json(null);
 
-    // Get current streak from user
-    const user = await prisma.user.findUnique({ where: { id: userId }, select: { currentStreak: true, xpTotal: true } });
+    // Get user data for nutrition calculations
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { currentStreak: true, xpTotal: true, weight: true, goal: true } });
+    
+    // Calculate nutrition from today's food logs
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const logs = await prisma.foodLog.findMany({ where: { userId, loggedAt: { gte: today } } });
+    const caloriesConsumed = logs.reduce((sum, log) => sum + log.cals, 0);
+    const protein = logs.reduce((sum, log) => sum + (log.protein || 0), 0);
+    const carbs = logs.reduce((sum, log) => sum + (log.carbs || 0), 0);
+    const fat = logs.reduce((sum, log) => sum + (log.fats || 0), 0);
+    
+    const weight = user?.weight || 70;
+    const baseCals = Math.round(weight * 28);
+    const calorieGoal = user?.goal?.toLowerCase().includes('loss') ? Math.round(baseCals * 0.8)
+      : user?.goal?.toLowerCase().includes('gain') ? Math.round(baseCals * 1.15) : baseCals;
+    const proteinGoal = Math.round(weight * 2);
+    const carbGoal = Math.round((calorieGoal - proteinGoal * 4) * 0.5 / 4);
+    const fatGoal = Math.round((calorieGoal - proteinGoal * 4) * 0.25 / 9);
 
     res.json({
       bpm: vitals.bpm,
       restingBpm: vitals.bpm - 10,
-      bpmDelta: null,
-      hrv: null,
-      spo2: null,
-      respiratoryRate: null,
       bodyBattery: Math.round(vitals.bodyBattery * 100),
-      bodyBatteryDelta: null,
-      bodyBatteryTrend: null,
       moveProgress: vitals.moveProgress,
       moveCurrent: Math.round(vitals.moveProgress * 500),
       moveGoal: 500,
@@ -92,15 +103,15 @@ router.get('/vitals', async (req, res) => {
       loadTodayIndex: new Date().getDay() === 0 ? 6 : new Date().getDay() - 1,
       currentStreak: user?.currentStreak || 0,
       xpTotal: user?.xpTotal || 0,
-      caloriesRemaining: null,
-      caloriesConsumed: null,
-      caloriesGoal: null,
-      protein: null,
-      proteinGoal: null,
-      carbs: null,
-      carbsGoal: null,
-      fat: null,
-      fatGoal: null,
+      caloriesRemaining: Math.max(0, calorieGoal - caloriesConsumed),
+      caloriesConsumed,
+      caloriesGoal: calorieGoal,
+      protein,
+      proteinGoal,
+      carbs,
+      carbsGoal: carbGoal,
+      fat,
+      fatGoal,
     })
   } catch (error) {
     res.json(null)

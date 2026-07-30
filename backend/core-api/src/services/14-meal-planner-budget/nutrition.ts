@@ -52,21 +52,6 @@ router.get('/dashboard', async (req, res) => {
       waterProgress: vitals?.waterProgress || 0,
       dailyWaterMl: vitals?.dailyWaterMl || 0,
       waterGoalMl: vitals?.waterGoalMl || 2500,
-      score: 85, // Mock score for now
-      recommendation: {
-        text: 'Increase protein intake',
-        reason: 'Yesterday\'s workout burned 920 kcal. Recovery score 58%.'
-      },
-      macroSplit: { protein: 32, carbs: 44, fat: 24 },
-      adherence: { logged: 33, total: 35 },
-      topProtein: [
-        { name: 'Chicken breast', grams: 412, share: 0.34 },
-        { name: 'Greek yogurt', grams: 248, share: 0.20 },
-        { name: 'Whey protein', grams: 196, share: 0.16 },
-        { name: 'Salmon', grams: 154, share: 0.13 },
-      ],
-      spend: { week: 68.4, day: 9.77, meal: 1.95 }
-    });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to fetch dashboard' });
