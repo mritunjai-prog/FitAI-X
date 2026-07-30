@@ -130,25 +130,7 @@ export default function AnalyticsScreen({ navigation, onNavigateToNotifications,
       <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
 
-        {/* ── Header ── */}
-        <View style={{
-          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-          paddingHorizontal: HORIZ_PAD, paddingTop: 10, paddingBottom: 8,
-        }}>
-          <TouchableOpacity
-            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); (onNavigateBack || navigation?.goBack)?.(); }}
-            style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Icon name="arrow-back" size={22} color={C.onSurface} />
-          </TouchableOpacity>
-          <Text style={{ fontFamily: F.header, fontSize: 17, color: C.onSurface, letterSpacing: -0.5 }}>Progress</Text>
-          <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); onNavigateToNotifications?.(); }}
-            style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Icon name="notifications" size={22} color={C.onSurface} />
-          </TouchableOpacity>
-        </View>
+
 
         {/* ── Welcome ── */}
         <View style={{ paddingHorizontal: HORIZ_PAD, marginBottom: 6 }}>

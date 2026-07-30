@@ -1448,19 +1448,6 @@ export default function RecoveryScreen({
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
-        {/* ── Nav bar ── */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 0) * 0.2 + 6 : 6 }}>
-          <Pressable onPress={goBack} hitSlop={10} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
-            <Icon name="chevron-left" size={22} color={C.onSurface} />
-          </Pressable>
-          <Animated.Text numberOfLines={1} style={[{ fontFamily: F.header, fontSize: 15.5, letterSpacing: -0.2, color: C.onSurface }, compact]}>
-            Recovery
-          </Animated.Text>
-          <Pressable onPress={() => { haptic('light'); onNavigateToNotifications?.(); }} hitSlop={10} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
-            <Icon name="notifications" size={22} color={C.onSurface} />
-          </Pressable>
-        </View>
-
         {/* ── Large title ── */}
         <View style={{ paddingHorizontal: T.gutter, paddingTop: 8, paddingBottom: 2 }}>
           <Text style={{ fontFamily: F.header, fontSize: 34, letterSpacing: -1.2, color: C.onSurface }}>Recovery</Text>

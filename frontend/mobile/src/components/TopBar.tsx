@@ -98,9 +98,9 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 18,
-    paddingTop: Platform.OS === 'ios' ? 6 : (RNStatusBar.currentHeight ?? 0) * 0.2 + 6,
+    paddingTop: Platform.OS === 'ios' ? 54 : (RNStatusBar.currentHeight ?? 0) + 12,
     paddingBottom: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 0,
   },
   left: {
     flexDirection: 'row',

@@ -364,14 +364,9 @@ export default function CoachScreen({ onNavigateToNotifications, onNavigateBack 
       <MeshGradientBackground isDark={isDark} bgColors={isDark ? ["#0F172A", "#1E1B4B", "#312E81"] : ["#F8FAFC", "#F1F5F9", "#E2E8F0"]} />
       
       <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
+        <View style={[styles.header, { justifyContent: 'center' }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            {onNavigateBack && (
-              <TouchableOpacity onPress={onNavigateBack} style={{ marginRight: 12 }}>
-                <Icon name="chevron-left" size={24} color={C.onSurface} />
-              </TouchableOpacity>
-            )}
-            <View>
+            <View style={{ alignItems: 'center' }}>
               <View style={styles.headerTitleRow}>
                 <Icon name="auto-awesome" size={24} color={C.primary} />
                 <Text style={styles.headerTitle}>Rachel</Text>
@@ -379,9 +374,6 @@ export default function CoachScreen({ onNavigateToNotifications, onNavigateBack 
               <Text style={styles.headerSub}>AI Fitness Coach</Text>
             </View>
           </View>
-          <TouchableOpacity onPress={() => { Haptics.selectionAsync(); onNavigateToNotifications?.(); }} style={{ padding: 8, backgroundColor: C.glassInset, borderRadius: 20 }}>
-            <Icon name="notifications" size={20} color={C.onSurface} />
-          </TouchableOpacity>
         </View>
 
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 20}>

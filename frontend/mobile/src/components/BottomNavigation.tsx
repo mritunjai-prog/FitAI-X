@@ -50,7 +50,7 @@ export default function BottomNavigation({ currentScreen, onNavigate }: BottomNa
   };
 
   return (
-    <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={styles.bottomNav}>
+    <View style={[styles.bottomNav, { backgroundColor: C.bg }]}>
       <Animated.View style={[styles.navActivePill, pillStyle]} />
       
       {/* Dashboard / Home */}
@@ -83,7 +83,7 @@ export default function BottomNavigation({ currentScreen, onNavigate }: BottomNa
         <Icon name="person" size={24} color={activeIndex === 4 ? C.primary : C.onSurfaceVariant} />
         <Text style={[styles.navLabel, { color: activeIndex === 4 ? C.primary : C.onSurfaceVariant }]}>Profile</Text>
       </TouchableOpacity>
-    </BlurView>
+    </View>
   );
 }
 
@@ -94,7 +94,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     paddingBottom: Platform.OS === 'ios' ? 24 : 16, 
     paddingTop: 8, 
-    backgroundColor: 'transparent',
     borderTopWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',

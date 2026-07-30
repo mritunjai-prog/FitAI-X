@@ -365,11 +365,6 @@ export default function CalendarScreen({ onNavigateToNotifications, onNavigateBa
         {/* Header */}
         <View style={styles.header}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            {onNavigateBack && (
-              <TouchableOpacity onPress={onNavigateBack} style={{ marginRight: 12 }}>
-                <Feather name="chevron-left" size={24} color={C.onSurface} />
-              </TouchableOpacity>
-            )}
             <View>
               <Text style={styles.title}>Smart Calendar</Text>
               <Text style={styles.subtitle}>AI-generated · Tap a day to explore</Text>

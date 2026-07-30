@@ -648,20 +648,14 @@ export default function DashboardScreen({ onNavigate, onNavigateToWorkout, onNav
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
       <Animated.View pointerEvents="none" style={[{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 5, flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: Platform.OS === 'ios' ? 54 : (RNStatusBar.currentHeight ?? 0) + 12, paddingBottom: 11, paddingHorizontal: T.gutter, backgroundColor: C.bg, borderBottomWidth: T.hairline, borderBottomColor: T.hairSoft }, compactStyle]}>
-        {hasText(user?.avatar) ? <Image source={{ uri: user!.avatar! }} style={{ width: 24, height: 24, borderRadius: 12 }} /> : <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: T.track, alignItems: 'center', justifyContent: 'center' }}><Icon name="person" size={14} color={C.onSurfaceVariant} /></View>}
         <Text numberOfLines={1} style={{ flex: 1, fontFamily: F.header, fontSize: 15, letterSpacing: -0.2, color: C.onSurface }}>{hasText(user?.name) ? user!.name! : 'Dashboard'}</Text>
         {has(xp?.level) && <Text style={{ fontFamily: F.num, fontSize: 11, color: C.primary }}>LVL {xp!.level}</Text>}
       </Animated.View>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <Animated.ScrollView onScroll={scrollHandler} scrollEventThrottle={16} contentContainerStyle={{ paddingBottom: 44 }} showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.primary} />}>
-          {/* Nav - profile left, settings right */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 6 }}>
-            <Pressable onPress={() => { haptic('select'); onNavigate?.('Profile'); }} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: T.track, alignItems: 'center', justifyContent: 'center' }}>
-                {hasText(user?.avatar) ? <Image source={{ uri: user!.avatar! }} style={{ width: 32, height: 32, borderRadius: 16 }} /> : <Icon name="person" size={18} color={C.onSurfaceVariant} />}
-              </View>
-            </Pressable>
+          {/* Nav - settings right */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', paddingHorizontal: 18, paddingTop: 6 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
               <Pressable onPress={() => { haptic('select'); toggleTheme(); }} hitSlop={8} style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}>
                 <Icon name={isDark ? 'light-mode' : 'dark-mode'} size={22} color={C.onSurface} />

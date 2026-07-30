@@ -49,7 +49,7 @@ export default function SplashScreen({ onComplete }: { onComplete: () => void })
     <View style={[styles.container, { backgroundColor: C.bg }]}>
       <Animated.View style={[styles.logoContainer, { backgroundColor: isDark ? '#000' : '#FFF' }, animStyle]}>
         <Image 
-          source={isDark ? require('../../assets/icon.png') : require('../../assets/logoforlightmode.png')} 
+          source={require('../../assets/logoforlightmode.png')} 
           style={styles.image}
           resizeMode="cover"
         />

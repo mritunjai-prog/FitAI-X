@@ -173,22 +173,23 @@ function MainApp() {
 
     if (!hasOnboarded) return screen;
 
-    const hideTopFor = ['Dashboard', 'Settings', 'Notifications'];
+    const hideTopFor = ['Dashboard', 'Profile', 'Settings', 'Notifications'];
     const showTop = !hideTopFor.includes(currentScreen);
 
     return (
       <View style={{ flex: 1 }}>
-        {showTop && (
-          <TopBar
-            title={screenTitle()}
-            showBack={currentScreen !== 'Dashboard'}
-            onBack={() => setCurrentScreen('Dashboard')}
-            onAction={(action) => handleTopAction(action)}
-            rightActions={['theme', 'settings', 'palette', 'notifications']}
-            unreadCount={unreadCount}
-          />
-        )}
         <View style={{ flex: 1 }}>{screen}</View>
+        {showTop && (
+          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50 }}>
+            <TopBar
+              showBack={currentScreen !== 'Dashboard'}
+              onBack={() => setCurrentScreen('Dashboard')}
+              onAction={(action) => handleTopAction(action)}
+              rightActions={['theme', 'settings', 'palette', 'notifications']}
+              unreadCount={unreadCount}
+            />
+          </View>
+        )}
       </View>
     );
   };

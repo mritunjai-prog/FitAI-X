@@ -40,8 +40,8 @@ export const saveWorkout = async (workoutData: any) => {
   return data;
 };
 
-export const generateWorkout = async (prompt: string, currentWorkoutId?: string) => {
-  const { data } = await apiClient.post('/workouts/generate', { prompt, currentWorkoutId });
+export const generateWorkout = async (prompt: string, currentWorkoutId?: string, userId?: string) => {
+  const { data } = await apiClient.post('/workouts/generate', { prompt, currentWorkoutId, userId });
   return data;
 };
 

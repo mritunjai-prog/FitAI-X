@@ -2600,61 +2600,7 @@ export default function NutritionScreen({
       <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
 
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        {/* Nav — bare glyphs, no circular chrome */}
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingHorizontal: 18,
-            paddingTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 0) * 0.2 + 6 : 6,
-          }}
-        >
-          <Pressable
-            onPress={() => {
-              haptic('light');
-              onNavigateBack?.();
-            }}
-            hitSlop={10}
-            style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Icon name="chevron-left" size={22} color={C.onSurface} />
-          </Pressable>
-
-          <Animated.Text
-            numberOfLines={1}
-            style={[
-              { fontFamily: F.header, fontSize: 15.5, letterSpacing: -0.2, color: C.onSurface },
-              compactStyle,
-            ]}
-          >
-            Nutrition
-          </Animated.Text>
-
-          <Pressable
-            onPress={() => {
-              haptic('light');
-              onNavigateToNotifications?.();
-            }}
-            hitSlop={10}
-            style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Icon name="notifications" size={22} color={C.onSurface} />
-            <View
-              style={{
-                position: 'absolute',
-                top: 5,
-                right: 5,
-                width: 7,
-                height: 7,
-                borderRadius: 4,
-                backgroundColor: C.primary,
-                borderWidth: 2,
-                borderColor: C.bg,
-              }}
-            />
-          </Pressable>
-        </View>
+        {/* Large title */}
 
         {/* Large title */}
         <View style={{ paddingHorizontal: T.gutter, paddingTop: 8, paddingBottom: 2 }}>

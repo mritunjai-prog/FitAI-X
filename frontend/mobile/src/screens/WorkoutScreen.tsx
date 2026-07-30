@@ -3143,7 +3143,7 @@ export default function WorkoutScreen({
   });
 
   const generateMutation = useMutation({
-    mutationFn: (prompt: string) => generateWorkout(prompt, workout?.id),
+    mutationFn: (prompt: string) => generateWorkout(prompt, workout?.id, user?.id),
     onSuccess: (data: any) => {
       if (data?.exercises?.length) {
         // Map API exercise format (muscleGroup) to frontend (muscle)
@@ -3222,56 +3222,6 @@ export default function WorkoutScreen({
       <MeshGradientBackground bgColors={bgColors} isDark={isDark} />
 
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        {/* ── Nav bar: bare glyphs, no circular chrome ──── */}
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            paddingHorizontal: 18,
-            paddingTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 0) * 0.2 + 6 : 6,
-          }}
-        >
-          <Pressable
-            onPress={() => { haptic('light'); onNavigateBack?.(); }}
-            hitSlop={10}
-            style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Icon name="chevron-left" size={22} color={C.onSurface} />
-          </Pressable>
-
-          <Animated.Text
-            numberOfLines={1}
-            style={[
-              { fontFamily: F.header, fontSize: 15.5, letterSpacing: -0.2, color: C.onSurface },
-              compactStyle,
-            ]}
-          >
-            Workout Tracker
-          </Animated.Text>
-
-          <Pressable
-            onPress={() => { haptic('light'); onNavigateToNotifications?.(); }}
-            hitSlop={10}
-            style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
-          >
-            <Icon name="notifications" size={22} color={C.onSurface} />
-            <View
-              style={{
-                position: 'absolute',
-                top: 5,
-                right: 5,
-                width: 7,
-                height: 7,
-                borderRadius: 4,
-                backgroundColor: C.primary,
-                borderWidth: 2,
-                borderColor: C.bg,
-              }}
-            />
-          </Pressable>
-        </View>
-
         {/* ── Large title ────────────────────────────────── */}
         <View style={{ paddingHorizontal: T.gutter, paddingTop: 8, paddingBottom: 2 }}>
           <Text style={{ fontFamily: F.header, fontSize: 34, letterSpacing: -1.2, color: C.onSurface }}>
