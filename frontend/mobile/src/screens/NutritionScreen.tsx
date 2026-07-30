@@ -1510,7 +1510,7 @@ function CreateMealPlanModal({ visible, onClose, onGenerateAI, onSaveManual, gen
           <Text style={{ fontFamily: F.header, fontSize: 18, color: C.onSurface }}>Create Meal Plan</Text>
           <Pressable onPress={() => { setMode('choose'); onClose(); }} hitSlop={10}><Icon name="close" size={22} color={C.onSurfaceVariant} /></Pressable>
         </View>
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: Platform.OS === 'ios' ? 50 : 40 }} keyboardShouldPersistTaps="handled">
           {mode === 'choose' && (
             <View style={{ gap: 16 }}>
               <Pressable onPress={() => { setMode('ai'); onGenerateAI(); }}
@@ -1521,7 +1521,7 @@ function CreateMealPlanModal({ visible, onClose, onGenerateAI, onSaveManual, gen
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: F.header, fontSize: 16, color: C.onSurface }}>Generate with Rachel AI</Text>
                   <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant, marginTop: 4 }}>
-                    Personalized 7-day plan based on your diet preferences, fitness goals and profile.
+                    Personalized 7-day plan based on your diet, goals and profile.
                   </Text>
                 </View>
                 <Icon name="chevron-right" size={20} color={C.onSurfaceVariant} />
@@ -1534,7 +1534,7 @@ function CreateMealPlanModal({ visible, onClose, onGenerateAI, onSaveManual, gen
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontFamily: F.header, fontSize: 16, color: C.onSurface }}>Create Manually</Text>
                   <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant, marginTop: 4 }}>
-                    Add your own meals for each day with custom macros.
+                    Add your own meals with custom macros.
                   </Text>
                 </View>
                 <Icon name="chevron-right" size={20} color={C.onSurfaceVariant} />
@@ -1551,22 +1551,22 @@ function CreateMealPlanModal({ visible, onClose, onGenerateAI, onSaveManual, gen
           )}
           {mode === 'manual' && (
             <>
-              <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant, marginBottom: 12 }}>
-                Fill meals for the week. 21 meals (7d x 3). Name and calories required.
+              <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant, marginBottom: 12, lineHeight: 18 }}>
+                Add meals for each day. 7 days x 3 meals (Breakfast, Lunch, Dinner). Name + calories are required.
               </Text>
               {meals.map((m, idx) => (
                 <View key={idx} style={{ marginBottom: 6, padding: 8, backgroundColor: T.wash, borderRadius: 8, borderWidth: T.hairline, borderColor: T.hairSoft }}>
                   <Text style={{ fontFamily: F.header, fontSize: 9, color: C.primary, marginBottom: 3 }}>{dayNames[m.dayIndex]} - {m.type}</Text>
                   <View style={{ flexDirection: 'row', gap: 4 }}>
                     <TextInput value={m.name} onChangeText={(t) => { const x = [...meals]; x[idx] = {...x[idx], name: t}; setMeals(x); }}
-                      placeholder="Name" placeholderTextColor={C.onSurfaceVariant}
-                      style={{ flex: 2, backgroundColor: C.bg, borderRadius: 4, padding: 4, fontSize: 12, fontFamily: F.bodyMed, color: C.onSurface }} />
+                      placeholder="Meal name" placeholderTextColor={C.onSurfaceVariant}
+                      style={{ flex: 2, backgroundColor: C.bg, borderRadius: 4, padding: 6, fontSize: 12, fontFamily: F.bodyMed, color: C.onSurface, minWidth: 80 }} />
                     <TextInput value={m.cals} onChangeText={(t) => { const x = [...meals]; x[idx] = {...x[idx], cals: t}; setMeals(x); }}
                       placeholder="Cal" keyboardType="numeric" placeholderTextColor={C.onSurfaceVariant}
-                      style={{ flex: 1, backgroundColor: C.bg, borderRadius: 4, padding: 4, fontSize: 11, fontFamily: F.num, color: C.onSurface, textAlign: 'center', maxWidth: 50 }} />
+                      style={{ width: 50, backgroundColor: C.bg, borderRadius: 4, padding: 6, fontSize: 11, fontFamily: F.num, color: C.onSurface, textAlign: 'center' }} />
                     <TextInput value={m.protein} onChangeText={(t) => { const x = [...meals]; x[idx] = {...x[idx], protein: t}; setMeals(x); }}
                       placeholder="P" keyboardType="numeric" placeholderTextColor={C.onSurfaceVariant}
-                      style={{ flex: 1, backgroundColor: C.bg, borderRadius: 4, padding: 4, fontSize: 11, fontFamily: F.num, color: C.onSurface, textAlign: 'center', maxWidth: 40 }} />
+                      style={{ width: 36, backgroundColor: C.bg, borderRadius: 4, padding: 6, fontSize: 11, fontFamily: F.num, color: C.onSurface, textAlign: 'center' }} />
                   </View>
                 </View>
               ))}
@@ -1581,7 +1581,6 @@ function CreateMealPlanModal({ visible, onClose, onGenerateAI, onSaveManual, gen
     </View>
   );
 }
-
 function PlanTab({
   week,
   selectedDay,
@@ -2547,34 +2546,46 @@ function FoodLogModal({ visible, onClose, onLog, userId, C, isDark }: {
           <Pressable onPress={onClose} hitSlop={10}><Icon name="close" size={22} color={C.onSurfaceVariant} /></Pressable>
         </View>
 
-        {/* Tab selector */}
-        <View style={{ flexDirection: 'row', marginHorizontal: 20, marginTop: 12, gap: 8 }}>
-          {[{ key: 'manual', icon: 'edit', label: 'Manual' }, { key: 'scan', icon: 'auto-awesome', label: 'AI Scan' }, { key: 'search', icon: 'search', label: 'Search' }].map(t => (
-            <Pressable key={t.key} onPress={() => { setFoodTab(t.key as any); setScanResult(null); }}
-              style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20, backgroundColor: foodTab === t.key ? C.primary : T.track, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Icon name={t.icon as any} size={14} color={foodTab === t.key ? C.onPrimary : C.onSurfaceVariant} />
-              <Text style={{ fontFamily: F.header, fontSize: 11, color: foodTab === t.key ? C.onPrimary : C.onSurfaceVariant }}>{t.label}</Text>
-            </Pressable>
-          ))}
+        <View style={{ paddingHorizontal: 20, paddingVertical: 10 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            {[{ key: 'manual', icon: 'edit', label: 'Manual' }, { key: 'scan', icon: 'auto-awesome', label: 'AI Scan' }, { key: 'search', icon: 'search', label: 'Search' }].map(t => (
+              <Pressable key={t.key} onPress={() => { setFoodTab(t.key as any); setScanResult(null); }}
+                style={{ paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, backgroundColor: foodTab === t.key ? C.primary : T.track, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <Icon name={t.icon as any} size={14} color={foodTab === t.key ? C.onPrimary : C.onSurfaceVariant} />
+                <Text style={{ fontFamily: F.header, fontSize: 12, color: foodTab === t.key ? C.onPrimary : C.onSurfaceVariant }}>{t.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
-          {/* ── MANUAL TAB ── */}
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: Platform.OS === 'ios' ? 50 : 40 }} keyboardShouldPersistTaps="handled">
           {foodTab === 'manual' && (
             <>
               <TextInput value={name} onChangeText={setName} placeholder="Meal name (e.g. Chicken Rice)" placeholderTextColor={C.onSurfaceVariant}
                 style={{ backgroundColor: T.wash, borderRadius: 12, padding: 14, fontSize: 15, fontFamily: F.bodyMed, color: C.onSurface, borderWidth: T.hairline, borderColor: T.hairSoft, marginBottom: 12 }} />
               <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-                <View style={{ flex: 1 }}><Text style={{ fontFamily: F.header, fontSize: 10, color: C.onSurfaceVariant, marginBottom: 4 }}>CALORIES</Text>
-                  <TextInput value={cals} onChangeText={setCals} keyboardType="numeric" placeholder="0" style={{ backgroundColor: T.wash, borderRadius: 10, padding: 12, fontSize: 16, fontFamily: F.num, color: C.onSurface, textAlign: 'center' }} /></View>
-                <View style={{ flex: 1 }}><Text style={{ fontFamily: F.header, fontSize: 10, color: C.onSurfaceVariant, marginBottom: 4 }}>PROTEIN (g)</Text>
-                  <TextInput value={protein} onChangeText={setProtein} keyboardType="numeric" placeholder="0" style={{ backgroundColor: T.wash, borderRadius: 10, padding: 12, fontSize: 16, fontFamily: F.num, color: C.onSurface, textAlign: 'center' }} /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.header, fontSize: 10, color: C.onSurfaceVariant, marginBottom: 4 }}>CALORIES</Text>
+                  <TextInput value={cals} onChangeText={setCals} keyboardType="numeric" placeholder="0"
+                    style={{ backgroundColor: T.wash, borderRadius: 10, padding: 12, fontSize: 16, fontFamily: F.num, color: C.onSurface, textAlign: 'center' }} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.header, fontSize: 10, color: C.onSurfaceVariant, marginBottom: 4 }}>PROTEIN (g)</Text>
+                  <TextInput value={protein} onChangeText={setProtein} keyboardType="numeric" placeholder="0"
+                    style={{ backgroundColor: T.wash, borderRadius: 10, padding: 12, fontSize: 16, fontFamily: F.num, color: C.onSurface, textAlign: 'center' }} />
+                </View>
               </View>
               <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
-                <View style={{ flex: 1 }}><Text style={{ fontFamily: F.header, fontSize: 10, color: C.onSurfaceVariant, marginBottom: 4 }}>CARBS (g)</Text>
-                  <TextInput value={carbs} onChangeText={setCarbs} keyboardType="numeric" placeholder="0" style={{ backgroundColor: T.wash, borderRadius: 10, padding: 12, fontSize: 16, fontFamily: F.num, color: C.onSurface, textAlign: 'center' }} /></View>
-                <View style={{ flex: 1 }}><Text style={{ fontFamily: F.header, fontSize: 10, color: C.onSurfaceVariant, marginBottom: 4 }}>FATS (g)</Text>
-                  <TextInput value={fats} onChangeText={setFats} keyboardType="numeric" placeholder="0" style={{ backgroundColor: T.wash, borderRadius: 10, padding: 12, fontSize: 16, fontFamily: F.num, color: C.onSurface, textAlign: 'center' }} /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.header, fontSize: 10, color: C.onSurfaceVariant, marginBottom: 4 }}>CARBS (g)</Text>
+                  <TextInput value={carbs} onChangeText={setCarbs} keyboardType="numeric" placeholder="0"
+                    style={{ backgroundColor: T.wash, borderRadius: 10, padding: 12, fontSize: 16, fontFamily: F.num, color: C.onSurface, textAlign: 'center' }} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.header, fontSize: 10, color: C.onSurfaceVariant, marginBottom: 4 }}>FATS (g)</Text>
+                  <TextInput value={fats} onChangeText={setFats} keyboardType="numeric" placeholder="0"
+                    style={{ backgroundColor: T.wash, borderRadius: 10, padding: 12, fontSize: 16, fontFamily: F.num, color: C.onSurface, textAlign: 'center' }} />
+                </View>
               </View>
               <Pressable onPress={handleManualLog} disabled={!name.trim() || !cals}
                 style={{ backgroundColor: C.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', opacity: (!name.trim() || !cals) ? 0.5 : 1 }}>
@@ -2583,12 +2594,14 @@ function FoodLogModal({ visible, onClose, onLog, userId, C, isDark }: {
             </>
           )}
 
-          {/* ── AI SCAN TAB ── */}
           {foodTab === 'scan' && (
             <>
-              <Text style={{ fontFamily: F.bodyMed, fontSize: 13, color: C.onSurfaceVariant, marginBottom: 12 }}>Describe your meal and Rachel AI will estimate the macros.</Text>
-              <TextInput value={scanInput} onChangeText={setScanInput} placeholder="e.g. 2 chapatis with dal and salad" placeholderTextColor={C.onSurfaceVariant} multiline
-                style={{ backgroundColor: T.wash, borderRadius: 12, padding: 14, fontSize: 15, fontFamily: F.bodyMed, color: C.onSurface, borderWidth: T.hairline, borderColor: T.hairSoft, minHeight: 80, marginBottom: 12 }} />
+              <Text style={{ fontFamily: F.bodyMed, fontSize: 13, color: C.onSurfaceVariant, marginBottom: 12, lineHeight: 20 }}>
+                Describe your meal and Rachel AI will estimate the macros.
+              </Text>
+              <TextInput value={scanInput} onChangeText={setScanInput}
+                placeholder="e.g. 2 chapatis with dal and salad" placeholderTextColor={C.onSurfaceVariant} multiline
+                style={{ backgroundColor: T.wash, borderRadius: 12, padding: 14, fontSize: 15, fontFamily: F.bodyMed, color: C.onSurface, borderWidth: T.hairline, borderColor: T.hairSoft, minHeight: 80, textAlignVertical: 'top', marginBottom: 12 }} />
               <Pressable onPress={handleScan} disabled={!scanInput.trim() || scanning}
                 style={{ backgroundColor: C.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', opacity: (!scanInput.trim() || scanning) ? 0.5 : 1 }}>
                 <Text style={{ fontFamily: F.header, fontSize: 15, color: C.onPrimary }}>{scanning ? 'Scanning...' : 'Scan with AI'}</Text>
@@ -2611,20 +2624,20 @@ function FoodLogModal({ visible, onClose, onLog, userId, C, isDark }: {
             </>
           )}
 
-          {/* ── SEARCH TAB ── */}
           {foodTab === 'search' && (
             <>
-              <TextInput value={searchQuery} onChangeText={handleSearch} placeholder="Search foods..." placeholderTextColor={C.onSurfaceVariant}
+              <TextInput value={searchQuery} onChangeText={(t) => { setSearchQuery(t); handleSearch(t); }}
+                placeholder="Search foods..." placeholderTextColor={C.onSurfaceVariant}
                 style={{ backgroundColor: T.wash, borderRadius: 12, padding: 14, fontSize: 15, fontFamily: F.bodyMed, color: C.onSurface, borderWidth: T.hairline, borderColor: T.hairSoft, marginBottom: 12 }} />
               {searching && <ActivityIndicator color={C.primary} style={{ marginVertical: 10 }} />}
               {searchResults.map((item, i) => (
                 <Pressable key={i} onPress={() => handleLogResult(item)}
-                  style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: T.hairline, borderBottomColor: T.hairSoft }}>
-                  <View style={{ flex: 1 }}>
+                  style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: T.hairline, borderBottomColor: T.hairSoft }}>
+                  <View style={{ flex: 1, marginRight: 8 }}>
                     <Text style={{ fontFamily: F.header, fontSize: 14, color: C.onSurface }}>{item.name}</Text>
                     <Text style={{ fontFamily: F.num, fontSize: 11, color: C.onSurfaceVariant, marginTop: 2 }}>{item.cals} kcal · P{item.protein} · C{item.carbs} · F{item.fats}</Text>
                   </View>
-                  <Text style={{ fontFamily: F.header, fontSize: 10, color: C.primary, marginTop: 4 }}>{item.category}</Text>
+                  <Text style={{ fontFamily: F.header, fontSize: 10, color: C.primary }}>{item.category}</Text>
                 </Pressable>
               ))}
               {searchQuery.length >= 2 && searchResults.length === 0 && !searching && (
