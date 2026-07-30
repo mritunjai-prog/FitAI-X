@@ -752,6 +752,143 @@ const MIN: Record<NumericField, number> = { sets: 1, reps: 1, weight: 0, rest: 0
 
 const SUGGESTIONS = ['Make it 30 min', 'Shoulder-safe swap', 'Add finisher', 'More intensity', 'Beginner friendly'];
 
+/* ── Add Exercise Modal ─────────────────────────────── */
+interface AddExerciseModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onAdd: (exercise: WorkoutExercise) => void;
+  C: ThemeColors;
+  isDark: boolean;
+}
+
+function AddExerciseModal({ visible, onClose, onAdd, C, isDark }: AddExerciseModalProps) {
+  const T = useMemo(() => makeTokens(C, isDark), [C, isDark]);
+  const [name, setName] = useState('');
+  const [muscle, setMuscle] = useState('');
+  const [sets, setSets] = useState(3);
+  const [reps, setReps] = useState(10);
+  const [weight, setWeight] = useState(0);
+  const [rest, setRest] = useState(60);
+
+  const handleAdd = () => {
+    if (!name.trim()) return;
+    haptic('medium');
+    onAdd({
+      id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name: name.trim(),
+      muscle: muscle.trim() || 'Full Body',
+      sets,
+      reps,
+      weight,
+      rest,
+    });
+    // Reset form
+    setName('');
+    setMuscle('');
+    setSets(3);
+    setReps(10);
+    setWeight(0);
+    setRest(60);
+    onClose();
+  };
+
+  const handleClose = () => {
+    setName('');
+    setMuscle('');
+    setSets(3);
+    setReps(10);
+    setWeight(0);
+    setRest(60);
+    onClose();
+  };
+
+  if (!visible) return null;
+
+  return (
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' }}>
+      <Pressable style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} onPress={handleClose} />
+      <Animated.View entering={FadeInDown.springify().damping(20).stiffness(120)}
+        style={{ width: '88%', maxHeight: '80%', backgroundColor: C.bg, borderRadius: 24, overflow: 'hidden', borderWidth: StyleSheet.hairlineWidth, borderColor: T.hair }}>
+        
+        {/* Header */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 22, paddingVertical: 18, borderBottomWidth: T.hairline, borderBottomColor: T.hairSoft }}>
+          <Text style={{ fontFamily: F.header, fontSize: 18, letterSpacing: -0.3, color: C.onSurface }}>Add Exercise</Text>
+          <Pressable onPress={handleClose} hitSlop={10}><Icon name="close" size={20} color={C.onSurfaceVariant} /></Pressable>
+        </View>
+
+        <ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 30 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {/* Exercise Name */}
+          <View style={{ marginBottom: 18 }}>
+            <Text style={{ fontFamily: F.header, fontSize: 10, letterSpacing: 1.2, color: C.onSurfaceVariant, marginBottom: 7, textTransform: 'uppercase' }}>Exercise Name *</Text>
+            <TextInput value={name} onChangeText={setName} placeholder="e.g. Bench Press" placeholderTextColor={C.onSurfaceVariant}
+              style={{ fontFamily: F.bodyMed, fontSize: 15, color: C.onSurface, backgroundColor: T.wash, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: T.hairline, borderColor: name.trim() ? C.primary : T.hairSoft }} />
+          </View>
+
+          {/* Muscle Group */}
+          <View style={{ marginBottom: 18 }}>
+            <Text style={{ fontFamily: F.header, fontSize: 10, letterSpacing: 1.2, color: C.onSurfaceVariant, marginBottom: 7, textTransform: 'uppercase' }}>Muscle Group</Text>
+            <TextInput value={muscle} onChangeText={setMuscle} placeholder="e.g. Chest" placeholderTextColor={C.onSurfaceVariant}
+              style={{ fontFamily: F.bodyMed, fontSize: 15, color: C.onSurface, backgroundColor: T.wash, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12, borderWidth: T.hairline, borderColor: T.hairSoft }} />
+          </View>
+
+          {/* Sets & Reps row */}
+          <View style={{ flexDirection: 'row', gap: 16, marginBottom: 18 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: F.header, fontSize: 10, letterSpacing: 1.2, color: C.onSurfaceVariant, marginBottom: 7, textTransform: 'uppercase' }}>Sets</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.wash, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8, borderWidth: T.hairline, borderColor: T.hairSoft }}>
+                <Stepper sign="−" onPress={() => setSets(Math.max(1, sets - 1))} C={C} T={T} />
+                <Text style={{ flex: 1, textAlign: 'center', fontFamily: F.num, fontSize: 18, letterSpacing: -0.5, color: C.onSurface }}>{sets}</Text>
+                <Stepper sign="+" onPress={() => setSets(Math.min(20, sets + 1))} C={C} T={T} />
+              </View>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: F.header, fontSize: 10, letterSpacing: 1.2, color: C.onSurfaceVariant, marginBottom: 7, textTransform: 'uppercase' }}>Reps</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.wash, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8, borderWidth: T.hairline, borderColor: T.hairSoft }}>
+                <Stepper sign="−" onPress={() => setReps(Math.max(1, reps - 1))} C={C} T={T} />
+                <Text style={{ flex: 1, textAlign: 'center', fontFamily: F.num, fontSize: 18, letterSpacing: -0.5, color: C.onSurface }}>{reps}</Text>
+                <Stepper sign="+" onPress={() => setReps(Math.min(100, reps + 1))} C={C} T={T} />
+              </View>
+            </View>
+          </View>
+
+          {/* Weight & Rest row */}
+          <View style={{ flexDirection: 'row', gap: 16, marginBottom: 24 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: F.header, fontSize: 10, letterSpacing: 1.2, color: C.onSurfaceVariant, marginBottom: 7, textTransform: 'uppercase' }}>Weight (kg)</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.wash, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8, borderWidth: T.hairline, borderColor: T.hairSoft }}>
+                <Stepper sign="−" onPress={() => setWeight(Math.max(0, weight - 2.5))} C={C} T={T} />
+                <Text style={{ flex: 1, textAlign: 'center', fontFamily: F.num, fontSize: 18, letterSpacing: -0.5, color: C.onSurface }}>{weight}</Text>
+                <Stepper sign="+" onPress={() => setWeight(Math.min(500, weight + 2.5))} C={C} T={T} />
+              </View>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontFamily: F.header, fontSize: 10, letterSpacing: 1.2, color: C.onSurfaceVariant, marginBottom: 7, textTransform: 'uppercase' }}>Rest (s)</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: T.wash, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8, borderWidth: T.hairline, borderColor: T.hairSoft }}>
+                <Stepper sign="−" onPress={() => setRest(Math.max(0, rest - 15))} C={C} T={T} />
+                <Text style={{ flex: 1, textAlign: 'center', fontFamily: F.num, fontSize: 18, letterSpacing: -0.5, color: C.onSurface }}>{rest}</Text>
+                <Stepper sign="+" onPress={() => setRest(Math.min(600, rest + 15))} C={C} T={T} />
+              </View>
+            </View>
+          </View>
+
+          {/* Actions */}
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Pressable onPress={handleClose} style={{ flex: 1, paddingVertical: 14, borderRadius: 14, borderWidth: T.hairline, borderColor: T.hair, alignItems: 'center' }}>
+              <Text style={{ fontFamily: F.header, fontSize: 14, color: C.onSurfaceVariant }}>Cancel</Text>
+            </Pressable>
+            <PressableScale onPress={handleAdd} style={{ flex: 1.5 }} disabled={!name.trim()}>
+              <LinearGradient colors={[C.primary, C.primaryDim]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={{ paddingVertical: 14, borderRadius: 14, alignItems: 'center', justifyContent: 'center', opacity: name.trim() ? 1 : 0.5 }}>
+                <Text style={{ fontFamily: F.header, fontSize: 14, color: C.onPrimary }}>Add Exercise</Text>
+              </LinearGradient>
+            </PressableScale>
+          </View>
+        </ScrollView>
+      </Animated.View>
+    </View>
+  );
+}
+
 function BuilderTab({ exercises, activation, onChange, onSave, onDiscard, onGenerate, title, setTitle, muscleGroup, setMuscleGroup, generating, saving, C, isDark, onDuplicate, onDelete, onRename }: {
   exercises: WorkoutExercise[]; activation: MuscleActivation[]; onChange: (next: WorkoutExercise[]) => void;
   onSave: () => void; onDiscard: () => void; onGenerate: (prompt: string) => void;
@@ -763,6 +900,7 @@ function BuilderTab({ exercises, activation, onChange, onSave, onDiscard, onGene
   const [view, setView] = useState<MapView>('front');
   const [open, setOpen] = useState<string | null>(exercises[0]?.id ?? null);
   const [prompt, setPrompt] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
 
   const bump = useCallback((id: string, field: 'sets' | 'reps' | 'weight' | 'rest', delta: number) => {
     haptic('light');
@@ -794,26 +932,6 @@ function BuilderTab({ exercises, activation, onChange, onSave, onDiscard, onGene
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
       <ScrollView contentContainerStyle={{ paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
-        <SectionLabel text="Workout Details" C={C} />
-        <View style={{ paddingHorizontal: T.gutter, gap: 16, marginBottom: 16 }}>
-          <View>
-            <Text style={{ fontFamily: F.header, fontSize: 11, letterSpacing: 0.5, color: C.onSurfaceVariant, marginBottom: 8 }}>WORKOUT NAME</Text>
-            <TextInput value={title} onChangeText={setTitle} placeholder="e.g. Pull Day" placeholderTextColor={C.onSurfaceVariant}
-              style={{ fontFamily: F.bodyMed, fontSize: 16, color: C.onSurface, backgroundColor: T.wash, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 12, borderWidth: T.hairline, borderColor: T.hairSoft }} />
-          </View>
-          <View>
-            <Text style={{ fontFamily: F.header, fontSize: 11, letterSpacing: 0.5, color: C.onSurfaceVariant, marginBottom: 8 }}>TARGET MUSCLES</Text>
-            <TextInput value={muscleGroup} onChangeText={setMuscleGroup} placeholder="e.g. Back, Biceps" placeholderTextColor={C.onSurfaceVariant}
-              style={{ fontFamily: F.bodyMed, fontSize: 16, color: C.onSurface, backgroundColor: T.wash, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 12, borderWidth: T.hairline, borderColor: T.hairSoft }} />
-          </View>
-          {/* Actions row */}
-          <View style={{ flexDirection: 'row', gap: 20 }}>
-            {onRename && <Pressable onPress={() => { haptic('light'); onRename(); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><Icon name="edit" size={15} color={C.primary} /><Text style={{ fontFamily: F.header, fontSize: 12, color: C.primary }}>Rename</Text></Pressable>}
-            {onDuplicate && <Pressable onPress={() => { haptic('light'); onDuplicate(); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><Icon name="content-copy" size={15} color={C.primary} /><Text style={{ fontFamily: F.header, fontSize: 12, color: C.primary }}>Duplicate</Text></Pressable>}
-            {onDelete && <Pressable onPress={() => { haptic('light'); onDelete(); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><Icon name="delete" size={15} color={C.error || '#ef4444'} /><Text style={{ fontFamily: F.header, fontSize: 12, color: C.error || '#ef4444' }}>Delete</Text></Pressable>}
-          </View>
-        </View>
-
         <SectionLabel text="Muscle Activation" C={C} />
         <MuscleMap activation={activation} view={view} onChangeView={setView} C={C} isDark={isDark} />
 
@@ -840,8 +958,8 @@ function BuilderTab({ exercises, activation, onChange, onSave, onDiscard, onGene
         </View>
 
         <SectionLabel text={`Exercises · ${exercises.length}`} C={C} action="Add" onAction={() => {
-          haptic('light');
-          onChange([...exercises, { id: `custom-${Date.now()}`, name: 'New Exercise', muscle: 'Full Body', sets: 3, reps: 10, weight: 0, rest: 60 }]);
+          haptic('select');
+          setShowAddModal(true);
         }} />
 
         {exercises.map((e, i) => {
@@ -938,6 +1056,17 @@ function BuilderTab({ exercises, activation, onChange, onSave, onDiscard, onGene
           </View>
         </View>
       </ScrollView>
+
+      {/* Add Exercise Modal */}
+      <AddExerciseModal
+        visible={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onAdd={(newEx) => {
+          onChange([...exercises, newEx]);
+        }}
+        C={C}
+        isDark={isDark}
+      />
     </KeyboardAvoidingView>
   );
 }
