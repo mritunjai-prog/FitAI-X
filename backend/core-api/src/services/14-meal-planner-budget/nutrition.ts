@@ -472,4 +472,84 @@ router.post('/preferences', async (req, res) => {
   }
 });
 
+// POST /api/v1/nutrition/meal/manual — Create a single manual meal entry
+router.post('/meal/manual', async (req, res) => {
+  try {
+    const { userId, name, type, cals, protein, carbs, fats, date } = req.body;
+    if (!userId || !name) return res.status(400).json({ error: 'Missing userId or name' });
+
+    const mealDate = date ? new Date(date) : new Date();
+    
+    const meal = await prisma.meal.create({
+      data: {
+        userId,
+        name: name.trim(),
+        type: type || 'Meal',
+        cals: Math.round(cals || 0),
+        protein: parseFloat(protein || 0),
+        carbs: parseFloat(carbs || 0),
+        fats: parseFloat(fats || 0),
+        cost: 0,
+        date: mealDate,
+        status: 'generated',
+      }
+    });
+
+    const io = getIo();
+    io?.to(userId).emit('nutrition_update', { type: 'meal_created', meal });
+    
+    res.json(meal);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to create meal' });
+  }
+});
+
+// POST /api/v1/nutrition/meal-plan/manual — Create a full manual 7-day meal plan
+router.post('/meal-plan/manual', async (req, res) => {
+  try {
+    const { userId, meals } = req.body;
+    if (!userId || !Array.isArray(meals) || meals.length === 0) {
+      return res.status(400).json({ error: 'Missing userId or meals array' });
+    }
+
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const weekEnd = new Date(todayStart); weekEnd.setDate(weekEnd.getDate() + 7);
+    
+    // Soft-delete existing meals in this window
+    await prisma.meal.updateMany({
+      where: { userId, date: { gte: todayStart, lt: weekEnd }, deletedAt: null },
+      data: { deletedAt: new Date() }
+    });
+
+    const saved = [];
+    for (const m of meals) {
+      const dayDate = m.date ? new Date(m.date) : new Date(todayStart.getTime() + (m.dayIndex || 0) * 86400000);
+      const meal = await prisma.meal.create({
+        data: {
+          userId,
+          name: m.name || 'Meal',
+          type: m.type || 'Meal',
+          cals: Math.round(m.cals || m.calories || 0),
+          protein: parseFloat(m.protein || 0),
+          carbs: parseFloat(m.carbs || 0),
+          fats: parseFloat(m.fats || m.fat || 0),
+          cost: 0,
+          date: dayDate,
+          status: 'manual',
+        }
+      });
+      saved.push(meal);
+    }
+
+    const io = getIo();
+    io?.to(userId).emit('nutrition_update', { type: 'meal_plan_created' });
+    
+    res.json({ success: true, meals: saved, count: saved.length });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to save manual meal plan' });
+  }
+});
+
 export default router

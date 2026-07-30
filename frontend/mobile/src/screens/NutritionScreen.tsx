@@ -76,7 +76,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { F, ThemeColors } from '../theme';
 import { apiClient } from '../services/api/client';
-import { fetchBudgetPlan, generateAiPlan, fetchMealPlan, regenerateMealPlan, logFood, aiScanFood, searchFoods } from '../services/api/nutrition';
+import { fetchBudgetPlan, generateAiPlan, fetchMealPlan, regenerateMealPlan, logFood, aiScanFood, searchFoods, createManualMealPlan } from '../services/api/nutrition';
 
 /* ──────────────────────────────────────────────────────────────────────────
    TYPES
@@ -1472,6 +1472,116 @@ function TodayTab({
    TAB · PLAN
    ────────────────────────────────────────────────────────────────────────── */
 
+/* ──────────────────────────────────────────────────────────────────────────
+   CREATE MEAL PLAN MODAL — Manual · AI Generate
+   ────────────────────────────────────────────────────────────────────────── */
+
+function CreateMealPlanModal({ visible, onClose, onGenerateAI, onSaveManual, generating, C, isDark }: {
+  visible: boolean; onClose: () => void; onGenerateAI: () => void; onSaveManual: (meals: any[]) => void;
+  generating?: boolean; C: ThemeColors; isDark: boolean;
+}) {
+  const T = makeTokens(isDark);
+  const [mode, setMode] = useState<'choose' | 'manual' | 'ai'>('choose');
+  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const [meals, setMeals] = useState<Array<{dayIndex: number; type: string; name: string; cals: string; protein: string; carbs: string; fats: string}>>(
+    Array.from({length: 7}).flatMap((_, di) => 
+      ['Breakfast', 'Lunch', 'Dinner'].map(type => ({dayIndex: di, type, name: '', cals: '', protein: '', carbs: '', fats: ''}))
+    )
+  );
+
+  if (!visible) return null;
+
+  const handleSave = () => {
+    const valid = meals.filter(m => m.name.trim() && m.cals);
+    if (valid.length === 0) return;
+    onSaveManual(valid.map(m => ({
+      dayIndex: m.dayIndex, type: m.type, name: m.name.trim(),
+      cals: parseInt(m.cals) || 0, protein: parseFloat(m.protein) || 0,
+      carbs: parseFloat(m.carbs) || 0, fats: parseFloat(m.fats) || 0,
+    })));
+    onClose();
+  };
+
+  return (
+    <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+      <Pressable style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} onPress={() => { setMode('choose'); onClose(); }} />
+      <Animated.View entering={FadeInDown.springify().damping(20)} style={{ backgroundColor: C.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: T.hairline, borderBottomColor: T.hairSoft }}>
+          <Text style={{ fontFamily: F.header, fontSize: 18, color: C.onSurface }}>Create Meal Plan</Text>
+          <Pressable onPress={() => { setMode('choose'); onClose(); }} hitSlop={10}><Icon name="close" size={22} color={C.onSurfaceVariant} /></Pressable>
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+          {mode === 'choose' && (
+            <View style={{ gap: 16 }}>
+              <Pressable onPress={() => { setMode('ai'); onGenerateAI(); }}
+                style={{ backgroundColor: T.wash, borderRadius: 16, padding: 20, borderWidth: T.hairline, borderColor: T.hairGold, flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: C.primary, alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="auto-awesome" size={22} color={C.onPrimary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.header, fontSize: 16, color: C.onSurface }}>Generate with Rachel AI</Text>
+                  <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant, marginTop: 4 }}>
+                    Personalized 7-day plan based on your diet preferences, fitness goals and profile.
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={20} color={C.onSurfaceVariant} />
+              </Pressable>
+              <Pressable onPress={() => setMode('manual')}
+                style={{ backgroundColor: T.wash, borderRadius: 16, padding: 20, borderWidth: T.hairline, borderColor: T.hair, flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: T.hairGold, alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="edit" size={22} color={C.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.header, fontSize: 16, color: C.onSurface }}>Create Manually</Text>
+                  <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant, marginTop: 4 }}>
+                    Add your own meals for each day with custom macros.
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={20} color={C.onSurfaceVariant} />
+              </Pressable>
+            </View>
+          )}
+          {mode === 'ai' && (
+            <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+              <ActivityIndicator size="large" color={C.primary} />
+              <Text style={{ fontFamily: F.bodyMed, fontSize: 14, color: C.onSurfaceVariant, marginTop: 16 }}>
+                Rachel AI is creating your meal plan...
+              </Text>
+            </View>
+          )}
+          {mode === 'manual' && (
+            <>
+              <Text style={{ fontFamily: F.bodyMed, fontSize: 12, color: C.onSurfaceVariant, marginBottom: 12 }}>
+                Fill meals for the week. 21 meals (7d x 3). Name and calories required.
+              </Text>
+              {meals.map((m, idx) => (
+                <View key={idx} style={{ marginBottom: 6, padding: 8, backgroundColor: T.wash, borderRadius: 8, borderWidth: T.hairline, borderColor: T.hairSoft }}>
+                  <Text style={{ fontFamily: F.header, fontSize: 9, color: C.primary, marginBottom: 3 }}>{dayNames[m.dayIndex]} - {m.type}</Text>
+                  <View style={{ flexDirection: 'row', gap: 4 }}>
+                    <TextInput value={m.name} onChangeText={(t) => { const x = [...meals]; x[idx] = {...x[idx], name: t}; setMeals(x); }}
+                      placeholder="Name" placeholderTextColor={C.onSurfaceVariant}
+                      style={{ flex: 2, backgroundColor: C.bg, borderRadius: 4, padding: 4, fontSize: 12, fontFamily: F.bodyMed, color: C.onSurface }} />
+                    <TextInput value={m.cals} onChangeText={(t) => { const x = [...meals]; x[idx] = {...x[idx], cals: t}; setMeals(x); }}
+                      placeholder="Cal" keyboardType="numeric" placeholderTextColor={C.onSurfaceVariant}
+                      style={{ flex: 1, backgroundColor: C.bg, borderRadius: 4, padding: 4, fontSize: 11, fontFamily: F.num, color: C.onSurface, textAlign: 'center', maxWidth: 50 }} />
+                    <TextInput value={m.protein} onChangeText={(t) => { const x = [...meals]; x[idx] = {...x[idx], protein: t}; setMeals(x); }}
+                      placeholder="P" keyboardType="numeric" placeholderTextColor={C.onSurfaceVariant}
+                      style={{ flex: 1, backgroundColor: C.bg, borderRadius: 4, padding: 4, fontSize: 11, fontFamily: F.num, color: C.onSurface, textAlign: 'center', maxWidth: 40 }} />
+                  </View>
+                </View>
+              ))}
+              <Pressable onPress={handleSave} disabled={!meals.some(x => x.name.trim() && x.cals)}
+                style={{ backgroundColor: C.primary, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 12, opacity: meals.some(x => x.name.trim() && x.cals) ? 1 : 0.5 }}>
+                <Text style={{ fontFamily: F.header, fontSize: 15, color: C.onPrimary }}>Save Meal Plan</Text>
+              </Pressable>
+            </>
+          )}
+        </ScrollView>
+      </Animated.View>
+    </View>
+  );
+}
+
 function PlanTab({
   week,
   selectedDay,
@@ -1483,6 +1593,7 @@ function PlanTab({
   generating,
   C,
   isDark,
+  onOpenCreate,
 }: {
   week: DayPlan[];
   selectedDay: number;
@@ -1494,6 +1605,7 @@ function PlanTab({
   generating?: boolean;
   C: ThemeColors;
   isDark: boolean;
+  onOpenCreate?: () => void;
 }) {
   const T = makeTokens(isDark);
   const A = makeAccents(isDark);
@@ -1517,11 +1629,11 @@ function PlanTab({
           actionNode={
             <Pressable
               hitSlop={10}
-              onPress={() => haptic('select')}
+              onPress={() => { haptic('select'); onOpenCreate?.(); }}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
             >
-              <Icon name="filter-list" size={15} color={C.primary} />
-              <Text style={{ fontFamily: F.header, fontSize: 13, color: C.primary }}>Filters</Text>
+              <Icon name="add" size={15} color={C.primary} />
+              <Text style={{ fontFamily: F.header, fontSize: 13, color: C.primary }}>Create Plan</Text>
             </Pressable>
           }
         />
@@ -2550,6 +2662,7 @@ export default function NutritionScreen({
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [selectedDay, setSelectedDay] = useState(1);
   const [showFoodModal, setShowFoodModal] = useState(false);
+  const [showCreatePlanModal, setShowCreatePlanModal] = useState(false);
 
   /* ── Queries ─────────────────────────────────────── */
   const { data: userMeals = [] } = useQuery({
@@ -2636,6 +2749,11 @@ export default function NutritionScreen({
       haptic('success');
       void qc.invalidateQueries({ queryKey: ['mealPlan'] });
     },
+  });
+
+  const manualMealPlanMutation = useMutation({
+    mutationFn: (meals: any[]) => createManualMealPlan(user?.id || '', meals),
+    onSuccess: () => { haptic('success'); void qc.invalidateQueries({ queryKey: ['userMeals'] }); },
   });
 
   const logFoodMutation = useMutation({
@@ -2750,6 +2868,7 @@ export default function NutritionScreen({
   };
 
   const weeklyCost = budgetData?.weeklyCost ?? 0;
+  const handleCreatePlan = useCallback(() => setShowCreatePlanModal(true), []);
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
@@ -2816,6 +2935,7 @@ export default function NutritionScreen({
                 generating={generatePlanMutation.isPending}
                 C={C}
                 isDark={isDark}
+                onOpenCreate={handleCreatePlan}
               />
             </Animated.View>
           )}
@@ -2851,6 +2971,13 @@ export default function NutritionScreen({
         </View>
       </SafeAreaView>
 
+      <CreateMealPlanModal visible={showCreatePlanModal} onClose={() => setShowCreatePlanModal(false)}
+        onGenerateAI={() => {
+          setShowCreatePlanModal(false);
+          setTimeout(() => { if (user?.id) generatePlanMutation.mutate(); }, 300);
+        }}
+        onSaveManual={(meals) => manualMealPlanMutation.mutate(meals)}
+        generating={generatePlanMutation.isPending} C={C} isDark={isDark} />
       <FoodLogModal visible={showFoodModal} onClose={() => setShowFoodModal(false)}
         onLog={(data) => logFoodMutation.mutate(data)} userId={user?.id || ''} C={C} isDark={isDark} />
     </View>

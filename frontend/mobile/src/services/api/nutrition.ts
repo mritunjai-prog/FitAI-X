@@ -49,3 +49,13 @@ export const fetchNutritionDashboard = async (userId: string) => {
   const { data } = await apiClient.get(`/nutrition/dashboard?userId=${userId}`);
   return data;
 };
+
+export const createManualMeal = async (payload: { userId: string; name: string; type?: string; cals: number; protein?: number; carbs?: number; fats?: number; date?: string }) => {
+  const { data } = await apiClient.post('/nutrition/meal/manual', payload);
+  return data;
+};
+
+export const createManualMealPlan = async (userId: string, meals: any[]) => {
+  const { data } = await apiClient.post('/nutrition/meal-plan/manual', { userId, meals });
+  return data;
+};
