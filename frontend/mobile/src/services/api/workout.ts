@@ -23,9 +23,7 @@ export const fetchCurrentWorkout = async (userId: string): Promise<Workout | nul
     const { data } = await apiClient.get(`/workouts/current?userId=${userId}`);
     return data;
   } catch (error: any) {
-    if (error.response && error.response.status === 404) {
-      return null;
-    }
+    if (error.response && error.response.status === 404) { return null; }
     throw error;
   }
 };
@@ -62,5 +60,15 @@ export const fetchWorkoutHistory = async (userId: string) => {
 
 export const updateExerciseStatus = async (workoutId: string, exId: string, status: string) => {
   const { data } = await apiClient.patch(`/workouts/${workoutId}/exercises/${exId}/status`, { status });
+  return data;
+};
+
+export const deleteWorkout = async (workoutId: string) => {
+  const { data } = await apiClient.delete(`/workouts/${workoutId}`);
+  return data;
+};
+
+export const updateWorkout = async (workoutId: string, payload: any) => {
+  const { data } = await apiClient.patch(`/workouts/${workoutId}`, payload);
   return data;
 };

@@ -453,4 +453,23 @@ router.patch('/:id/exercises/:exId', async (req, res) => {
   }
 });
 
+// DELETE /api/v1/workouts/:id
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.workout.update({
+      where: { id },
+      data: { deletedAt: new Date(), isCurrent: false }
+    });
+    await prisma.workoutSession.updateMany({
+      where: { workoutId: id },
+      data: { status: 'CANCELLED' }
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to delete workout' });
+  }
+});
+
 export default router
